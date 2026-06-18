@@ -1,1 +1,1 @@
-run_cpp_tests("MutatoR")
+run_cpp_tests("mutator")

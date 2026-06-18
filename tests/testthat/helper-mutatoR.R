@@ -30,7 +30,7 @@ create_test_package <- function(pkg_name = "testMutatoR") {
   # Add basic package files
   writeLines(sprintf("Package: %s
 Version: 0.1.0
-Title: Test Package for MutatoR
+Title: Test Package for mutator
 Description: A test package for mutation testing.
 Author: Test Author
 License: MIT

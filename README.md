@@ -5,11 +5,11 @@
 
 <!-- badges: end -->
 
-# MutatoR
+# mutator
 
 ## Overview
 
-MutatoR is an automated mutation testing tool for the R language. It applies mutation testing principles to help developers improve test suite quality by introducing small, systematic changes (mutations) to source code and verifying if tests can detect these changes.
+mutator is an automated mutation testing tool for the R language. It applies mutation testing principles to help developers improve test suite quality by introducing small, systematic changes (mutations) to source code and verifying if tests can detect these changes.
 
 ## Features
 
@@ -22,9 +22,9 @@ MutatoR is an automated mutation testing tool for the R language. It applies mut
 ## Package Structure
 
 ```
-MutatoR/
+mutator/
 ├── R/                      # R source code
-│   ├── mutatoRpackage.R    # Core functionality
+│   ├── mutator.R           # Core functionality
 │   └── init.R
 ├── src/                    # C++ source + Catch2 C++ tests (testthat integration)
 ├── tests/                  # R tests (includes compiled C++ test entrypoint)
@@ -42,14 +42,14 @@ devtools::install_github("PRL-PRG/MutatoR")
 
 # Or install from local source
 # In R console
-setwd("path/to/MutatoR")
+setwd("path/to/mutator")
 devtools::install()
 ```
 
 ## Quick Start Guide
 
 ```r
-library(MutatoR)
+library(mutator)
 
 # Mutate a single file
 mutants <- mutate_file("path/to/your/file.R")
@@ -72,14 +72,14 @@ result <- mutate_package("path/to/your/package", mutation_dir = tempdir())
 
 ## Testing
 
-MutatoR selects a package test strategy automatically:
+mutator selects a package test strategy automatically:
 
-- If `tests/testthat/` exists, MutatoR uses `testthat::test_dir("tests/testthat")`.
-- Otherwise, if `tests/` exists, MutatoR falls back to `tools::testInstalledPackage(..., types = "tests")` after installing each mutant with `--install-tests`.
+- If `tests/testthat/` exists, mutator uses `testthat::test_dir("tests/testthat")`.
+- Otherwise, if `tests/` exists, mutator falls back to `tools::testInstalledPackage(..., types = "tests")` after installing each mutant with `--install-tests`.
 
 The fallback path supports non-`testthat` layouts (for example `tinytest`-driven packages that run through `tests/` scripts), but it is slower because each mutant must be installed before tests are executed.
 
-Each mutant test run uses a timeout. By default, MutatoR runs the baseline suite first and derives the per-mutant timeout as `baseline_elapsed_seconds * 1.5`. You can override this by setting `timeout_seconds` explicitly.
+Each mutant test run uses a timeout. By default, mutator runs the baseline suite first and derives the per-mutant timeout as `baseline_elapsed_seconds * 1.5`. You can override this by setting `timeout_seconds` explicitly.
 
 Mutant outcomes are reported as:
 
@@ -87,11 +87,11 @@ Mutant outcomes are reported as:
 - `KILLED`: tests failed (or execution error)
 - `HANG`: mutant exceeded timeout
 
-MutatoR itself uses `testthat` for its own R tests and `testthat` + Catch2 for C++ tests.
+mutator itself uses `testthat` for its own R tests and `testthat` + Catch2 for C++ tests.
 
 - C++ tests are located in `src/test-*.cpp`
 - The C++ test runner is `src/test-runner.cpp`
-- C++ tests are executed from `tests/testthat/test-cpp.R` via `run_cpp_tests("MutatoR")`
+- C++ tests are executed from `tests/testthat/test-cpp.R` via `run_cpp_tests("mutator")`
 
 Run the full test suite with:
 
@@ -115,7 +115,7 @@ To use the equivalent mutant detection feature with OpenAI:
 
 ## Mutation Operators
 
-MutatoR implements a wide range of mutation operators to thoroughly test your code:
+mutator implements a wide range of mutation operators to thoroughly test your code:
 
 ### Arithmetic and Logical Operator Replacements
 
@@ -158,12 +158,11 @@ MutatoR implements a wide range of mutation operators to thoroughly test your co
 
 ## Dependencies
 
-MutatoR depends on:
+mutator depends on:
 
 - **R Packages**:
   - **devtools**: For package development utilities
   - **testthat**: For test execution
-  - **xml2**: For parsing C++ test output (`run_cpp_tests`)
   - **future** and **furrr**: For parallel execution
   - **httr** and **jsonlite**: For OpenAI API integration
 - **LinkingTo**: `testthat` (for Catch2 C++ test headers)

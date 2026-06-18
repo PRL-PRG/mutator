@@ -1,4 +1,4 @@
-test_that("MutatoR works as a complete package", {
+test_that("mutator works as a complete package", {
   # Skip if not in interactive mode or on CI
   skip_on_cran()
   skip_on_ci()

@@ -16,7 +16,7 @@ static const R_CallMethodDef CallEntries[] = {
     {NULL, NULL, 0}};
 
 // Register the functions
-void R_init_MutatoR(DllInfo *dll)
+void R_init_mutator(DllInfo *dll)
 {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);

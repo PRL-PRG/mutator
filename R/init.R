@@ -1,3 +1,3 @@
 #' @keywords internal
-#' @useDynLib MutatoR, .registration = TRUE
+#' @useDynLib mutator, .registration = TRUE
 NULL

@@ -1,8 +1,8 @@
 \name{myfunctions}
 \alias{myfunctions}
-\title{Mutation Operators Supported by mutatoR}
+\title{Mutation Operators Supported by mutator}
 \description{
-This help page lists the mutation operators that the \code{mutatoR} package supports for mutation testing in R.
+This help page lists the mutation operators that the \code{mutator} package supports for mutation testing in R.
 }
 \details{
 The following mutation operators can be applied to R code:
@@ -34,7 +34,7 @@ The following mutation operators can be applied to R code:
   \item \code{scalar_value_mutator}: Replaces zeros with \code{42}, and non-zeros with \code{0}
 }
 
-These operators allow the \code{mutatoR} package to systematically alter source code in controlled ways, enabling thorough testing of R code and ensuring that tests are sensitive to subtle code changes.
+These operators allow the \code{mutator} package to systematically alter source code in controlled ways, enabling thorough testing of R code and ensuring that tests are sensitive to subtle code changes.
 }
 \author{
 Assanali Amandykov and Pierre Donat-Bouillud

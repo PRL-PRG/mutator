@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
-library(MutatoR)
+library(mutator)
 
-test_check("MutatoR")
+test_check("mutator")

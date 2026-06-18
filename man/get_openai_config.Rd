@@ -13,3 +13,8 @@ List containing api_key and model values
 Retrieves API key and model configuration from environment variables
 or a configuration file.
 }
+\examples{
+config <- get_openai_config()
+names(config)
+
+}

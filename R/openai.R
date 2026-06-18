@@ -9,6 +9,17 @@
 #' @param api_config Optional API configuration (will be loaded if NULL)
 #'
 #' @return Updated list of survived mutants with equivalence information
+#'
+#' @examples
+#' src <- tempfile(fileext = ".R")
+#' writeLines("add <- function(x, y) x + y", src)
+#' survived <- list(mutant_001 = list(mutation_info = "x + y -> x - y"))
+#' suppressWarnings(identify_equivalent_mutants(
+#'     src,
+#'     survived,
+#'     api_config = list(api_key = "", model = "gpt-4")
+#' ))
+#'
 #' @export
 identify_equivalent_mutants <- function(src_file, survived_mutants, api_config = NULL) {
     # Load API configuration if not provided
@@ -215,6 +226,11 @@ call_openai_api <- function(prompt, config) {
 #' or a configuration file.
 #'
 #' @return List containing api_key and model values
+#'
+#' @examples
+#' config <- get_openai_config()
+#' names(config)
+#'
 #' @export
 get_openai_config <- function() {
     api_key <- Sys.getenv("OPENAI_API_KEY", "")

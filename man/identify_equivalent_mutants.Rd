@@ -20,3 +20,14 @@ Updated list of survived mutants with equivalence information
 Analyzes survived mutants to determine if they are functionally equivalent
 to the original code using OpenAI's language models.
 }
+\examples{
+src <- tempfile(fileext = ".R")
+writeLines("add <- function(x, y) x + y", src)
+survived <- list(mutant_001 = list(mutation_info = "x + y -> x - y"))
+suppressWarnings(identify_equivalent_mutants(
+    src,
+    survived,
+    api_config = list(api_key = "", model = "gpt-4")
+))
+
+}

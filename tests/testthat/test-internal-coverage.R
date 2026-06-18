@@ -2,7 +2,7 @@ resolve_mutator_fn <- function(name) {
     get0(name,
         mode = "function",
         inherits = TRUE,
-        ifnotfound = get(name, envir = asNamespace("MutatoR"))
+        ifnotfound = get(name, envir = asNamespace("mutator"))
     )
 }
 
@@ -136,7 +136,7 @@ test_that("get_openai_config searches parent folders for config file", {
 
 test_that("C_mutate_file validates input types and srcref", {
     expect_error(
-        .Call("C_mutate_file", 1L, PACKAGE = "MutatoR"),
+        .Call("C_mutate_file", 1L, PACKAGE = "mutator"),
         "EXPRSXP"
     )
 
@@ -144,7 +144,7 @@ test_that("C_mutate_file validates input types and srcref", {
     attr(exprs, "srcref") <- list(1:3)
 
     expect_error(
-        .Call("C_mutate_file", exprs, PACKAGE = "MutatoR"),
+        .Call("C_mutate_file", exprs, PACKAGE = "mutator"),
         "length 4"
     )
 })
@@ -209,7 +209,7 @@ test_that("mutate_package handles empty test results as killed mutants", {
         mutate_file = function(...) {
             list(list(path = mut_path, info = "mock mutation"))
         },
-        .package = "MutatoR"
+        .package = "mutator"
     )
     testthat::local_mocked_bindings(
         future_map = function(.x, .f, ...) {
@@ -254,7 +254,7 @@ test_that("mutate_package marks timed-out mutants as HANG", {
         mutate_file = function(...) {
             list(list(path = mut_path, info = "mock mutation"))
         },
-        .package = "MutatoR"
+        .package = "mutator"
     )
     testthat::local_mocked_bindings(
         future_map = function(.x, .f, ...) {
@@ -299,7 +299,7 @@ test_that("mutate_package passes explicit timeout to inline worker execution", {
         mutate_file = function(...) {
             list(list(path = mut_path, info = "mock mutation"))
         },
-        .package = "MutatoR"
+        .package = "mutator"
     )
     testthat::local_mocked_bindings(
         future_map = function(.x, .f, ...) {
@@ -381,7 +381,7 @@ test_that("mutate_package computes equivalent mutant summary when enabled", {
             }
             file_mutants
         },
-        .package = "MutatoR"
+        .package = "mutator"
     )
 
     output <- capture.output({
@@ -456,7 +456,7 @@ test_that("mutate_package caps total mutants with max_mutants", {
                 list(path = mut_paths[[3]], info = "m3")
             )
         },
-        .package = "MutatoR"
+        .package = "mutator"
     )
     testthat::local_mocked_bindings(
         future_map = function(.x, .f, ...) {
@@ -505,7 +505,7 @@ test_that("mutate_package supports max_mutants set to zero", {
         mutate_file = function(...) {
             list(list(path = mut_path, info = "m1"))
         },
-        .package = "MutatoR"
+        .package = "mutator"
     )
     testthat::local_mocked_bindings(
         plan = function(...) NULL,

@@ -2,3 +2,12 @@
 .vscode
 ^\.github$
 packages
+^\.claude$
+^\.agents$
+^\.codex$
+^cran-comments\.md$
+^CRAN-SUBMISSION$
+^revdep$
+^.*\.Rcheck$
+^.*\.tar\.gz$
+^\.openai_config\.R$

@@ -1,17 +1,18 @@
-Package: MutatoR
-Title: Mutation testing for the R Language
-Version: 0.0.0.9000
+Package: mutator
+Title: Mutation Testing for 'R'
+Version: 0.1.0
 Authors@R: c(
-    person("Pierre", "Donat-Bouillud", email = "pierre.donat.bouillud@fit.cvut.cz", role = c("aut", "cre")),
-    person("Assanali", "Amandykov", email = "amandass@fit.cvut.cz", role = "aut"))
-Description: A tool to perform mutation testing for the R language, to test the effectiveness of a test suite. It supports several testing frameworks, including 'testthat'.
-    It can perform the mutation testing in parallel and scale to large code bases.
+    person("Pierre", "Donat-Bouillud", email = "pierre.donat.bouillud@fit.cvut.cz", role = c("aut", "cre", "cph")),
+    person("Assanali", "Amandykov", email = "amandass@fit.cvut.cz", role = c("aut", "cph")))
+Description: Performs mutation testing for 'R' packages to assess the
+    effectiveness of a test suite. It mutates source files, runs package tests
+    against each mutant, and reports which mutants were killed, survived, or
+    timed out. Parallel execution is supported for larger code bases.
 URL: https://github.com/PRL-PRG/MutatoR
 BugReports: https://github.com/PRL-PRG/MutatoR/issues
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports:
     jsonlite,
     httr,
@@ -20,11 +21,8 @@ Imports:
     testthat,
     future,
     furrr
-Suggests:
-    knitr,
-    rmarkdown,
-    xml2
 LinkingTo:
     testthat
 Config/testthat/edition: 3
 SystemRequirements: C++17
+Config/roxygen2/version: 8.0.0

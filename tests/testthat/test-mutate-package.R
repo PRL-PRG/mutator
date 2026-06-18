@@ -19,7 +19,7 @@ test_that("mutate_package generates and tests mutants", {
   # Add basic package files
   writeLines(sprintf("Package: %s
 Version: 0.1.0
-Title: Test Package for MutatoR
+Title: Test Package for mutator
 Description: A test package for mutation testing.
 Author: Test Author
 License: MIT
@@ -91,7 +91,7 @@ test_that("mutate_package links unchanged package content", {
 
   writeLines(sprintf("Package: %s
 Version: 0.1.0
-Title: Test Package for MutatoR
+Title: Test Package for mutator
 Description: A test package for mutation testing.
 Author: Test Author
 License: MIT

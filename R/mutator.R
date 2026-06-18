@@ -131,6 +131,13 @@ format_mutation_info <- function(src_file, raw_info = NULL) {
 #'   \item{`path`}{Path to the mutant file.}
 #'   \item{`info`}{Formatted mutation metadata (file, source range, and details).}
 #' }
+#'
+#' @examples
+#' src <- tempfile(fileext = ".R")
+#' writeLines("add <- function(x, y) x + y", src)
+#' mutants <- mutate_file(src, out_dir = tempfile("mutations_"), max_mutants = 1)
+#' length(mutants)
+#'
 #' @export
 mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL) {
   max_mutants <- normalize_max_mutants(max_mutants)
@@ -209,7 +216,7 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL) {
 #' Test strategy is detected automatically:
 #' \itemize{
 #'   \item If `tests/testthat/` exists, `testthat::test_dir()` is used.
-#'   \item Otherwise, if `tests/` exists, MutatoR installs the mutant package
+#'   \item Otherwise, if `tests/` exists, mutator installs the mutant package
 #'   with `--install-tests` and runs `tools::testInstalledPackage()`.
 #' }
 #'
@@ -231,6 +238,28 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL) {
 #'   \item{`test_results`}{Named list mapping mutant IDs to statuses:
 #'   `"KILLED"`, `"SURVIVED"`, or `"HANG"`.}
 #' }
+#'
+#' @examples
+#' pkg <- file.path(tempdir(), "examplepkg")
+#' dir.create(file.path(pkg, "R"), recursive = TRUE, showWarnings = FALSE)
+#' dir.create(file.path(pkg, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+#' writeLines(c(
+#'   "Package: examplepkg",
+#'   "Title: Example Package",
+#'   "Version: 0.0.1",
+#'   "Description: Minimal package for a mutator example.",
+#'   "License: GPL-3",
+#'   "Encoding: UTF-8"
+#' ), file.path(pkg, "DESCRIPTION"))
+#' writeLines("export(add)", file.path(pkg, "NAMESPACE"))
+#' writeLines("add <- function(x, y) x + y", file.path(pkg, "R", "add.R"))
+#' writeLines(
+#'   "testthat::expect_equal(add(1, 2), 3)",
+#'   file.path(pkg, "tests", "testthat", "test-add.R")
+#' )
+#' result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
+#' names(result)
+#'
 #' @export
 mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            isFullLog = FALSE, detectEqMutants = FALSE,
@@ -296,17 +325,10 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   run_testthat_tests <- function(pkg_path) {
     set_last_test_failure(NULL)
 
-    if (requireNamespace("grDevices", quietly = TRUE)) {
-      while (grDevices::dev.cur() > 1) grDevices::dev.off()
-    }
-
     old_wd <- getwd()
     on.exit(
       {
         setwd(old_wd)
-        if (requireNamespace("grDevices", quietly = TRUE)) {
-          while (grDevices::dev.cur() > 1) grDevices::dev.off()
-        }
       },
       add = TRUE
     )
@@ -480,7 +502,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
         strategy_hint <- if (identical(test_strategy, "installed-tests")) {
           paste0(
-            " In fallback mode, MutatoR installs the package with '--install-tests' and runs ",
+            " In fallback mode, mutator installs the package with '--install-tests' and runs ",
             "tools::testInstalledPackage(..., types = 'tests')."
           )
         } else {

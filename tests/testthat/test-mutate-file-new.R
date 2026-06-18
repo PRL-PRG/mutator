@@ -88,7 +88,7 @@ test_that("C_mutate_file falls back to coarse range without synthetic child anch
     collapse = "\n"
   ), keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "MutatoR")
+  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
   infos <- lapply(mutants, attr, which = "mutation_info")
 
   plus_info <- NULL
@@ -109,7 +109,7 @@ test_that("C_mutate_file falls back to coarse range without synthetic child anch
 test_that("C_mutate_file generates all operator mutants for a single expression", {
   exprs <- parse(text = "(1 + 2) * 3 - 4", keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "MutatoR")
+  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
   infos <- lapply(mutants, attr, which = "mutation_info")
 
   symbols <- vapply(
