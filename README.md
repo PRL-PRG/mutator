@@ -1,7 +1,7 @@
  <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/PRL-PRG/MutatoR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/PRL-PRG/MutatoR/actions/workflows/R-CMD-check.yaml)
-[![Codecov test coverage](https://codecov.io/gh/PRL-PRG/MutatoR/graph/badge.svg)](https://app.codecov.io/gh/PRL-PRG/MutatoR)
+[![R-CMD-check](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml)
+[![Codecov test coverage](https://codecov.io/gh/PRL-PRG/mutator/graph/badge.svg)](https://app.codecov.io/gh/PRL-PRG/mutator)
 
 <!-- badges: end -->
 
@@ -38,7 +38,7 @@ mutator/
 install.packages(c("pkgload", "testthat", "httr", "jsonlite", "future", "furrr"))
 
 # Install from GitHub (if available)
-devtools::install_github("PRL-PRG/MutatoR")
+devtools::install_github("PRL-PRG/mutator")
 
 # Or install from local source
 # In R console

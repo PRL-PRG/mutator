@@ -8,8 +8,8 @@ Description: Performs mutation testing for 'R' packages to assess the
     effectiveness of a test suite. It mutates source files, runs package tests
     against each mutant, and reports which mutants were killed, survived, or
     timed out. Parallel execution is supported for larger code bases.
-URL: https://github.com/PRL-PRG/MutatoR
-BugReports: https://github.com/PRL-PRG/MutatoR/issues
+URL: https://github.com/PRL-PRG/mutator
+BugReports: https://github.com/PRL-PRG/mutator/issues
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
