@@ -540,6 +540,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   )
 
   link_or_copy <- function(from, to, recursive = FALSE) {
+    from <- normalizePath(from, mustWork = TRUE)
     linked <- tryCatch(file.symlink(from, to), warning = function(w) FALSE, error = function(e) FALSE)
     if (!isTRUE(linked)) {
       file.copy(from, to, recursive = recursive)
@@ -628,55 +629,78 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   }
 
   if (length(mutants) > 0) {
-    old_future_plan <- future::plan()
-    on.exit(future::plan(old_future_plan), add = TRUE)
-
-    if (workers_to_use > 1) {
-      future::plan(future::multisession,
-        workers = workers_to_use
-      )
-    } else {
-      future::plan(future::sequential)
-    }
-
     pkg_dir_list <- lapply(mutants, function(x) x$pkg)
     names(pkg_dir_list) <- mutant_ids
 
-    # Run tests in parallel with progress bar
-    parallel_results <- furrr::future_map(
-      pkg_dir_list,
-      function(pkg) {
-        tryCatch(
-          {
-            setTimeLimit(
-              cpu = effective_timeout_seconds,
-              elapsed = effective_timeout_seconds,
-              transient = TRUE
-            )
-            on.exit(setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE), add = TRUE)
+    run_one_mutant <- function(pkg) {
+      tryCatch(
+        {
+          setTimeLimit(
+            cpu = effective_timeout_seconds,
+            elapsed = effective_timeout_seconds,
+            transient = TRUE
+          )
+          on.exit(setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE), add = TRUE)
 
-            passed <- run_tests(pkg)
-            if (isTRUE(passed)) "SURVIVED" else "KILLED"
-          },
-          error = function(e) {
-            err_msg <- tolower(conditionMessage(e))
-            if (grepl("reached elapsed time limit|reached cpu time limit", err_msg)) {
-              "HANG"
-            } else {
-              "KILLED"
-            }
+          passed <- run_tests(pkg)
+          if (isTRUE(passed)) "SURVIVED" else "KILLED"
+        },
+        error = function(e) {
+          err_msg <- tolower(conditionMessage(e))
+          if (grepl("reached elapsed time limit|reached cpu time limit", err_msg)) {
+            "HANG"
+          } else {
+            "KILLED"
           }
+        }
+      )
+    }
+
+    if (workers_to_use > 1 && future::supportsMulticore()) {
+      parallel_results <- parallel::mclapply(
+        pkg_dir_list,
+        run_one_mutant,
+        mc.cores = workers_to_use,
+        mc.preschedule = FALSE
+      )
+      parallel_results <- vapply(
+        parallel_results,
+        function(result) {
+          if (inherits(result, "try-error")) {
+            "KILLED"
+          } else {
+            as.character(result)[1]
+          }
+        },
+        character(1)
+      )
+    } else {
+      old_future_plan <- future::plan()
+      on.exit(future::plan(old_future_plan), add = TRUE)
+
+      if (workers_to_use > 1) {
+        future::plan(future::multisession,
+          workers = workers_to_use
         )
-      },
-      .progress = TRUE,
-      .options = furrr::furrr_options(
-        seed = TRUE,
-        globals = list(
-          run_tests = run_tests,
-          effective_timeout_seconds = effective_timeout_seconds
+      } else {
+        future::plan(future::sequential)
+      }
+
+      # Run tests in parallel with progress bar
+      parallel_results <- furrr::future_map(
+        pkg_dir_list,
+        run_one_mutant,
+        .progress = TRUE,
+        .options = furrr::furrr_options(
+          seed = TRUE,
+          globals = list(
+            run_one_mutant = run_one_mutant,
+            run_tests = run_tests,
+            effective_timeout_seconds = effective_timeout_seconds
+          )
         )
       )
-    )
+    }
   }
 
   # Process the parallel test results

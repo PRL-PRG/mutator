@@ -46,6 +46,29 @@ test_that("mutate_file handles empty files", {
   expect_true(is.list(mutated_files))
 })
 
+test_that("line-deletion mutants are parseable", {
+  temp_file <- tempfile(fileext = ".R")
+  mutation_dir <- tempfile("mutations_")
+  dir.create(mutation_dir)
+  on.exit(unlink(c(temp_file, mutation_dir), recursive = TRUE), add = TRUE)
+
+  writeLines(c(
+    "f <- function(x) {",
+    "  if (x > 0) {",
+    "    x + 1",
+    "  }",
+    "}"
+  ), temp_file)
+
+  mutants <- delete_line_mutants(temp_file, mutation_dir, "fallback.R", max_del = 5)
+
+  expect_true(all(vapply(
+    mutants,
+    function(mutant) !inherits(try(parse(mutant$path), silent = TRUE), "try-error"),
+    logical(1)
+  )))
+})
+
 test_that("mutate_file honors max_mutants cap", {
   temp_file <- tempfile(fileext = ".R")
   out_dir_all <- tempfile("mutations_all_")
