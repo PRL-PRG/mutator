@@ -90,7 +90,7 @@ std::vector<OperatorPos> ASTHandler::gatherOperators(SEXP expr, SEXP src_ref,
                                                      bool is_inside_block)
 {
     if (!extractSrcrefBounds(src_ref, _start_line, _start_col, _end_line, _end_col))
-        Rf_error("src_ref must be an integer vector of length >= 4");
+        Rf_error("src_ref must be an integer vector of length 4 or more");
 
     _file_path.clear();
 
