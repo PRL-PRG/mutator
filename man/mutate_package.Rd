@@ -13,7 +13,8 @@ mutate_package(
   max_mutants = NULL,
   timeout_seconds = NULL,
   config_dir = getwd(),
-  max_line_deletions = 5
+  max_line_deletions = 5,
+  cran = TRUE
 )
 }
 \arguments{
@@ -44,6 +45,14 @@ current working directory.}
 
 \item{max_line_deletions}{Maximum number of line-deletion mutants per \code{.R}
 file (passed to \code{\link[=mutate_file]{mutate_file()}}); \code{0} disables them. Defaults to \code{5}.}
+
+\item{cran}{Logical; if \code{TRUE} (the default), tests run in "CRAN mode": the
+\code{NOT_CRAN} environment variable is set to \code{"false"} in the test subprocess
+so \code{testthat::skip_on_cran()} / \code{skip_if_offline()} guards take effect and
+the same tests CRAN would run are used (skipping network/slow tests the
+package marks). Set to \code{FALSE} to run the full suite (\code{NOT_CRAN = "true"}),
+as \code{devtools::test()} does. Note this only affects tests the package
+actually guards; unguarded network tests still run.}
 }
 \value{
 An invisible list with two components:

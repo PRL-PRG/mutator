@@ -101,6 +101,28 @@ devtools::test()
 
 ## Configuration
 
+### CRAN mode (test selection)
+
+By default `mutate_package()` runs each mutant's tests in **CRAN mode**
+(`cran = TRUE`): the `NOT_CRAN` environment variable is set to `"false"` in the
+test subprocess, so `testthat::skip_on_cran()` and `skip_if_offline()` guards
+take effect and mutator runs the same tests CRAN would. This skips the slow,
+flaky, or network-dependent tests that packages mark as CRAN-skippable — which
+keeps mutation runs fast and avoids spurious timeouts/kills from, e.g., tests
+that hit the network.
+
+Set `cran = FALSE` to run the **full** suite instead (`NOT_CRAN = "true"`, the
+behaviour of `devtools::test()`):
+
+```r
+mutate_package("path/to/pkg", cran = FALSE)
+```
+
+This applies to both test strategies (the `testthat` strategy and the
+installed-tests fallback). Note that it only affects tests the package
+*explicitly* guards with `skip_on_cran()` / `skip_if_offline()`; a package whose
+network test has no such guard will still run that test in either mode.
+
 ### Equivalent Mutant Detection
 
 Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API.

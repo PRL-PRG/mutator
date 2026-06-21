@@ -257,6 +257,13 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   current working directory.
 #' @param max_line_deletions Maximum number of line-deletion mutants per `.R`
 #'   file (passed to [mutate_file()]); `0` disables them. Defaults to `5`.
+#' @param cran Logical; if `TRUE` (the default), tests run in "CRAN mode": the
+#'   `NOT_CRAN` environment variable is set to `"false"` in the test subprocess
+#'   so `testthat::skip_on_cran()` / `skip_if_offline()` guards take effect and
+#'   the same tests CRAN would run are used (skipping network/slow tests the
+#'   package marks). Set to `FALSE` to run the full suite (`NOT_CRAN = "true"`),
+#'   as `devtools::test()` does. Note this only affects tests the package
+#'   actually guards; unguarded network tests still run.
 #'
 #' @return An invisible list with two components:
 #' \describe{
@@ -296,7 +303,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            isFullLog = FALSE, detectEqMutants = FALSE,
                            mutation_dir = NULL, max_mutants = NULL,
                            timeout_seconds = NULL, config_dir = getwd(),
-                           max_line_deletions = 5) {
+                           max_line_deletions = 5, cran = TRUE) {
   timeout_multiplier <- 1.5
   timeout_floor_seconds <- 5
   max_mutants <- normalize_max_mutants(max_mutants)
@@ -385,13 +392,16 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
     proc <- tryCatch(
       callr::r_bg(
-        function(pkg_path) {
+        function(pkg_path, not_cran) {
+          # Control NOT_CRAN so skip_on_cran()/skip_if_offline() behave as on
+          # CRAN ("false") or run everything in dev mode ("true").
+          Sys.setenv(NOT_CRAN = not_cran)
           setwd(pkg_path)
           suppressMessages(pkgload::load_all(".", quiet = TRUE))
           tr <- testthat::test_dir("tests/testthat")
           sum(tr$failed)
         },
-        args = list(pkg_path = pkg_path),
+        args = list(pkg_path = pkg_path, not_cran = if (cran) "false" else "true"),
         stdout = out_file,
         stderr = "2>&1"
       ),
@@ -544,6 +554,10 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
         on.exit(unlink(runner), add = TRUE)
         writeLines(
           c(
+            # Control NOT_CRAN so skip_on_cran()/skip_if_offline() in the
+            # installed tests behave as on CRAN ("false") or run everything
+            # ("true"). Child processes spawned per test file inherit it.
+            sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(if (cran) "false" else "true")),
             sprintf(
               "status <- tools::testInstalledPackage(pkg = %s, lib.loc = %s, outDir = %s, types = \"tests\")",
               deparse(pkg_name), deparse(temp_lib), deparse(temp_out)
@@ -827,7 +841,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           globals = list(
             run_one_mutant = run_one_mutant,
             run_tests = run_tests,
-            effective_timeout_seconds = effective_timeout_seconds
+            effective_timeout_seconds = effective_timeout_seconds,
+            cran = cran
           )
         )
       )

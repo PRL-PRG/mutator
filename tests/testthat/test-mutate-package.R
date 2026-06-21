@@ -238,3 +238,46 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
     "strategy 'installed-tests'"
   )
 })
+
+test_that("cran mode controls skip_on_cran via NOT_CRAN", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("callr")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  pkg_dir <- file.path(temp_dir, "cranpkg")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)
+
+  writeLines(c(
+    "Package: cranpkg", "Version: 0.1.0", "Title: t",
+    "Description: t.", "Author: a", "License: MIT"
+  ), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+  writeLines("f <- function(x) x + 1", file.path(pkg_dir, "R", "f.R"))
+  writeLines("library(testthat)\nlibrary(cranpkg)\ntest_check(\"cranpkg\")",
+             file.path(pkg_dir, "tests", "testthat.R"))
+  # An always-on test keeps the suite non-empty; the only test that can kill the
+  # `+` -> `-` mutant is guarded by skip_on_cran().
+  writeLines(c(
+    "test_that(\"always\", { expect_true(TRUE) })",
+    "test_that(\"kills mutant but cran-guarded\", { skip_on_cran(); expect_equal(f(1), 2) })"
+  ), file.path(pkg_dir, "tests", "testthat", "test-f.R"))
+
+  # CRAN mode (default): the killing test is skipped -> mutant survives.
+  res_cran <- suppressMessages(
+    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, cran = TRUE)
+  )
+  expect_true(any(vapply(res_cran$test_results, function(x) identical(x, "SURVIVED"), logical(1))))
+
+  # Dev mode: the guard is lifted -> the test runs and kills the mutant.
+  res_dev <- suppressMessages(
+    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, cran = FALSE)
+  )
+  expect_true(any(vapply(res_dev$test_results, function(x) identical(x, "KILLED"), logical(1))))
+  expect_false(any(vapply(res_dev$test_results, function(x) identical(x, "SURVIVED"), logical(1))))
+})
