@@ -265,12 +265,14 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   as `devtools::test()` does. Note this only affects tests the package
 #'   actually guards; unguarded network tests still run.
 #'
-#' @return An invisible list with two components:
+#' @return An invisible list with three components:
 #' \describe{
 #'   \item{`package_mutants`}{Named list with mutant path, mutation info, status,
 #'   and optional equivalence flags.}
 #'   \item{`test_results`}{Named list mapping mutant IDs to statuses:
 #'   `"KILLED"`, `"SURVIVED"`, or `"HANG"`.}
+#'   \item{`timing`}{Named list of phase durations in seconds: `baseline`,
+#'   `generation`, `test_execution`, and `equivalence_detection`.}
 #' }
 #'
 #' @examples
@@ -706,6 +708,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   # First gather lightweight descriptors for every candidate mutant. Building
   # the per-mutant package copy is the expensive step, so it is deferred until
   # after sampling.
+  generation_started <- Sys.time()
   mutant_specs <- list()
   for (src in r_files) {
     for (m in mutate_file(src, out_dir = mutation_dir, max_line_deletions = max_line_deletions)) {
@@ -737,6 +740,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       pkg = pkg_copy, info = spec$info, src = spec$src, mutant_file = spec$mutant_file
     )
   }
+  generation_seconds <- as.numeric(Sys.time() - generation_started, units = "secs")
 
   # options(
   #   future.devices.onMisuse = "warning",   # or "ignore"
@@ -775,6 +779,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     ))
   }
 
+  test_run_started <- Sys.time()
   if (length(mutants) > 0) {
     pkg_dir_list <- lapply(mutants, function(x) x$pkg)
     names(pkg_dir_list) <- mutant_ids
@@ -848,6 +853,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       )
     }
   }
+  test_run_seconds <- as.numeric(Sys.time() - test_run_started, units = "secs")
 
   # Process the parallel test results
   package_mutants <- list()
@@ -898,6 +904,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   uncertain <- 0
 
   # Identify equivalent mutants among survived mutants only if detectEqMutants is TRUE
+  equivalence_started <- Sys.time()
   if (detectEqMutants && length(survived_mutants) > 0) {
     message("Analyzing equivalent mutants among survived mutants...")
     # Group survived mutants by their originating source file. The source path
@@ -929,6 +936,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       }
     }
   }
+  equivalence_seconds <- as.numeric(Sys.time() - equivalence_started, units = "secs")
 
   # Summarize test results
   total_mutants <- length(test_results)
@@ -973,5 +981,22 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     message(sprintf("  Mutation Score:   %.2f%%", mutation_score))
   }
 
-  invisible(list(package_mutants = package_mutants, test_results = test_results))
+  timing <- list(
+    baseline = baseline_elapsed_seconds,
+    generation = generation_seconds,
+    test_execution = test_run_seconds,
+    equivalence_detection = equivalence_seconds
+  )
+
+  message("Timing (seconds):")
+  message(sprintf("  Baseline run:          %.1f", timing$baseline))
+  message(sprintf("  Mutant generation:     %.1f", timing$generation))
+  message(sprintf("  Test execution:        %.1f", timing$test_execution))
+  message(sprintf("  Equivalence detection: %.1f", timing$equivalence_detection))
+
+  invisible(list(
+    package_mutants = package_mutants,
+    test_results = test_results,
+    timing = timing
+  ))
 }
