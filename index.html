@@ -159,6 +159,13 @@
 <h2 id="configuration">Configuration<a class="anchor" aria-label="anchor" href="#configuration"></a>
 </h2>
 <div class="section level3">
+<h3 id="timeouts-and-the-contended-baseline">Timeouts and the contended baseline<a class="anchor" aria-label="anchor" href="#timeouts-and-the-contended-baseline"></a>
+</h3>
+<p>Each mutant is run with a wall-clock timeout; exceeding it is reported as <code>HANG</code>. The timeout is derived from how long the package’s own test suite takes, unless you pass <code>timeout_seconds</code> explicitly.</p>
+<p>Because mutants run in parallel (<code>cores</code> at a time), the timeout must account for <strong>contention</strong>: with many workers, each test run is slower than it would be alone — for packages that load many dependencies, or recompile C code on every <code>R CMD INSTALL</code>, dramatically so. A timeout based on a single, <em>uncontended</em> baseline run would then fire on nearly every mutant (a wave of false <code>HANG</code>s).</p>
+<p>To avoid this, <code><a href="reference/mutate_package.html">mutate_package()</a></code> first runs the baseline suite once on its own (to confirm it passes and fail fast otherwise), then runs it <code>cores</code> times <strong>concurrently</strong> and takes the slowest of those as the <em>contended baseline</em>. The timeout is <code>max(contended_baseline * 1.5, 5s)</code>. This self-calibrates to the machine, the chosen parallelism, and the package’s real load/compile cost — no manual tuning. Pass <code>timeout_seconds</code> to override it entirely. (When <code>cores = 1</code>, or when forking is unavailable, the solo baseline is used.)</p>
+</div>
+<div class="section level3">
 <h3 id="cran-mode-test-selection">CRAN mode (test selection)<a class="anchor" aria-label="anchor" href="#cran-mode-test-selection"></a>
 </h3>
 <p>By default <code><a href="reference/mutate_package.html">mutate_package()</a></code> runs each mutant’s tests in <strong>CRAN mode</strong> (<code>cran = TRUE</code>): the <code>NOT_CRAN</code> environment variable is set to <code>"false"</code> in the test subprocess, so <code><a href="https://testthat.r-lib.org/reference/skip.html" class="external-link">testthat::skip_on_cran()</a></code> and <code>skip_if_offline()</code> guards take effect and mutator runs the same tests CRAN would. This skips the slow, flaky, or network-dependent tests that packages mark as CRAN-skippable — which keeps mutation runs fast and avoids spurious timeouts/kills from, e.g., tests that hit the network.</p>

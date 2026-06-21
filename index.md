@@ -117,6 +117,30 @@ devtools::test()
 
 ## Configuration
 
+### Timeouts and the contended baseline
+
+Each mutant is run with a wall-clock timeout; exceeding it is reported
+as `HANG`. The timeout is derived from how long the package’s own test
+suite takes, unless you pass `timeout_seconds` explicitly.
+
+Because mutants run in parallel (`cores` at a time), the timeout must
+account for **contention**: with many workers, each test run is slower
+than it would be alone — for packages that load many dependencies, or
+recompile C code on every `R CMD INSTALL`, dramatically so. A timeout
+based on a single, *uncontended* baseline run would then fire on nearly
+every mutant (a wave of false `HANG`s).
+
+To avoid this,
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+first runs the baseline suite once on its own (to confirm it passes and
+fail fast otherwise), then runs it `cores` times **concurrently** and
+takes the slowest of those as the *contended baseline*. The timeout is
+`max(contended_baseline * 1.5, 5s)`. This self-calibrates to the
+machine, the chosen parallelism, and the package’s real load/compile
+cost — no manual tuning. Pass `timeout_seconds` to override it entirely.
+(When `cores = 1`, or when forking is unavailable, the solo baseline is
+used.)
+
 ### CRAN mode (test selection)
 
 By default
