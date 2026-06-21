@@ -86,7 +86,7 @@ mutate_package(
 
 ## Value
 
-An invisible list with two components:
+An invisible list with three components:
 
 - `package_mutants`:
 
@@ -97,6 +97,11 @@ An invisible list with two components:
 
   Named list mapping mutant IDs to statuses: `"KILLED"`, `"SURVIVED"`,
   or `"HANG"`.
+
+- `timing`:
+
+  Named list of phase durations in seconds: `baseline`, `generation`,
+  `test_execution`, and `equivalence_detection`.
 
 ## Details
 
@@ -164,8 +169,6 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> [1] -1 - 3 == -4
 #> 
 #> [ FAIL 1 | WARN 0 | SKIP 0 | PASS 0 ]
-#> 
-#> Frustration is a natural part of programming :)
 #> Error : Test failures.
 #> Test error: ! in callr subprocess.
 #> Caused by error: 
@@ -177,9 +180,9 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   Survived:         0
 #>   Mutation Score:   100.00%
 #> Timing (seconds):
-#>   Baseline run:          0.9
+#>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        1.3
+#>   Test execution:        1.1
 #>   Equivalence detection: 0.0
 names(result)
 #> [1] "package_mutants" "test_results"    "timing"         

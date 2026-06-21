@@ -42,7 +42,13 @@ to the original code using OpenAI's language models.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">identify_equivalent_mutants</span><span class="op">(</span><span class="va">src_file</span>, <span class="va">survived_mutants</span>, api_config <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">identify_equivalent_mutants</span><span class="op">(</span></span>
+<span>  <span class="va">src_file</span>,</span>
+<span>  <span class="va">survived_mutants</span>,</span>
+<span>  api_config <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  batch_size <span class="op">=</span> <span class="fl">25</span>,</span>
+<span>  workers <span class="op">=</span> <span class="fl">1</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -59,6 +65,17 @@ to the original code using OpenAI's language models.</p>
 
 <dt id="arg-api-config">api_config<a class="anchor" aria-label="anchor" href="#arg-api-config"></a></dt>
 <dd><p>Optional API configuration (will be loaded if NULL)</p></dd>
+
+
+<dt id="arg-batch-size">batch_size<a class="anchor" aria-label="anchor" href="#arg-batch-size"></a></dt>
+<dd><p>Maximum number of mutants sent in a single API request.
+Smaller batches keep each response short enough to avoid truncation (which
+silently drops verdicts) and let batches run concurrently. Defaults to 25.</p></dd>
+
+
+<dt id="arg-workers">workers<a class="anchor" aria-label="anchor" href="#arg-workers"></a></dt>
+<dd><p>Number of API requests to run concurrently (requires a
+forking platform). Defaults to 1 (sequential).</p></dd>
 
 </dl></div>
     <div class="section level2">

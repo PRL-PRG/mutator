@@ -6,7 +6,13 @@ equivalent to the original code using OpenAI's language models.
 ## Usage
 
 ``` r
-identify_equivalent_mutants(src_file, survived_mutants, api_config = NULL)
+identify_equivalent_mutants(
+  src_file,
+  survived_mutants,
+  api_config = NULL,
+  batch_size = 25,
+  workers = 1
+)
 ```
 
 ## Arguments
@@ -22,6 +28,18 @@ identify_equivalent_mutants(src_file, survived_mutants, api_config = NULL)
 - api_config:
 
   Optional API configuration (will be loaded if NULL)
+
+- batch_size:
+
+  Maximum number of mutants sent in a single API request. Smaller
+  batches keep each response short enough to avoid truncation (which
+  silently drops verdicts) and let batches run concurrently. Defaults to
+  25.
+
+- workers:
+
+  Number of API requests to run concurrently (requires a forking
+  platform). Defaults to 1 (sequential).
 
 ## Value
 

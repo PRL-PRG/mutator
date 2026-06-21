@@ -207,6 +207,22 @@ to the public OpenAI API. Set `base_url` to target a self-hosted or
 alternative OpenAI-compatible service (for example
 `http://localhost:11434/v1`).
 
+Survived mutants are analyzed in **bounded batches** (default 25 per
+request), and each mutant is shown to the model as a small **unified
+diff** of its edit (plus a short change label) rather than its full
+mutated source — compact, unambiguous, and in a format LLMs read
+natively. When
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+runs with `cores > 1` the batches are sent **concurrently**, which (with
+the bounded size) keeps the equivalence pass fast and avoids the
+truncated responses that otherwise drop verdicts.
+
+For mutants the model flags as **EQUIVALENT** (the rare, high-stakes
+calls — they are excluded from the adjusted mutation score), it also
+returns a one-sentence **reason**, stored as `equivalence_reason` on the
+mutant so the call can be audited. No reason is requested for
+`NOT_EQUIVALENT`/`DONT_KNOW`, keeping responses small.
+
 Progress and the results summary are emitted via
 [`message()`](https://rdrr.io/r/base/message.html) (so they can be
 silenced with
