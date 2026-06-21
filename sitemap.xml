@@ -1,0 +1,18 @@
+<urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
+<url><loc>https://prl-prg.github.io/mutator/404.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/LICENSE.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/authors.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/index.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/news/index.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/call_openai_api.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/create_equivalent_mutant_prompt.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/get_openai_config.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/identify_equivalent_mutants.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/index.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/mutate_file.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/mutate_package.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/operators.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/reset_openai_config.html</loc></url>
+<url><loc>https://prl-prg.github.io/mutator/reference/set_openai_config.html</loc></url>
+</urlset>
+

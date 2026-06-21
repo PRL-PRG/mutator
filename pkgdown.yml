@@ -1,0 +1,8 @@
+pandoc: 3.8.3
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles: {}
+last_built: 2026-06-21T15:05Z
+urls:
+  reference: https://prl-prg.github.io/mutator/reference
+  article: https://prl-prg.github.io/mutator/articles
