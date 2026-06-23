@@ -175,13 +175,22 @@
 <p>This applies to both test strategies (the <code>testthat</code> strategy and the installed-tests fallback). Note that it only affects tests the package <em>explicitly</em> guards with <code>skip_on_cran()</code> / <code>skip_if_offline()</code>; a package whose network test has no such guard will still run that test in either mode.</p>
 </div>
 <div class="section level3">
+<h3 id="fail-fast-stop-at-the-first-failing-test">Fail-fast (stop at the first failing test)<a class="anchor" aria-label="anchor" href="#fail-fast-stop-at-the-first-failing-test"></a>
+</h3>
+<p>A mutant is <code>KILLED</code> the instant any one test detects it, so running the rest of its suite is wasted work. By default (<code>fail_fast = TRUE</code>) each mutant’s test run <strong>stops at the first failing test</strong> instead of finishing the suite, which speeds up the test-running phase — often substantially for packages with large suites — without changing any mutant’s verdict (the early-aborted run still reports the failure, so the mutant is still <code>KILLED</code>).</p>
+<p>Set <code>fail_fast = FALSE</code> to run the full suite for every mutant:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, fail_fast <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p>This applies to the <code>testthat</code> strategy (it sets <code>TESTTHAT_MAX_FAILS = 1</code> in the test subprocess and uses the progress reporter, which aborts the run at the first failing <code>test_that()</code> block). <code>SURVIVED</code> mutants are unaffected — they have no failure to short-circuit on — so baseline timing and timeout calibration are unchanged. The installed-tests fallback already stops at the first failing test <em>file</em> regardless of this flag.</p>
+</div>
+<div class="section level3">
 <h3 id="equivalent-mutant-detection">Equivalent Mutant Detection<a class="anchor" aria-label="anchor" href="#equivalent-mutant-detection"></a>
 </h3>
 <p>Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API. Configure it in any of these ways (listed highest precedence first; each setting is resolved independently, so they can be mixed):</p>
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>

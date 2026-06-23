@@ -17,7 +17,8 @@ mutate_package(
   timeout_seconds = NULL,
   config_dir = getwd(),
   max_line_deletions = 5,
-  cran = TRUE
+  cran = TRUE,
+  fail_fast = TRUE
 )
 ```
 
@@ -83,6 +84,17 @@ mutate_package(
   [`devtools::test()`](https://devtools.r-lib.org/reference/test.html)
   does. Note this only affects tests the package actually guards;
   unguarded network tests still run.
+
+- fail_fast:
+
+  Logical; if `TRUE` (the default), a mutant's test run stops at the
+  first failing test rather than running the whole suite. A mutant is
+  `KILLED` as soon as one test detects it, so the remainder of the suite
+  is wasted work; stopping early speeds up the test-running phase
+  without changing any mutant's verdict. Set to `FALSE` to run the full
+  suite for every mutant. Applies to the `testthat` strategy; the
+  installed-tests fallback already stops at the first failing test file
+  regardless of this flag.
 
 ## Value
 
@@ -160,29 +172,18 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> [1] -1 - 3 == -4
 #> ────────────────────────────────────────────────────────────────────────────────
 #> 
-#> ══ Results ═════════════════════════════════════════════════════════════════════
-#> ── Failed tests ────────────────────────────────────────────────────────────────
-#> Failure ('test-add.R:1:1'): (code run outside of `test_that()`)
-#> Expected `add(1, 2)` to equal 3.
-#> Differences:
-#> 1/1 mismatches
-#> [1] -1 - 3 == -4
-#> 
-#> [ FAIL 1 | WARN 0 | SKIP 0 | PASS 0 ]
-#> Error : Test failures.
-#> Test error: ! in callr subprocess.
-#> Caused by error: 
-#> ! Test failures.
+#> Maximum number of failures exceeded; quitting.
+#> ℹ Increase this number with (e.g.) `testthat::set_max_fails(Inf)` 
 #> Mutation Testing Summary:
 #>   Total mutants:    1
-#>   Killed:           1
+#>   Killed:           0
 #>   Hanged:           0
-#>   Survived:         0
-#>   Mutation Score:   100.00%
+#>   Survived:         1
+#>   Mutation Score:   0.00%
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        1.1
+#>   Test execution:        1.0
 #>   Equivalence detection: 0.0
 names(result)
 #> [1] "package_mutants" "test_results"    "timing"         
