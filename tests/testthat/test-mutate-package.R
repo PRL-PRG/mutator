@@ -281,3 +281,73 @@ test_that("cran mode controls skip_on_cran via NOT_CRAN", {
   expect_true(any(vapply(res_dev$test_results, function(x) identical(x, "KILLED"), logical(1))))
   expect_false(any(vapply(res_dev$test_results, function(x) identical(x, "SURVIVED"), logical(1))))
 })
+
+test_that("fail_fast stops the suite at the first failing test but keeps the verdict", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("callr")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  pkg_dir <- file.path(temp_dir, "ffpkg")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)
+
+  writeLines(c(
+    "Package: ffpkg", "Version: 0.1.0", "Title: t",
+    "Description: t.", "Author: a", "License: MIT"
+  ), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+  writeLines("f <- function(x) x + 1", file.path(pkg_dir, "R", "f.R"))
+  writeLines("library(testthat)\nlibrary(ffpkg)\ntest_check(\"ffpkg\")",
+             file.path(pkg_dir, "tests", "testthat.R"))
+
+  # Two test files. `test-a-kill.R` (sorted first) kills every mutant of `f`.
+  # `test-z-sentinel.R` (sorted last) appends a line to a sentinel file every
+  # time it runs, so the number of appends reveals how much of the suite ran.
+  sentinel <- file.path(temp_dir, "sentinel.txt")
+  writeLines(
+    "test_that(\"kills\", { expect_equal(f(1), 2) })",
+    file.path(pkg_dir, "tests", "testthat", "test-a-kill.R")
+  )
+  writeLines(
+    sprintf("test_that(\"sentinel\", { cat(\"ran\\n\", file = %s, append = TRUE); expect_true(TRUE) })",
+            deparse(sentinel)),
+    file.path(pkg_dir, "tests", "testthat", "test-z-sentinel.R")
+  )
+
+  count_runs <- function(path) {
+    if (!file.exists(path)) 0L else length(readLines(path, warn = FALSE))
+  }
+
+  # fail_fast = TRUE: each mutant aborts at test-a-kill, never reaching the
+  # sentinel file. The baseline (which passes) still runs the whole suite.
+  unlink(sentinel)
+  res_ff <- suppressMessages(
+    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, fail_fast = TRUE)
+  )
+  n_ff <- count_runs(sentinel)
+
+  # fail_fast = FALSE: every mutant runs the full suite, so each one also reaches
+  # the sentinel file -> strictly more appends than the baseline-only case above.
+  unlink(sentinel)
+  res_full <- suppressMessages(
+    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, fail_fast = FALSE)
+  )
+  n_full <- count_runs(sentinel)
+
+  # Verdict is identical: every mutant is KILLED either way.
+  all_killed <- function(res) {
+    length(res$test_results) > 0 &&
+      all(vapply(res$test_results, function(x) identical(x, "KILLED"), logical(1)))
+  }
+  expect_true(all_killed(res_ff))
+  expect_true(all_killed(res_full))
+
+  # But fail_fast ran strictly less of the suite: the mutants never reached the
+  # later test file, while the full run did (once per mutant).
+  expect_gt(n_full, n_ff)
+})

@@ -14,7 +14,8 @@ mutate_package(
   timeout_seconds = NULL,
   config_dir = getwd(),
   max_line_deletions = 5,
-  cran = TRUE
+  cran = TRUE,
+  fail_fast = TRUE
 )
 }
 \arguments{
@@ -53,6 +54,15 @@ the same tests CRAN would run are used (skipping network/slow tests the
 package marks). Set to \code{FALSE} to run the full suite (\code{NOT_CRAN = "true"}),
 as \code{devtools::test()} does. Note this only affects tests the package
 actually guards; unguarded network tests still run.}
+
+\item{fail_fast}{Logical; if \code{TRUE} (the default), a mutant's test run stops
+at the first failing test rather than running the whole suite. A mutant is
+\code{KILLED} as soon as one test detects it, so the remainder of the suite is
+wasted work; stopping early speeds up the test-running phase without
+changing any mutant's verdict. Set to \code{FALSE} to run the full suite for
+every mutant. Applies to the \code{testthat} strategy; the installed-tests
+fallback already stops at the first failing test file regardless of this
+flag.}
 }
 \value{
 An invisible list with three components:

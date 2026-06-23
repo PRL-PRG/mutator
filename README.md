@@ -143,6 +143,28 @@ installed-tests fallback). Note that it only affects tests the package
 *explicitly* guards with `skip_on_cran()` / `skip_if_offline()`; a package whose
 network test has no such guard will still run that test in either mode.
 
+### Fail-fast (stop at the first failing test)
+
+A mutant is `KILLED` the instant any one test detects it, so running the rest of
+its suite is wasted work. By default (`fail_fast = TRUE`) each mutant's test run
+**stops at the first failing test** instead of finishing the suite, which speeds
+up the test-running phase — often substantially for packages with large suites —
+without changing any mutant's verdict (the early-aborted run still reports the
+failure, so the mutant is still `KILLED`).
+
+Set `fail_fast = FALSE` to run the full suite for every mutant:
+
+```r
+mutate_package("path/to/pkg", fail_fast = FALSE)
+```
+
+This applies to the `testthat` strategy (it sets `TESTTHAT_MAX_FAILS = 1` in the
+test subprocess and uses the progress reporter, which aborts the run at the first
+failing `test_that()` block). `SURVIVED` mutants are unaffected — they have no
+failure to short-circuit on — so baseline timing and timeout calibration are
+unchanged. The installed-tests fallback already stops at the first failing test
+*file* regardless of this flag.
+
 ### Equivalent Mutant Detection
 
 Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API.

@@ -264,6 +264,14 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   package marks). Set to `FALSE` to run the full suite (`NOT_CRAN = "true"`),
 #'   as `devtools::test()` does. Note this only affects tests the package
 #'   actually guards; unguarded network tests still run.
+#' @param fail_fast Logical; if `TRUE` (the default), a mutant's test run stops
+#'   at the first failing test rather than running the whole suite. A mutant is
+#'   `KILLED` as soon as one test detects it, so the remainder of the suite is
+#'   wasted work; stopping early speeds up the test-running phase without
+#'   changing any mutant's verdict. Set to `FALSE` to run the full suite for
+#'   every mutant. Applies to the `testthat` strategy; the installed-tests
+#'   fallback already stops at the first failing test file regardless of this
+#'   flag.
 #'
 #' @return An invisible list with three components:
 #' \describe{
@@ -305,7 +313,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            isFullLog = FALSE, detectEqMutants = FALSE,
                            mutation_dir = NULL, max_mutants = NULL,
                            timeout_seconds = NULL, config_dir = getwd(),
-                           max_line_deletions = 5, cran = TRUE) {
+                           max_line_deletions = 5, cran = TRUE,
+                           fail_fast = TRUE) {
   timeout_multiplier <- 1.5
   timeout_floor_seconds <- 5
   max_mutants <- normalize_max_mutants(max_mutants)
@@ -394,16 +403,29 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
     proc <- tryCatch(
       callr::r_bg(
-        function(pkg_path, not_cran) {
+        function(pkg_path, not_cran, fail_fast) {
           # Control NOT_CRAN so skip_on_cran()/skip_if_offline() behave as on
           # CRAN ("false") or run everything in dev mode ("true").
           Sys.setenv(NOT_CRAN = not_cran)
+          # Fail-fast: a mutant is KILLED by the first failing test, so stop the
+          # run there instead of finishing the suite. TESTTHAT_MAX_FAILS = 1 makes
+          # the reporter abort at the first failing context; test_dir() still sees
+          # the failure and throws, which the caller turns into KILLED. We force
+          # reporter = "progress" because only the ProgressReporter actually aborts
+          # on max-fails (the default reporter can be "Llm"/"Summary", which do not).
+          if (fail_fast) {
+            Sys.setenv(TESTTHAT_MAX_FAILS = "1")
+          }
           setwd(pkg_path)
           suppressMessages(pkgload::load_all(".", quiet = TRUE))
-          tr <- testthat::test_dir("tests/testthat")
+          tr <- testthat::test_dir("tests/testthat", reporter = "progress")
           sum(tr$failed)
         },
-        args = list(pkg_path = pkg_path, not_cran = if (cran) "false" else "true"),
+        args = list(
+          pkg_path = pkg_path,
+          not_cran = if (cran) "false" else "true",
+          fail_fast = fail_fast
+        ),
         stdout = out_file,
         stderr = "2>&1"
       ),
@@ -886,7 +908,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
             run_one_mutant = run_one_mutant,
             run_tests = run_tests,
             effective_timeout_seconds = effective_timeout_seconds,
-            cran = cran
+            cran = cran,
+            fail_fast = fail_fast
           )
         )
       )
