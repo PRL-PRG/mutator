@@ -133,11 +133,14 @@ An invisible list with three components:
 
 Test strategy is, by default, detected automatically:
 
-- If `tests/testthat/` exists,
-  [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html)
-  is used (the mutant is loaded in-process with
-  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html),
-  no installation).
+- If `tests/testthat/` exists, the mutant is loaded in-process with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
+  (no installation) and its tests are run the way the package's own
+  `tests/testthat.R` harness runs them – i.e. with the same arguments
+  (notably any `filter`) that the harness passes to
+  [`testthat::test_check()`](https://testthat.r-lib.org/reference/test_package.html)
+  – via
+  [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html).
 
 - Otherwise, if `tests/` exists, mutator installs the mutant package
   with `--install-tests` and runs

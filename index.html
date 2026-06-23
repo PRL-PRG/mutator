@@ -128,7 +128,7 @@
 </h2>
 <p>mutator selects a package test strategy automatically:</p>
 <ul>
-<li>If <code>tests/testthat/</code> exists, mutator uses <code>testthat::test_dir("tests/testthat")</code>.</li>
+<li>If <code>tests/testthat/</code> exists, mutator loads the mutant in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and runs its tests the way the package’s own <code>tests/testthat.R</code> harness does — forwarding the same arguments (notably any <code>filter</code>) that the harness passes to <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> to <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>. This means mutator runs exactly the tests the package author (and <code>R CMD check</code>) run, without paying for an install per mutant.</li>
 <li>Otherwise, if <code>tests/</code> exists, mutator falls back to <code>tools::testInstalledPackage(..., types = "tests")</code> after installing each mutant with <code>--install-tests</code>.</li>
 </ul>
 <p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts), but it is slower because each mutant must be installed before tests are executed.</p>

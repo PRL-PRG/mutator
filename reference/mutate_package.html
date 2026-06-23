@@ -158,8 +158,11 @@ and optional equivalence flags.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Test strategy is, by default, detected automatically:</p><ul><li><p>If <code>tests/testthat/</code> exists, <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code> is used (the
-mutant is loaded in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code>, no installation).</p></li>
+    <p>Test strategy is, by default, detected automatically:</p><ul><li><p>If <code>tests/testthat/</code> exists, the mutant is loaded in-process with
+<code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> (no installation) and its tests are run the way the
+package's own <code>tests/testthat.R</code> harness runs them – i.e. with the same
+arguments (notably any <code>filter</code>) that the harness passes to
+<code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> – via <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>.</p></li>
 <li><p>Otherwise, if <code>tests/</code> exists, mutator installs the mutant package
 with <code>--install-tests</code> and runs <code><a href="https://rdrr.io/r/tools/testInstalledPackage.html" class="external-link">tools::testInstalledPackage()</a></code>.</p></li>
 </ul><p>Pass <code>strategy</code> to override this (for example to run a <code>testthat</code> package

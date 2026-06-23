@@ -79,8 +79,16 @@ result <- mutate_package("path/to/your/package", mutation_dir = tempdir())
 
 mutator selects a package test strategy automatically:
 
-- If `tests/testthat/` exists, mutator uses
-  `testthat::test_dir("tests/testthat")`.
+- If `tests/testthat/` exists, mutator loads the mutant in-process with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
+  and runs its tests the way the package’s own `tests/testthat.R`
+  harness does — forwarding the same arguments (notably any `filter`)
+  that the harness passes to
+  [`testthat::test_check()`](https://testthat.r-lib.org/reference/test_package.html)
+  to
+  [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html).
+  This means mutator runs exactly the tests the package author (and
+  `R CMD check`) run, without paying for an install per mutant.
 - Otherwise, if `tests/` exists, mutator falls back to
   `tools::testInstalledPackage(..., types = "tests")` after installing
   each mutant with `--install-tests`.
