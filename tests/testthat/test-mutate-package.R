@@ -127,6 +127,57 @@ test_check(\"%s\")", pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.
   expect_equal(symlink_count, length(mutant_r_files) - 1)
 })
 
+test_that("mutate_package isolates src/ and tests/ when isolate = TRUE", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+  skip_on_os("windows")
+
+  # Skip when symlinks are not supported (otherwise everything is copied anyway
+  # and the symlink-vs-copy distinction this test relies on does not exist).
+  probe_dir <- tempfile()
+  dir.create(probe_dir)
+  probe_src <- file.path(probe_dir, "source.txt")
+  probe_dst <- file.path(probe_dir, "target.txt")
+  writeLines("probe", probe_src)
+  symlink_supported <- isTRUE(tryCatch(file.symlink(probe_src, probe_dst), error = function(e) FALSE))
+  unlink(probe_dir, recursive = TRUE)
+  skip_if_not(symlink_supported)
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE))
+
+  pkg_name <- "testMutatoRIsolate"
+  pkg_dir <- file.path(temp_dir, pkg_name)
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)
+
+  writeLines(sprintf("Package: %s
+Version: 0.1.0
+Title: Test Package for mutator
+Description: A test package for mutation testing.
+Author: Test Author
+License: MIT
+RoxygenNote: 7.1.1", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+  writeLines("f_add <- function(x, y) { x + y }", file.path(pkg_dir, "R", "f_add.R"))
+  writeLines(sprintf("library(testthat)\nlibrary(%s)\n\ntest_check(\"%s\")",
+    pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.R"))
+  writeLines("test_that(\"add\", { expect_equal(f_add(1, 2), 3) })",
+    file.path(pkg_dir, "tests", "testthat", "test-basic.R"))
+
+  result <- mutate_package(pkg_dir, cores = 1, isolate = TRUE)
+  mutant_pkg <- result$package_mutants[[1]]$path
+
+  # DESCRIPTION (not in the isolate set) is still symlinked, but tests/ is a real
+  # copied directory rather than a symlink to the shared original.
+  expect_true(nzchar(Sys.readlink(file.path(mutant_pkg, "DESCRIPTION"))))
+  expect_identical(Sys.readlink(file.path(mutant_pkg, "tests")), "")
+  expect_true(dir.exists(file.path(mutant_pkg, "tests", "testthat")))
+  expect_true(file.exists(file.path(mutant_pkg, "tests", "testthat", "test-basic.R")))
+})
+
 test_that("mutate_package fails fast when baseline tests fail", {
   skip_if_not_installed("pkgload")
   skip_if_not_installed("furrr")
@@ -201,6 +252,64 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
   expect_true("package_mutants" %in% names(result))
   expect_true("test_results" %in% names(result))
   expect_true(length(result$test_results) > 0)
+})
+
+test_that("installed strategy reuses one compiled build across mutants (--no-libs)", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+  skip_if_not_installed("pkgbuild")
+  # Needs a C toolchain: this exercises the compile-once template + per-mutant
+  # --no-libs install + libs/ restore path, which only engages for packages with
+  # compiled code.
+  skip_if_not(isTRUE(pkgbuild::has_compiler(debug = FALSE)))
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  pkg_name <- "testCompiledFallback"
+  pkg_dir <- file.path(temp_dir, pkg_name)
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "src"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+
+  writeLines(sprintf("Package: %s
+Version: 0.1.0
+Title: Compiled installed-tests package
+Description: A package with compiled code and tests/ scripts.
+Author: Test Author
+License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines(c("useDynLib(testCompiledFallback, c_add)", "export(add2)"),
+    file.path(pkg_dir, "NAMESPACE"))
+
+  # Compiled function (never mutated): its shared object is built once and reused.
+  writeLines(c(
+    "#include <R.h>",
+    "#include <Rinternals.h>",
+    "SEXP c_add(SEXP a, SEXP b) {",
+    "  return ScalarReal(asReal(a) + asReal(b));",
+    "}"
+  ), file.path(pkg_dir, "src", "add.c"))
+
+  # R wrapper (this is what gets mutated). gate() guards the test below.
+  writeLines(c(
+    "add2 <- function(x, y) .Call(c_add, x, y)",
+    "gate <- function() TRUE"
+  ), file.path(pkg_dir, "R", "add.R"))
+
+  # Test calls into the compiled code, so it only passes if the restored .so is
+  # present -- guarding the libs/ restore step end to end.
+  writeLines("stopifnot(testCompiledFallback::add2(2, 3) == 5)",
+    file.path(pkg_dir, "tests", "test-add.R"))
+
+  result <- mutate_package(pkg_dir, cores = 2, strategy = "installed")
+
+  expect_true(is.list(result))
+  expect_true(length(result$test_results) > 0)
+  # Baseline succeeded (mutate_package would have errored otherwise) and every
+  # mutant produced a verdict -- i.e. installs with the restored .so worked.
+  expect_true(all(unlist(result$test_results) %in% c("KILLED", "SURVIVED", "HANG")))
 })
 
 test_that("mutate_package fails fast for fallback strategy when baseline tests fail", {

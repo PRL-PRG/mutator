@@ -16,6 +16,7 @@ mutate_package(
   max_line_deletions = 5,
   cran = TRUE,
   fail_fast = TRUE,
+  isolate = FALSE,
   strategy = c("auto", "testthat", "installed")
 )
 }
@@ -65,14 +66,31 @@ every mutant. Applies to the \code{testthat} strategy; the installed-tests
 fallback already stops at the first failing test file regardless of this
 flag.}
 
+\item{isolate}{Logical; if \code{FALSE} (the default), each mutant's package copy
+symlinks the unchanged directories of the original package (only the mutated
+\verb{R/} file is materialised), which is fast but makes those directories shared
+writable state across the parallel workers. If \code{TRUE}, the \verb{src/} and
+\verb{tests/} directories are deep-copied into every mutant copy instead. The
+\code{installed} strategy no longer recompiles per mutant (it builds once and
+installs each mutant with \code{--no-libs}, see \code{strategy}), so the shared-\verb{src/}
+build race no longer requires isolation. Use \code{isolate = TRUE} when a package
+has \strong{non-hermetic tests} that write files into \verb{tests/} (or \verb{src/}) and
+parallel runs therefore produce spurious \code{KILLED}/\code{HANG} verdicts; it gives
+each worker its own copy at the cost of extra disk. Running with \code{cores = 1}
+avoids such contention without the copy cost.}
+
 \item{strategy}{Test strategy to use. \code{"auto"} (the default) picks the
 \code{testthat} strategy when \verb{tests/testthat/} exists and the installed-tests
 strategy otherwise. \code{"testthat"} forces the in-process \code{testthat::test_dir()}
 path (requires \verb{tests/testthat/}). \code{"installed"} forces the
 \verb{R CMD INSTALL --install-tests} + \code{tools::testInstalledPackage()} path
 (requires \verb{tests/}); this works for \code{testthat} packages too — useful for
-comparing the two strategies' run times — but is slower because each mutant
-must be installed before its tests run.}
+comparing the two strategies. To avoid recompiling on every mutant, the
+unmutated package is installed (and its C/C++ compiled) \strong{once} into a
+template library; each mutant is then installed with \code{--no-libs} (R code
+only) and the template's prebuilt shared objects are restored before its
+tests run. This relies on compiled code never being mutated, and it also
+means concurrent mutant installs no longer write into a shared \verb{src/}.}
 }
 \value{
 An invisible list with three components:

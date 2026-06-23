@@ -342,14 +342,30 @@ extract_harness_test_args <- function(harness_file) {
 #'   every mutant. Applies to the `testthat` strategy; the installed-tests
 #'   fallback already stops at the first failing test file regardless of this
 #'   flag.
+#' @param isolate Logical; if `FALSE` (the default), each mutant's package copy
+#'   symlinks the unchanged directories of the original package (only the mutated
+#'   `R/` file is materialised), which is fast but makes those directories shared
+#'   writable state across the parallel workers. If `TRUE`, the `src/` and
+#'   `tests/` directories are deep-copied into every mutant copy instead. The
+#'   `installed` strategy no longer recompiles per mutant (it builds once and
+#'   installs each mutant with `--no-libs`, see `strategy`), so the shared-`src/`
+#'   build race no longer requires isolation. Use `isolate = TRUE` when a package
+#'   has **non-hermetic tests** that write files into `tests/` (or `src/`) and
+#'   parallel runs therefore produce spurious `KILLED`/`HANG` verdicts; it gives
+#'   each worker its own copy at the cost of extra disk. Running with `cores = 1`
+#'   avoids such contention without the copy cost.
 #' @param strategy Test strategy to use. `"auto"` (the default) picks the
 #'   `testthat` strategy when `tests/testthat/` exists and the installed-tests
 #'   strategy otherwise. `"testthat"` forces the in-process `testthat::test_dir()`
 #'   path (requires `tests/testthat/`). `"installed"` forces the
 #'   `R CMD INSTALL --install-tests` + `tools::testInstalledPackage()` path
 #'   (requires `tests/`); this works for `testthat` packages too — useful for
-#'   comparing the two strategies' run times — but is slower because each mutant
-#'   must be installed before its tests run.
+#'   comparing the two strategies. To avoid recompiling on every mutant, the
+#'   unmutated package is installed (and its C/C++ compiled) **once** into a
+#'   template library; each mutant is then installed with `--no-libs` (R code
+#'   only) and the template's prebuilt shared objects are restored before its
+#'   tests run. This relies on compiled code never being mutated, and it also
+#'   means concurrent mutant installs no longer write into a shared `src/`.
 #'
 #' @return An invisible list with three components:
 #' \describe{
@@ -392,7 +408,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            mutation_dir = NULL, max_mutants = NULL,
                            timeout_seconds = NULL, config_dir = getwd(),
                            max_line_deletions = 5, cran = TRUE,
-                           fail_fast = TRUE,
+                           fail_fast = TRUE, isolate = FALSE,
                            strategy = c("auto", "testthat", "installed")) {
   strategy <- match.arg(strategy)
   timeout_multiplier <- 1.5
@@ -426,6 +442,18 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   set_last_test_failure <- function(msg) {
     last_test_failure <<- msg
   }
+
+  # For the installed-tests strategy we install the *unmutated* package once into
+  # this template library, compiling its C/C++ code a single time. Because the
+  # mutator never mutates compiled code, every mutant links an identical shared
+  # object, so each mutant install skips compilation (`R CMD INSTALL --no-libs`)
+  # and restores the prebuilt `libs/` from this template. This avoids recompiling
+  # on every mutant and -- crucially -- avoids writing into the (shared) source
+  # `src/`, the contention that otherwise makes concurrent installs clobber each
+  # other's build outputs. Populated by build_installed_template() below.
+  installed_template_lib <- NULL
+  installed_pkg_name <- NULL
+  installed_template_has_libs <- FALSE
 
   # Detect test strategy once and reuse it for baseline and all mutants.
   detect_test_strategy <- function(pkg_path) {
@@ -592,17 +620,28 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     on.exit(unlink(temp_out, recursive = TRUE, force = TRUE), add = TRUE)
 
     r_bin <- file.path(R.home("bin"), "R")
+    # When a prebuilt template library exists, install only the (mutated) R code
+    # and tests with --no-libs and restore the template's compiled libs/ below.
+    # This skips recompiling C/C++ on every mutant and avoids touching the shared
+    # source src/. Without a template (e.g. a pure-R package), a normal install
+    # is used.
+    use_template <- !is.null(installed_template_lib)
+    install_args <- c(
+      "CMD", "INSTALL",
+      "--install-tests",
+      "--no-multiarch",
+      # --no-libs leaves the package without its shared object until we restore it
+      # below, so suppress R's end-of-install test load (it would fail to find the
+      # .so). The real tests run against the restored libs/ afterwards.
+      if (use_template) c("--no-libs", "--no-test-load"),
+      paste0("--library=", temp_lib),
+      pkg_path
+    )
     install_started <- Sys.time()
     install_output <- tryCatch(
       suppressWarnings(system2(
         r_bin,
-        args = c(
-          "CMD", "INSTALL",
-          "--install-tests",
-          "--no-multiarch",
-          paste0("--library=", temp_lib),
-          pkg_path
-        ),
+        args = install_args,
         stdout = TRUE,
         stderr = TRUE,
         timeout = run_timeout
@@ -637,6 +676,26 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
         message(paste(utils::tail(install_output, 10), collapse = "\n"))
       }
       return(FALSE)
+    }
+
+    # Restore the prebuilt shared objects from the template. They are identical
+    # for every mutant (compiled code is never mutated), and --no-libs left the
+    # installed package without a libs/ directory, so copy the template's into
+    # place. Skipped for pure-R packages (template has no libs/).
+    if (use_template && installed_template_has_libs) {
+      restored <- tryCatch(
+        file.copy(
+          file.path(installed_template_lib, pkg_name, "libs"),
+          file.path(temp_lib, pkg_name),
+          recursive = TRUE
+        ),
+        error = function(e) FALSE
+      )
+      if (!isTRUE(all(restored))) {
+        set_last_test_failure("Could not restore prebuilt shared objects from the install template.")
+        message("Install error: failed to restore libs/ from template for package: ", pkg_name)
+        return(FALSE)
+      }
     }
 
     # Charge install time against the per-mutant budget so install + tests share
@@ -762,6 +821,56 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     stop(sprintf("Unknown test strategy '%s'.", test_strategy), call. = FALSE)
   }
 
+  # Build the install template once (installed-tests strategy only): a full
+  # install of the unmutated package, compiling its C/C++ a single time. Done
+  # before the baseline run so the baseline, the contended calibration, and
+  # every mutant all go through the fast --no-libs install path. A failure here
+  # means the unmutated package does not install/compile -- fatal, like a failing
+  # baseline.
+  build_installed_template <- function() {
+    installed_pkg_name <<- get_package_name(pkg_dir)
+    template_lib <- tempfile("mutator_template_lib_")
+    dir.create(template_lib, recursive = TRUE, showWarnings = FALSE)
+    r_bin <- file.path(R.home("bin"), "R")
+    out <- tryCatch(
+      suppressWarnings(system2(
+        r_bin,
+        args = c(
+          "CMD", "INSTALL", "--install-tests", "--no-multiarch",
+          paste0("--library=", template_lib), pkg_dir
+        ),
+        stdout = TRUE, stderr = TRUE
+      )),
+      error = function(e) e
+    )
+    status <- if (inherits(out, "error")) {
+      1L
+    } else {
+      s <- attr(out, "status")
+      if (is.null(s)) 0L else as.integer(s)
+    }
+    if (!identical(status, 0L)) {
+      detail <- if (inherits(out, "error")) {
+        conditionMessage(out)
+      } else {
+        paste(utils::tail(out, 10), collapse = "\n")
+      }
+      stop(sprintf(
+        "Could not build the install template (the unmutated package failed to install/compile).\n  %s",
+        detail
+      ), call. = FALSE)
+    }
+    installed_template_lib <<- template_lib
+    installed_template_has_libs <<- dir.exists(
+      file.path(template_lib, installed_pkg_name, "libs")
+    )
+  }
+
+  if (identical(test_strategy, "installed-tests")) {
+    build_installed_template()
+    on.exit(unlink(installed_template_lib, recursive = TRUE, force = TRUE), add = TRUE)
+  }
+
   baseline_elapsed_seconds <- NA_real_
   effective_timeout_seconds <- NA_real_
 
@@ -818,6 +927,16 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     }
   }
 
+  # When `isolate` is set, these directories are deep-copied into every mutant
+  # package instead of being symlinked to the shared original. `src/` is the
+  # directory R CMD INSTALL writes `.o`/`.so` into, so sharing it lets parallel
+  # installs clobber each other's build artifacts (false KILLED/HANG); `tests/`
+  # is where non-hermetic tests are most likely to write files. Copying them
+  # gives each parallel worker its own writable scratch space at the cost of
+  # extra disk and (for `src/`) per-mutant recompilation. See the README's
+  # "Parallel execution" notes.
+  isolate_copy_dirs <- if (isTRUE(isolate)) c("src", "tests") else character(0)
+
   create_linked_package_copy <- function(pkg_dir, src_file, mutated_file, target_root) {
     pkg_copy <- file.path(target_root, basename(pkg_dir))
     dir.create(pkg_copy, recursive = TRUE, showWarnings = FALSE)
@@ -827,7 +946,13 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       name <- basename(entry)
       if (identical(name, "R")) next
       target <- file.path(pkg_copy, name)
-      link_or_copy(entry, target, recursive = dir.exists(entry))
+      if (name %in% isolate_copy_dirs && dir.exists(entry)) {
+        # Deep-copy the whole directory into the mutant package (recursive copy
+        # places `entry` *inside* pkg_copy, creating pkg_copy/<name>).
+        file.copy(entry, pkg_copy, recursive = TRUE)
+      } else {
+        link_or_copy(entry, target, recursive = dir.exists(entry))
+      }
     }
 
     original_r_dir <- file.path(pkg_dir, "R")
@@ -906,8 +1031,34 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   contended_baseline_seconds <- baseline_elapsed_seconds
   if (is.null(timeout_seconds) && workers_to_use > 1 && length(mutants) > 0 &&
     future::supportsMulticore()) {
+    # Each concurrent calibration run must reproduce the per-mutant conditions.
+    # With isolate = TRUE the mutants install/test from their own copied
+    # src/tests, so calibrating against the shared original `pkg_dir` would be
+    # doubly wrong: for the installed strategy the concurrent installs would race
+    # on the shared src/ (failing fast in a few seconds), and even otherwise it
+    # would not capture the real per-mutant recompile cost. The result is a far
+    # too-small contended baseline and a timeout that fires on every isolated
+    # mutant (100% false HANG). So under isolation we calibrate against one
+    # isolated, *unmutated* copy of the package per worker -- exactly what a
+    # mutant run does, minus the mutation.
+    calib_pkgs <- rep(list(pkg_dir), workers_to_use)
+    if (isTRUE(isolate) && length(r_files) > 0) {
+      calib_root <- tempfile("mut_calib_")
+      dir.create(calib_root)
+      on.exit(unlink(calib_root, recursive = TRUE, force = TRUE), add = TRUE)
+      calib_pkgs <- lapply(seq_len(workers_to_use), function(i) {
+        # src_file == mutated_file: the original R file is copied over itself, so
+        # the copy is isolated (own src/tests) but unmutated.
+        create_linked_package_copy(
+          pkg_dir = pkg_dir,
+          src_file = r_files[[1L]],
+          mutated_file = r_files[[1L]],
+          target_root = file.path(calib_root, sprintf("w%d", i))
+        )
+      })
+    }
     time_one_baseline <- function(i) {
-      timing <- system.time(passed <- run_tests(pkg_dir))
+      timing <- system.time(passed <- run_tests(calib_pkgs[[i]]))
       list(elapsed = unname(timing[["elapsed"]]), passed = isTRUE(passed))
     }
     calibration <- tryCatch(
@@ -1029,7 +1180,10 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
             effective_timeout_seconds = effective_timeout_seconds,
             cran = cran,
             fail_fast = fail_fast,
-            harness_test_args = harness_test_args
+            harness_test_args = harness_test_args,
+            installed_template_lib = installed_template_lib,
+            installed_pkg_name = installed_pkg_name,
+            installed_template_has_libs = installed_template_has_libs
           )
         )
       )
