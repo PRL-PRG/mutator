@@ -15,7 +15,8 @@ mutate_package(
   config_dir = getwd(),
   max_line_deletions = 5,
   cran = TRUE,
-  fail_fast = TRUE
+  fail_fast = TRUE,
+  strategy = c("auto", "testthat", "installed")
 )
 }
 \arguments{
@@ -63,6 +64,15 @@ changing any mutant's verdict. Set to \code{FALSE} to run the full suite for
 every mutant. Applies to the \code{testthat} strategy; the installed-tests
 fallback already stops at the first failing test file regardless of this
 flag.}
+
+\item{strategy}{Test strategy to use. \code{"auto"} (the default) picks the
+\code{testthat} strategy when \verb{tests/testthat/} exists and the installed-tests
+strategy otherwise. \code{"testthat"} forces the in-process \code{testthat::test_dir()}
+path (requires \verb{tests/testthat/}). \code{"installed"} forces the
+\verb{R CMD INSTALL --install-tests} + \code{tools::testInstalledPackage()} path
+(requires \verb{tests/}); this works for \code{testthat} packages too — useful for
+comparing the two strategies' run times — but is slower because each mutant
+must be installed before its tests run.}
 }
 \value{
 An invisible list with three components:
@@ -80,12 +90,15 @@ Mutates all \code{.R} files under a package's \verb{R/} directory, runs the pack
 tests against each mutant in parallel, and summarizes mutation outcomes.
 }
 \details{
-Test strategy is detected automatically:
+Test strategy is, by default, detected automatically:
 \itemize{
-\item If \verb{tests/testthat/} exists, \code{testthat::test_dir()} is used.
+\item If \verb{tests/testthat/} exists, \code{testthat::test_dir()} is used (the
+mutant is loaded in-process with \code{pkgload::load_all()}, no installation).
 \item Otherwise, if \verb{tests/} exists, mutator installs the mutant package
 with \code{--install-tests} and runs \code{tools::testInstalledPackage()}.
 }
+Pass \code{strategy} to override this (for example to run a \code{testthat} package
+through the slower installed-tests path for comparison).
 }
 \examples{
 # Wrapped in \donttest{}: it loads and test-runs a throwaway package, which

@@ -231,12 +231,15 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' Mutates all `.R` files under a package's `R/` directory, runs the package's
 #' tests against each mutant in parallel, and summarizes mutation outcomes.
 #'
-#' Test strategy is detected automatically:
+#' Test strategy is, by default, detected automatically:
 #' \itemize{
-#'   \item If `tests/testthat/` exists, `testthat::test_dir()` is used.
+#'   \item If `tests/testthat/` exists, `testthat::test_dir()` is used (the
+#'   mutant is loaded in-process with `pkgload::load_all()`, no installation).
 #'   \item Otherwise, if `tests/` exists, mutator installs the mutant package
 #'   with `--install-tests` and runs `tools::testInstalledPackage()`.
 #' }
+#' Pass `strategy` to override this (for example to run a `testthat` package
+#' through the slower installed-tests path for comparison).
 #'
 #' @param pkg_dir Path to the package directory.
 #' @param cores Number of parallel workers used for mutant test execution.
@@ -272,6 +275,14 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   every mutant. Applies to the `testthat` strategy; the installed-tests
 #'   fallback already stops at the first failing test file regardless of this
 #'   flag.
+#' @param strategy Test strategy to use. `"auto"` (the default) picks the
+#'   `testthat` strategy when `tests/testthat/` exists and the installed-tests
+#'   strategy otherwise. `"testthat"` forces the in-process `testthat::test_dir()`
+#'   path (requires `tests/testthat/`). `"installed"` forces the
+#'   `R CMD INSTALL --install-tests` + `tools::testInstalledPackage()` path
+#'   (requires `tests/`); this works for `testthat` packages too — useful for
+#'   comparing the two strategies' run times — but is slower because each mutant
+#'   must be installed before its tests run.
 #'
 #' @return An invisible list with three components:
 #' \describe{
@@ -314,7 +325,9 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            mutation_dir = NULL, max_mutants = NULL,
                            timeout_seconds = NULL, config_dir = getwd(),
                            max_line_deletions = 5, cran = TRUE,
-                           fail_fast = TRUE) {
+                           fail_fast = TRUE,
+                           strategy = c("auto", "testthat", "installed")) {
+  strategy <- match.arg(strategy)
   timeout_multiplier <- 1.5
   timeout_floor_seconds <- 5
   max_mutants <- normalize_max_mutants(max_mutants)
@@ -631,7 +644,22 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     passed
   }
 
-  test_strategy <- detect_test_strategy(pkg_dir)
+  test_strategy <- switch(
+    strategy,
+    auto = detect_test_strategy(pkg_dir),
+    testthat = {
+      if (!dir.exists(file.path(pkg_dir, "tests", "testthat"))) {
+        stop("strategy = \"testthat\" requires a 'tests/testthat' directory.", call. = FALSE)
+      }
+      "testthat"
+    },
+    installed = {
+      if (!dir.exists(file.path(pkg_dir, "tests"))) {
+        stop("strategy = \"installed\" requires a 'tests' directory.", call. = FALSE)
+      }
+      "installed-tests"
+    }
+  )
 
   run_tests <- function(pkg_path) {
     if (identical(test_strategy, "testthat")) {
