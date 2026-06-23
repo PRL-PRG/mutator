@@ -18,7 +18,8 @@ mutate_package(
   config_dir = getwd(),
   max_line_deletions = 5,
   cran = TRUE,
-  fail_fast = TRUE
+  fail_fast = TRUE,
+  strategy = c("auto", "testthat", "installed")
 )
 ```
 
@@ -96,6 +97,19 @@ mutate_package(
   installed-tests fallback already stops at the first failing test file
   regardless of this flag.
 
+- strategy:
+
+  Test strategy to use. `"auto"` (the default) picks the `testthat`
+  strategy when `tests/testthat/` exists and the installed-tests
+  strategy otherwise. `"testthat"` forces the in-process
+  [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html)
+  path (requires `tests/testthat/`). `"installed"` forces the
+  `R CMD INSTALL --install-tests` +
+  [`tools::testInstalledPackage()`](https://rdrr.io/r/tools/testInstalledPackage.html)
+  path (requires `tests/`); this works for `testthat` packages too —
+  useful for comparing the two strategies' run times — but is slower
+  because each mutant must be installed before its tests run.
+
 ## Value
 
 An invisible list with three components:
@@ -117,15 +131,20 @@ An invisible list with three components:
 
 ## Details
 
-Test strategy is detected automatically:
+Test strategy is, by default, detected automatically:
 
 - If `tests/testthat/` exists,
   [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html)
-  is used.
+  is used (the mutant is loaded in-process with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html),
+  no installation).
 
 - Otherwise, if `tests/` exists, mutator installs the mutant package
   with `--install-tests` and runs
   [`tools::testInstalledPackage()`](https://rdrr.io/r/tools/testInstalledPackage.html).
+
+Pass `strategy` to override this (for example to run a `testthat`
+package through the slower installed-tests path for comparison).
 
 ## Examples
 
