@@ -54,6 +54,7 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <span>  max_line_deletions <span class="op">=</span> <span class="fl">5</span>,</span>
 <span>  cran <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  fail_fast <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  isolate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"installed"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -129,6 +130,21 @@ fallback already stops at the first failing test file regardless of this
 flag.</p></dd>
 
 
+<dt id="arg-isolate">isolate<a class="anchor" aria-label="anchor" href="#arg-isolate"></a></dt>
+<dd><p>Logical; if <code>FALSE</code> (the default), each mutant's package copy
+symlinks the unchanged directories of the original package (only the mutated
+<code>R/</code> file is materialised), which is fast but makes those directories shared
+writable state across the parallel workers. If <code>TRUE</code>, the <code>src/</code> and
+<code>tests/</code> directories are deep-copied into every mutant copy instead. The
+<code>installed</code> strategy no longer recompiles per mutant (it builds once and
+installs each mutant with <code>--no-libs</code>, see <code>strategy</code>), so the shared-<code>src/</code>
+build race no longer requires isolation. Use <code>isolate = TRUE</code> when a package
+has <strong>non-hermetic tests</strong> that write files into <code>tests/</code> (or <code>src/</code>) and
+parallel runs therefore produce spurious <code>KILLED</code>/<code>HANG</code> verdicts; it gives
+each worker its own copy at the cost of extra disk. Running with <code>cores = 1</code>
+avoids such contention without the copy cost.</p></dd>
+
+
 <dt id="arg-strategy">strategy<a class="anchor" aria-label="anchor" href="#arg-strategy"></a></dt>
 <dd><p>Test strategy to use. <code>"auto"</code> (the default) picks the
 <code>testthat</code> strategy when <code>tests/testthat/</code> exists and the installed-tests
@@ -136,8 +152,12 @@ strategy otherwise. <code>"testthat"</code> forces the in-process <code><a href=
 path (requires <code>tests/testthat/</code>). <code>"installed"</code> forces the
 <code>R CMD INSTALL --install-tests</code> + <code><a href="https://rdrr.io/r/tools/testInstalledPackage.html" class="external-link">tools::testInstalledPackage()</a></code> path
 (requires <code>tests/</code>); this works for <code>testthat</code> packages too — useful for
-comparing the two strategies' run times — but is slower because each mutant
-must be installed before its tests run.</p></dd>
+comparing the two strategies. To avoid recompiling on every mutant, the
+unmutated package is installed (and its C/C++ compiled) <strong>once</strong> into a
+template library; each mutant is then installed with <code>--no-libs</code> (R code
+only) and the template's prebuilt shared objects are restored before its
+tests run. This relies on compiled code never being mutated, and it also
+means concurrent mutant installs no longer write into a shared <code>src/</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

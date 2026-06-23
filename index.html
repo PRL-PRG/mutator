@@ -131,7 +131,7 @@
 <li>If <code>tests/testthat/</code> exists, mutator loads the mutant in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and runs its tests the way the package’s own <code>tests/testthat.R</code> harness does — forwarding the same arguments (notably any <code>filter</code>) that the harness passes to <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> to <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>. This means mutator runs exactly the tests the package author (and <code>R CMD check</code>) run, without paying for an install per mutant.</li>
 <li>Otherwise, if <code>tests/</code> exists, mutator falls back to <code>tools::testInstalledPackage(..., types = "tests")</code> after installing each mutant with <code>--install-tests</code>.</li>
 </ul>
-<p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts), but it is slower because each mutant must be installed before tests are executed.</p>
+<p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts). To avoid recompiling C/C++ on every mutant, mutator installs the unmutated package — compiling its shared objects — <strong>once</strong> into a template library, then installs each mutant with <code>--no-libs</code> (R code only) and restores the template’s prebuilt shared objects before running its tests. This is safe because mutator does not mutate compiled code, so the shared object is identical for every mutant; it also means concurrent mutant installs no longer write into a shared <code>src/</code> (see “Parallel execution and isolation” below).</p>
 <p>Each mutant test run uses a timeout. By default, mutator runs the baseline suite first and derives the per-mutant timeout as <code>baseline_elapsed_seconds * 1.5</code>. You can override this by setting <code>timeout_seconds</code> explicitly.</p>
 <p>Mutant outcomes are reported as:</p>
 <ul>
@@ -162,7 +162,7 @@
 <h3 id="timeouts-and-the-contended-baseline">Timeouts and the contended baseline<a class="anchor" aria-label="anchor" href="#timeouts-and-the-contended-baseline"></a>
 </h3>
 <p>Each mutant is run with a wall-clock timeout; exceeding it is reported as <code>HANG</code>. The timeout is derived from how long the package’s own test suite takes, unless you pass <code>timeout_seconds</code> explicitly.</p>
-<p>Because mutants run in parallel (<code>cores</code> at a time), the timeout must account for <strong>contention</strong>: with many workers, each test run is slower than it would be alone — for packages that load many dependencies, or recompile C code on every <code>R CMD INSTALL</code>, dramatically so. A timeout based on a single, <em>uncontended</em> baseline run would then fire on nearly every mutant (a wave of false <code>HANG</code>s).</p>
+<p>Because mutants run in parallel (<code>cores</code> at a time), the timeout must account for <strong>contention</strong>: with many workers, each test run is slower than it would be alone — for packages that load many dependencies, or do heavy per-mutant install work, dramatically so. A timeout based on a single, <em>uncontended</em> baseline run would then fire on nearly every mutant (a wave of false <code>HANG</code>s).</p>
 <p>To avoid this, <code><a href="reference/mutate_package.html">mutate_package()</a></code> first runs the baseline suite once on its own (to confirm it passes and fail fast otherwise), then runs it <code>cores</code> times <strong>concurrently</strong> and takes the slowest of those as the <em>contended baseline</em>. The timeout is <code>max(contended_baseline * 1.5, 5s)</code>. This self-calibrates to the machine, the chosen parallelism, and the package’s real load/compile cost — no manual tuning. Pass <code>timeout_seconds</code> to override it entirely. (When <code>cores = 1</code>, or when forking is unavailable, the solo baseline is used.)</p>
 </div>
 <div class="section level3">
@@ -184,13 +184,32 @@
 <p>This applies to the <code>testthat</code> strategy (it sets <code>TESTTHAT_MAX_FAILS = 1</code> in the test subprocess and uses the progress reporter, which aborts the run at the first failing <code>test_that()</code> block). <code>SURVIVED</code> mutants are unaffected — they have no failure to short-circuit on — so baseline timing and timeout calibration are unchanged. The installed-tests fallback already stops at the first failing test <em>file</em> regardless of this flag.</p>
 </div>
 <div class="section level3">
+<h3 id="parallel-execution-and-isolation-isolate">Parallel execution and isolation (<code>isolate</code>)<a class="anchor" aria-label="anchor" href="#parallel-execution-and-isolation-isolate"></a>
+</h3>
+<p>By default each mutant package copy <em>symlinks</em> the unchanged directories of the original package (only the mutated <code>R/</code> file is materialised), so all parallel workers point at the same physical <code>src/</code>, <code>tests/</code>, etc. This is fast, and two design choices keep it correct:</p>
+<ul>
+<li>
+<strong>Compiled code is built once, not per mutant.</strong> Earlier, the <code>installed</code> strategy recompiled into <code>src/</code> on every <code>R CMD INSTALL</code>; with several installs running at once against the same (symlinked) <code>src/</code> they clobbered each other’s <code>.o</code>/<code>.so</code> (<code>shared object not found</code>), so genuine survivors were misreported as <code>KILLED</code>/<code>HANG</code>. The strategy now compiles once into a template library and installs each mutant with <code>--no-libs</code>, which never writes into <code>src/</code>, so the race is gone. (The <code>testthat</code> strategy was always immune: <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> reuses the baseline’s compiled <code>src/</code> since C code is never mutated.)</li>
+</ul>
+<p>The one remaining hazard is <strong>non-hermetic tests that write files</strong> into a shared directory (most often <code>tests/</code>). When parallel workers’ tests fight over the same files you can still see spurious <code>KILLED</code>/<code>HANG</code>. Two ways to attenuate it:</p>
+<ol style="list-style-type: decimal">
+<li><p><strong>Run without parallelism:</strong> <code>cores = 1</code>. No contention, no extra disk — but the slowest option.</p></li>
+<li>
+<p><strong>Isolate file state:</strong> <code>isolate = TRUE</code>. Each mutant gets its own deep copy of <code>src/</code> and <code>tests/</code> instead of a symlink, so file-writing tests can’t collide:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, isolate <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+</li>
+</ol>
+<p>The default (<code>isolate = FALSE</code>) is fast and correct for hermetic test suites; reach for <code>isolate = TRUE</code> (or <code>cores = 1</code>) only when a package’s tests are not hermetic and you see parallel-only <code>KILLED</code>/<code>HANG</code> results.</p>
+</div>
+<div class="section level3">
 <h3 id="equivalent-mutant-detection">Equivalent Mutant Detection<a class="anchor" aria-label="anchor" href="#equivalent-mutant-detection"></a>
 </h3>
 <p>Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API. Configure it in any of these ways (listed highest precedence first; each setting is resolved independently, so they can be mixed):</p>
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>

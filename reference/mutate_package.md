@@ -19,6 +19,7 @@ mutate_package(
   max_line_deletions = 5,
   cran = TRUE,
   fail_fast = TRUE,
+  isolate = FALSE,
   strategy = c("auto", "testthat", "installed")
 )
 ```
@@ -97,6 +98,22 @@ mutate_package(
   installed-tests fallback already stops at the first failing test file
   regardless of this flag.
 
+- isolate:
+
+  Logical; if `FALSE` (the default), each mutant's package copy symlinks
+  the unchanged directories of the original package (only the mutated
+  `R/` file is materialised), which is fast but makes those directories
+  shared writable state across the parallel workers. If `TRUE`, the
+  `src/` and `tests/` directories are deep-copied into every mutant copy
+  instead. The `installed` strategy no longer recompiles per mutant (it
+  builds once and installs each mutant with `--no-libs`, see
+  `strategy`), so the shared-`src/` build race no longer requires
+  isolation. Use `isolate = TRUE` when a package has **non-hermetic
+  tests** that write files into `tests/` (or `src/`) and parallel runs
+  therefore produce spurious `KILLED`/`HANG` verdicts; it gives each
+  worker its own copy at the cost of extra disk. Running with
+  `cores = 1` avoids such contention without the copy cost.
+
 - strategy:
 
   Test strategy to use. `"auto"` (the default) picks the `testthat`
@@ -107,8 +124,13 @@ mutate_package(
   `R CMD INSTALL --install-tests` +
   [`tools::testInstalledPackage()`](https://rdrr.io/r/tools/testInstalledPackage.html)
   path (requires `tests/`); this works for `testthat` packages too —
-  useful for comparing the two strategies' run times — but is slower
-  because each mutant must be installed before its tests run.
+  useful for comparing the two strategies. To avoid recompiling on every
+  mutant, the unmutated package is installed (and its C/C++ compiled)
+  **once** into a template library; each mutant is then installed with
+  `--no-libs` (R code only) and the template's prebuilt shared objects
+  are restored before its tests run. This relies on compiled code never
+  being mutated, and it also means concurrent mutant installs no longer
+  write into a shared `src/`.
 
 ## Value
 

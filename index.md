@@ -94,8 +94,15 @@ mutator selects a package test strategy automatically:
   each mutant with `--install-tests`.
 
 The fallback path supports non-`testthat` layouts (for example
-`tinytest`-driven packages that run through `tests/` scripts), but it is
-slower because each mutant must be installed before tests are executed.
+`tinytest`-driven packages that run through `tests/` scripts). To avoid
+recompiling C/C++ on every mutant, mutator installs the unmutated
+package — compiling its shared objects — **once** into a template
+library, then installs each mutant with `--no-libs` (R code only) and
+restores the template’s prebuilt shared objects before running its
+tests. This is safe because mutator does not mutate compiled code, so
+the shared object is identical for every mutant; it also means
+concurrent mutant installs no longer write into a shared `src/` (see
+“Parallel execution and isolation” below).
 
 Each mutant test run uses a timeout. By default, mutator runs the
 baseline suite first and derives the per-mutant timeout as
@@ -133,10 +140,10 @@ suite takes, unless you pass `timeout_seconds` explicitly.
 
 Because mutants run in parallel (`cores` at a time), the timeout must
 account for **contention**: with many workers, each test run is slower
-than it would be alone — for packages that load many dependencies, or
-recompile C code on every `R CMD INSTALL`, dramatically so. A timeout
-based on a single, *uncontended* baseline run would then fire on nearly
-every mutant (a wave of false `HANG`s).
+than it would be alone — for packages that load many dependencies, or do
+heavy per-mutant install work, dramatically so. A timeout based on a
+single, *uncontended* baseline run would then fire on nearly every
+mutant (a wave of false `HANG`s).
 
 To avoid this,
 [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
@@ -202,6 +209,47 @@ block). `SURVIVED` mutants are unaffected — they have no failure to
 short-circuit on — so baseline timing and timeout calibration are
 unchanged. The installed-tests fallback already stops at the first
 failing test *file* regardless of this flag.
+
+### Parallel execution and isolation (`isolate`)
+
+By default each mutant package copy *symlinks* the unchanged directories
+of the original package (only the mutated `R/` file is materialised), so
+all parallel workers point at the same physical `src/`, `tests/`, etc.
+This is fast, and two design choices keep it correct:
+
+- **Compiled code is built once, not per mutant.** Earlier, the
+  `installed` strategy recompiled into `src/` on every `R CMD INSTALL`;
+  with several installs running at once against the same (symlinked)
+  `src/` they clobbered each other’s `.o`/`.so`
+  (`shared object not found`), so genuine survivors were misreported as
+  `KILLED`/`HANG`. The strategy now compiles once into a template
+  library and installs each mutant with `--no-libs`, which never writes
+  into `src/`, so the race is gone. (The `testthat` strategy was always
+  immune:
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
+  reuses the baseline’s compiled `src/` since C code is never mutated.)
+
+The one remaining hazard is **non-hermetic tests that write files** into
+a shared directory (most often `tests/`). When parallel workers’ tests
+fight over the same files you can still see spurious `KILLED`/`HANG`.
+Two ways to attenuate it:
+
+1.  **Run without parallelism:** `cores = 1`. No contention, no extra
+    disk — but the slowest option.
+
+2.  **Isolate file state:** `isolate = TRUE`. Each mutant gets its own
+    deep copy of `src/` and `tests/` instead of a symlink, so
+    file-writing tests can’t collide:
+
+    ``` r
+
+    mutate_package("path/to/pkg", isolate = TRUE)
+    ```
+
+The default (`isolate = FALSE`) is fast and correct for hermetic test
+suites; reach for `isolate = TRUE` (or `cores = 1`) only when a
+package’s tests are not hermetic and you see parallel-only
+`KILLED`/`HANG` results.
 
 ### Equivalent Mutant Detection
 
