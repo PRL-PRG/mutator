@@ -199,6 +199,33 @@ The default (`isolate = FALSE`) is fast and correct for hermetic test suites;
 reach for `isolate = TRUE` (or `cores = 1`) only when a package's tests are not
 hermetic and you see parallel-only `KILLED`/`HANG` results.
 
+### Coverage-guided test selection (`coverage_guided`)
+
+Most mutants are settled by a small subset of the suite, and a mutant on a line
+that **no test exercises** can never be killed. With `coverage_guided = TRUE`
+(`testthat` strategy only) mutator measures coverage once with
+[covr](https://covr.r-lib.org/) and then, for each mutant, runs only the test
+files that cover its mutated line — and skips running tests altogether for mutants
+on uncovered lines (reported `SURVIVED` immediately).
+
+```r
+mutate_package("path/to/pkg", coverage_guided = TRUE)
+```
+
+The single coverage run also serves as the baseline check (it runs the package's
+own `tests/testthat.R` harness, which fails if any test fails), so the suite is
+not run twice. Selection is at the **test-file** level — testthat filters tests by
+file — so it changes *which* tests run, never a mutant's verdict.
+
+This is conservative by design: when a covered line is reached through a function
+defined in a `helper-*.R` / `setup-*.R` file, covr credits the helper rather than
+the originating `test-*.R` file, so the true triggering test is unknown — mutator
+then runs the **full suite** for that mutant rather than risk skipping the test
+that would kill it. Packages whose tests wrap the package API in shared helpers
+(a common pattern) therefore see less speed-up than packages whose tests call the
+API directly; the pay-off is largest when the suite is big, many lines are
+uncovered, and tests exercise the code directly. Requires the `covr` package.
+
 ### Equivalent Mutant Detection
 
 Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API.
@@ -303,6 +330,7 @@ mutator depends on:
   - **pkgload**: For loading mutated package copies
   - **testthat**: For test execution
   - **xml2**: For running C++ tests through `testthat::run_cpp_tests()`
+  - **covr**: For coverage-guided test selection (`coverage_guided = TRUE`)
   - **future** and **furrr**: For parallel execution
   - **httr** and **jsonlite**: For OpenAI API integration
 - **LinkingTo**: `testthat` (for Catch2 C++ test headers)

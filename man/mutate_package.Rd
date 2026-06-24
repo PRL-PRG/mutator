@@ -17,7 +17,8 @@ mutate_package(
   cran = TRUE,
   fail_fast = TRUE,
   isolate = FALSE,
-  strategy = c("auto", "testthat", "installed")
+  strategy = c("auto", "testthat", "installed"),
+  coverage_guided = FALSE
 )
 }
 \arguments{
@@ -91,6 +92,16 @@ template library; each mutant is then installed with \code{--no-libs} (R code
 only) and the template's prebuilt shared objects are restored before its
 tests run. This relies on compiled code never being mutated, and it also
 means concurrent mutant installs no longer write into a shared \verb{src/}.}
+
+\item{coverage_guided}{Logical; if \code{TRUE}, only the tests that actually
+exercise a mutant's mutated line(s) are run for that mutant, instead of the
+whole suite. Coverage is measured once on the unmutated package with
+\pkg{covr} (\code{options(covr.record_tests = TRUE)}); that single coverage run
+also doubles as the baseline check (the suite is not run twice). A mutant on
+a line no test covers cannot be killed, so it is reported \code{SURVIVED} without
+running any test. Selection is at the test-\emph{file} level (testthat filters by
+file), so it never changes a mutant's verdict, only which tests run. Requires
+the \code{testthat} strategy (errors otherwise). Defaults to \code{FALSE}.}
 }
 \value{
 An invisible list with three components:

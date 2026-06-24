@@ -507,3 +507,82 @@ test_that("fail_fast stops the suite at the first failing test but keeps the ver
   # later test file, while the full run did (once per mutant).
   expect_gt(n_full, n_ff)
 })
+
+test_that("coverage_guided yields the same verdicts as the full suite", {
+  skip_on_cran()
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("covr")
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE))
+
+  pkg_dir <- file.path(temp_dir, "cgpkg")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)
+
+  writeLines(c(
+    "Package: cgpkg", "Version: 0.1.0", "Title: t",
+    "Description: t.", "Author: a", "License: MIT"
+  ), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+
+  # Three functions, each in its own file:
+  #  - direct_fun: tested directly inside a test_that block
+  #  - helper_fun: tested ONLY through a helper-defined wrapper (the case covr's
+  #    record_tests mis-attributes to the helper file -- the soundness trap)
+  #  - dead_fun:   not exercised by any test (an uncovered survivor)
+  writeLines("direct_fun <- function(x) x + 1", file.path(pkg_dir, "R", "direct.R"))
+  writeLines("helper_fun <- function(x) x * 2", file.path(pkg_dir, "R", "helper_fun.R"))
+  writeLines("dead_fun <- function(x) x - 1", file.path(pkg_dir, "R", "dead.R"))
+  # A file wrapped in `# nocov`: covr emits NO coverage for it, even though it
+  # runs and is tested. Without disabling covr's exclusions it would look
+  # uncovered and be wrongly auto-SURVIVED (the forcats compat-file trap).
+  writeLines(c("# nocov start", "nocov_fun <- function(x) x + 10", "# nocov end"),
+             file.path(pkg_dir, "R", "nocov_fn.R"))
+
+  writeLines("library(testthat)\nlibrary(cgpkg)\ntest_check(\"cgpkg\")",
+             file.path(pkg_dir, "tests", "testthat.R"))
+  # The wrapper lives in a helper-*.R file, so the helper_fun() call site is
+  # inside the helper -- exactly what makes covr credit the helper, not the test.
+  writeLines("wrap <- function(x) helper_fun(x)",
+             file.path(pkg_dir, "tests", "testthat", "helper-wrap.R"))
+  writeLines("test_that(\"direct\", { expect_equal(direct_fun(1), 2) })",
+             file.path(pkg_dir, "tests", "testthat", "test-direct.R"))
+  writeLines("test_that(\"viahelper\", { expect_equal(wrap(2), 4) })",
+             file.path(pkg_dir, "tests", "testthat", "test-viahelper.R"))
+  writeLines("test_that(\"nocov\", { expect_equal(nocov_fun(1), 11) })",
+             file.path(pkg_dir, "tests", "testthat", "test-nocov.R"))
+
+  # Deterministic mutant set (no sampling, no line deletions) so the two runs
+  # produce identically-keyed results.
+  run <- function(cg) {
+    suppressMessages(mutate_package(
+      pkg_dir, cores = 1, max_line_deletions = 0,
+      strategy = "testthat", coverage_guided = cg
+    ))$test_results
+  }
+  off <- run(FALSE)
+  on <- run(TRUE)
+
+  expect_setequal(names(on), names(off))
+  # The key guarantee: coverage-guided selection never changes a verdict. Without
+  # the helper-attribution safeguard, helper_fun mutants would wrongly SURVIVE
+  # under coverage_guided while being KILLED by the full suite.
+  expect_identical(on[names(off)], off)
+
+  # And mutants in the untested file survive under both modes.
+  dead_ids <- grep("^dead\\.R_", names(off), value = TRUE)
+  expect_true(length(dead_ids) > 0)
+  expect_true(all(vapply(dead_ids, function(id) identical(off[[id]], "SURVIVED"), logical(1))))
+
+  # The `# nocov`-wrapped function is exercised by test-nocov. Its mutants are
+  # KILLED by the full suite, and coverage_guided must reach the same verdict --
+  # proving covr's exclusions were disabled (otherwise the file looks uncovered
+  # and these mutants wrongly survive). Asserted via OFF (so the scenario is real)
+  # and ON==OFF (the soundness property, immune to any equivalent mutant).
+  nocov_ids <- grep("^nocov_fn\\.R_", names(off), value = TRUE)
+  expect_true(length(nocov_ids) > 0)
+  expect_true(any(vapply(nocov_ids, function(id) identical(off[[id]], "KILLED"), logical(1))))
+  expect_identical(on[nocov_ids], off[nocov_ids])
+})
