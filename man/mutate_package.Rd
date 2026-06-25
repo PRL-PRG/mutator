@@ -17,6 +17,7 @@ mutate_package(
   cran = TRUE,
   fail_fast = TRUE,
   isolate = FALSE,
+  exclude_files = NULL,
   strategy = c("auto", "testthat", "installed")
 )
 }
@@ -78,6 +79,19 @@ has \strong{non-hermetic tests} that write files into \verb{tests/} (or \verb{sr
 parallel runs therefore produce spurious \code{KILLED}/\code{HANG} verdicts; it gives
 each worker its own copy at the cost of extra disk. Running with \code{cores = 1}
 avoids such contention without the copy cost.}
+
+\item{exclude_files}{Optional character vector of shell-style glob patterns
+(e.g. \code{"import-standalone-*"}) matched against the \strong{base names} of the
+\code{.R} files in \verb{R/}. Matching files are skipped entirely before any mutants
+are generated — useful for vendored/standalone code, generated files, or
+anything the test suite is not meant to cover. \code{NULL} (the default) mutates
+every file. This complements the in-source \verb{# mutator:ignore-file} and
+\verb{# mutator:ignore-start} / \verb{# mutator:ignore-end} directives, which exclude
+a whole file or a line region from within the source itself. Note that for
+operator mutations the engine only resolves positions to the enclosing
+top-level definition, so a region directive excludes that function's
+operator mutants as a group (line-deletion mutants are excluded
+line-precisely).}
 
 \item{strategy}{Test strategy to use. \code{"auto"} (the default) picks the
 \code{testthat} strategy when \verb{tests/testthat/} exists and the installed-tests

@@ -1053,3 +1053,83 @@ test_that("extract_harness_test_args mirrors the testthat.R harness", {
     list()
   )
 })
+
+test_that("ignore_directive_ranges parses # mutator:ignore directives", {
+    ignore_directive_ranges <- resolve_mutator_fn("ignore_directive_ranges")
+
+    # No directives -> not whole-file, no ranges.
+    none <- ignore_directive_ranges(c("a <- 1", "b <- 2"))
+    expect_false(none$whole_file)
+    expect_equal(none$ranges, list())
+
+    # Empty input is handled.
+    empty <- ignore_directive_ranges(character())
+    expect_false(empty$whole_file)
+    expect_equal(empty$ranges, list())
+
+    # A start/end pair yields the inclusive region.
+    region <- ignore_directive_ranges(c(
+        "x <- 1",
+        "# mutator:ignore-start",
+        "y <- 2",
+        "z <- 3",
+        "# mutator:ignore-end",
+        "w <- 4"
+    ))
+    expect_false(region$whole_file)
+    expect_equal(region$ranges, list(c(2L, 5L)))
+
+    # An unmatched -start runs through the end of the file.
+    open <- ignore_directive_ranges(c("a <- 1", "# mutator:ignore-start", "b <- 2"))
+    expect_equal(open$ranges, list(c(2L, 3L)))
+
+    # ignore-file flips whole_file regardless of position.
+    wf <- ignore_directive_ranges(c("a <- 1", "# mutator:ignore-file", "b <- 2"))
+    expect_true(wf$whole_file)
+
+    # `-start` is not mistaken for `-file` (prefix-disambiguation).
+    expect_false(ignore_directive_ranges("# mutator:ignore-start")$whole_file)
+
+    # A bare `# mutator:ignore` is NOT a recognised directive (no single-line form).
+    bare <- ignore_directive_ranges(c("x <- 1 # mutator:ignore", "y <- 2"))
+    expect_false(bare$whole_file)
+    expect_equal(bare$ranges, list())
+})
+
+test_that("is_excluded_range tests inclusive span overlap", {
+    is_excluded_range <- resolve_mutator_fn("is_excluded_range")
+
+    expect_false(is_excluded_range(3, 3, list()))             # no ranges
+    expect_true(is_excluded_range(3, 3, list(c(2, 4))))       # inside
+    expect_true(is_excluded_range(1, 2, list(c(2, 4))))       # overlaps lower edge
+    expect_true(is_excluded_range(4, 9, list(c(2, 4))))       # overlaps upper edge
+    expect_false(is_excluded_range(5, 9, list(c(2, 4))))      # disjoint
+    expect_true(is_excluded_range(1, 9, list(c(2, 4))))       # span contains range
+    # NA / empty bounds are treated as "cannot attribute" -> not excluded.
+    expect_false(is_excluded_range(NA, NA, list(c(2, 4))))
+    expect_false(is_excluded_range(integer(), integer(), list(c(2, 4))))
+})
+
+test_that("filter_excluded_files drops files matching glob patterns", {
+    filter_excluded_files <- resolve_mutator_fn("filter_excluded_files")
+
+    files <- c("/p/R/import-standalone-x.R", "/p/R/import-standalone-y.R", "/p/R/core.R")
+
+    # Glob matches both standalone files, keeps core.R.
+    expect_equal(
+        basename(filter_excluded_files(files, "import-standalone-*")),
+        "core.R"
+    )
+    # Exact literal name works too.
+    expect_equal(
+        basename(filter_excluded_files(files, "core.R")),
+        c("import-standalone-x.R", "import-standalone-y.R")
+    )
+    # Multiple patterns are unioned.
+    expect_length(filter_excluded_files(files, c("import-standalone-*", "core.R")), 0)
+    # NULL / empty is a no-op.
+    expect_equal(filter_excluded_files(files, NULL), files)
+    expect_equal(filter_excluded_files(files, character()), files)
+    # Non-character errors.
+    expect_error(filter_excluded_files(files, 123), "character vector")
+})

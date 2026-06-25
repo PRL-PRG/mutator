@@ -507,3 +507,125 @@ test_that("fail_fast stops the suite at the first failing test but keeps the ver
   # later test file, while the full run did (once per mutant).
   expect_gt(n_full, n_ff)
 })
+
+# Build a minimal installable testthat package from a named list of R/ files
+# and test files. Returns the package directory (caller cleans up temp_dir).
+make_exclusion_pkg <- function(temp_dir, pkg_name, r_files, test_files) {
+  pkg_dir <- file.path(temp_dir, pkg_name)
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+
+  writeLines(sprintf("Package: %s
+Version: 0.1.0
+Title: Test Package for mutator
+Description: A test package for mutation testing.
+Author: Test Author
+License: MIT
+RoxygenNote: 7.1.1", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+  writeLines(sprintf("library(testthat)\nlibrary(%s)\n\ntest_check(\"%s\")", pkg_name, pkg_name),
+    file.path(pkg_dir, "tests", "testthat.R"))
+
+  for (nm in names(r_files)) {
+    writeLines(r_files[[nm]], file.path(pkg_dir, "R", nm))
+  }
+  for (nm in names(test_files)) {
+    writeLines(test_files[[nm]], file.path(pkg_dir, "tests", "testthat", nm))
+  }
+  pkg_dir
+}
+
+test_that("exclude_files and # mutator:ignore-file skip whole files", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE))
+
+  pkg_dir <- make_exclusion_pkg(
+    temp_dir, "exclMutatoR",
+    r_files = list(
+      "core.R" = "core_add <- function(x, y) x + y",
+      "vendored.R" = "vendored_sub <- function(a, b) a - b",
+      "generated.R" = c(
+        "# mutator:ignore-file",
+        "generated_mul <- function(p, q) p * q"
+      )
+    ),
+    test_files = list(
+      "test-core.R" = "test_that('core', {
+  expect_equal(core_add(1, 2), 3)
+  expect_equal(vendored_sub(5, 2), 3)
+  expect_equal(generated_mul(2, 3), 6)
+})"
+    )
+  )
+
+  result <- mutate_package(pkg_dir, cores = 1, max_line_deletions = 0,
+    exclude_files = c("vendored*"))
+
+  srcs <- vapply(result$package_mutants, function(m) basename(m$src), character(1))
+  expect_true(length(srcs) > 0)
+  # vendored.R excluded by the exclude_files glob; generated.R by its directive.
+  expect_false("vendored.R" %in% srcs)
+  expect_false("generated.R" %in% srcs)
+  # core.R is still mutated.
+  expect_true("core.R" %in% srcs)
+})
+
+test_that("# mutator:ignore-start/-end excludes a function's mutants", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE))
+
+  # keep_fn comes first (lines 1-3); drop_fn is wrapped in an ignore region.
+  funcs <- c(
+    "keep_fn <- function(x, y) {",
+    "  x + y",
+    "}",
+    "# mutator:ignore-start",
+    "drop_fn <- function(a, b) {",
+    "  a - b",
+    "}",
+    "# mutator:ignore-end"
+  )
+
+  extract_start_lines <- function(mutants) {
+    vapply(mutants, function(m) {
+      mm <- regmatches(m$info, regexpr("Range: ([0-9]+):", m$info))
+      if (length(mm) == 0) return(NA_integer_)
+      as.integer(sub("Range: ([0-9]+):", "\\1", mm))
+    }, integer(1))
+  }
+
+  build <- function(name, lines) {
+    make_exclusion_pkg(
+      temp_dir, name,
+      r_files = list("funcs.R" = lines),
+      test_files = list("test-funcs.R" = "test_that('funcs', {
+  expect_equal(keep_fn(1, 2), 3)
+  expect_equal(drop_fn(5, 2), 3)
+})")
+    )
+  }
+
+  with_region <- mutate_package(build("regionMutatoR", funcs),
+    cores = 1, max_line_deletions = 5)
+  no_region <- mutate_package(build("plainMutatoR", funcs[-c(4, 8)]),
+    cores = 1, max_line_deletions = 5)
+
+  # The region removes drop_fn's mutants, so fewer are generated overall.
+  expect_lt(length(with_region$package_mutants), length(no_region$package_mutants))
+
+  # Every surviving mutant is attributed to keep_fn (lines 1-3); none to the
+  # excluded drop_fn region (lines >= 4).
+  starts <- extract_start_lines(with_region$package_mutants)
+  expect_true(length(starts) > 0)
+  expect_true(all(starts <= 3L, na.rm = TRUE))
+})

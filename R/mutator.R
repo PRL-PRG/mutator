@@ -1,9 +1,76 @@
+# Parse `# mutator:ignore*` directives from a file's lines and return the
+# regions to exclude from mutation. Returns a list with:
+#   $whole_file : TRUE if a `# mutator:ignore-file` directive is present anywhere
+#   $ranges     : list of integer c(start, end) line ranges to exclude, derived
+#                 from `# mutator:ignore-start` / `# mutator:ignore-end` pairs.
+# An unmatched `-start` runs to the end of the file. Multiple non-nested regions
+# are supported (a single open marker is tracked linearly). The directive lines
+# themselves are comments and so are never mutated regardless.
+ignore_directive_ranges <- function(lines) {
+  result <- list(whole_file = FALSE, ranges = list())
+  if (length(lines) == 0) {
+    return(result)
+  }
+
+  file_re  <- "^\\s*#\\s*mutator:ignore-file\\b"
+  start_re <- "^\\s*#\\s*mutator:ignore-start\\b"
+  end_re   <- "^\\s*#\\s*mutator:ignore-end\\b"
+
+  if (any(grepl(file_re, lines, perl = TRUE))) {
+    result$whole_file <- TRUE
+    return(result)
+  }
+
+  open <- NA_integer_
+  for (i in seq_along(lines)) {
+    line <- lines[[i]]
+    if (grepl(start_re, line, perl = TRUE)) {
+      if (is.na(open)) open <- i
+    } else if (grepl(end_re, line, perl = TRUE)) {
+      if (!is.na(open)) {
+        result$ranges[[length(result$ranges) + 1L]] <- c(open, i)
+        open <- NA_integer_
+      }
+    }
+  }
+  # Unmatched `-start`: exclude through the end of the file.
+  if (!is.na(open)) {
+    result$ranges[[length(result$ranges) + 1L]] <- c(open, length(lines))
+  }
+
+  result
+}
+
+# TRUE if the inclusive line span [start_line, end_line] overlaps any excluded
+# range. Used to drop mutants whose reported source span falls inside a
+# `# mutator:ignore-start`/`-end` region. Note that operator mutants report
+# their enclosing top-level expression's bounds (see src/ASTHandler.cpp), so in
+# practice this matches at function granularity for them.
+is_excluded_range <- function(start_line, end_line, ranges) {
+  if (length(ranges) == 0) {
+    return(FALSE)
+  }
+  if (length(start_line) == 0 || length(end_line) == 0 ||
+    is.na(start_line[1]) || is.na(end_line[1])) {
+    return(FALSE)
+  }
+  s <- as.integer(start_line[1])
+  e <- as.integer(end_line[1])
+  for (r in ranges) {
+    if (s <= r[2] && r[1] <= e) {
+      return(TRUE)
+    }
+  }
+  FALSE
+}
+
 # Utility: delete individual lines to create "string-deletion" mutants
 delete_line_mutants <- function(src_file,
                                 out_dir = "mutations",
                                 file_base = NULL,
                                 max_del = 5,
-                                start_idx = 1) {
+                                start_idx = 1,
+                                exclude_lines = integer()) {
   if (is.null(file_base)) file_base <- basename(src_file)
   lines <- readLines(src_file)
 
@@ -13,6 +80,12 @@ delete_line_mutants <- function(src_file,
 
   # Only keep lines that are both non-empty and non-comments
   valid_lines <- intersect(non_empty, non_comment)
+
+  # Drop any lines inside a `# mutator:ignore-*` region (line-precise here, since
+  # line-deletion mutants are addressed by exact line index).
+  if (length(exclude_lines) > 0) {
+    valid_lines <- setdiff(valid_lines, as.integer(exclude_lines))
+  }
 
   count <- min(max_del, length(valid_lines))
   if (length(valid_lines) == 0) {
@@ -72,6 +145,27 @@ normalize_max_mutants <- function(max_mutants, arg = "max_mutants") {
   }
 
   as.integer(max_mutants)
+}
+
+# Drop R source files whose base name matches any of `exclude_files`. Patterns
+# are shell-style globs (e.g. "import-standalone-*"); an exact name also works.
+# `exclude_files` of NULL or empty is a no-op. Matching is on the base name
+# because R source discovery is non-recursive (flat `R/`).
+filter_excluded_files <- function(r_files, exclude_files) {
+  if (is.null(exclude_files) || length(exclude_files) == 0) {
+    return(r_files)
+  }
+  if (!is.character(exclude_files)) {
+    stop("`exclude_files` must be NULL or a character vector of file patterns.",
+      call. = FALSE
+    )
+  }
+  patterns <- utils::glob2rx(exclude_files)
+  bases <- basename(r_files)
+  excluded <- Reduce(`|`, lapply(patterns, function(p) grepl(p, bases)),
+    accumulate = FALSE
+  )
+  r_files[!excluded]
 }
 
 format_mutation_info <- function(src_file, raw_info = NULL) {
@@ -163,6 +257,18 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
   old_options <- options(keep.source = TRUE)
   on.exit(options(old_options), add = TRUE)
 
+  # Honour in-source `# mutator:ignore*` directives. A whole-file directive
+  # short-circuits generation; region directives are applied below.
+  excl <- ignore_directive_ranges(readLines(src_file, warn = FALSE))
+  if (isTRUE(excl$whole_file)) {
+    return(list())
+  }
+  exclude_lines <- if (length(excl$ranges) > 0) {
+    unique(unlist(lapply(excl$ranges, function(r) seq.int(r[1], r[2]))))
+  } else {
+    integer()
+  }
+
   parsed <- parse(src_file, keep.source = TRUE)
   if (is.null(attr(parsed, "srcref"))) {
     attr(parsed, "srcref") <- lapply(parsed, function(x) c(1L, 1L, 1L, 1L))
@@ -193,10 +299,18 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
     )
     if (length(code) == 0) next
 
+    info <- attr(m, "mutation_info")
+
+    # Skip mutants whose source span overlaps a `# mutator:ignore-*` region
+    # before writing any file. (Operator mutants report their enclosing
+    # top-level expression's bounds, so this excludes at function granularity.)
+    if (is.list(info) && is_excluded_range(info$start_line, info$end_line, excl$ranges)) {
+      next
+    }
+
     out_file <- file.path(out_dir, sprintf("%s_%03d.R", base_name, idx))
     writeLines(paste(code, collapse = "\n"), out_file)
 
-    info <- attr(m, "mutation_info")
     if (is.null(info) || (is.character(info) && length(info) == 1 && info == "")) info <- "<no info>"
 
     results[[length(results) + 1]] <- list(path = out_file, info = info)
@@ -207,8 +321,9 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
   results <- c(
     results,
     delete_line_mutants(src_file, out_dir, base_name,
-      max_del   = max_line_deletions,
-      start_idx = length(results) + 1L
+      max_del       = max_line_deletions,
+      start_idx     = length(results) + 1L,
+      exclude_lines = exclude_lines
     )
   )
 
@@ -366,6 +481,18 @@ extract_harness_test_args <- function(harness_file) {
 #'   only) and the template's prebuilt shared objects are restored before its
 #'   tests run. This relies on compiled code never being mutated, and it also
 #'   means concurrent mutant installs no longer write into a shared `src/`.
+#' @param exclude_files Optional character vector of shell-style glob patterns
+#'   (e.g. `"import-standalone-*"`) matched against the **base names** of the
+#'   `.R` files in `R/`. Matching files are skipped entirely before any mutants
+#'   are generated — useful for vendored/standalone code, generated files, or
+#'   anything the test suite is not meant to cover. `NULL` (the default) mutates
+#'   every file. This complements the in-source `# mutator:ignore-file` and
+#'   `# mutator:ignore-start` / `# mutator:ignore-end` directives, which exclude
+#'   a whole file or a line region from within the source itself. Note that for
+#'   operator mutations the engine only resolves positions to the enclosing
+#'   top-level definition, so a region directive excludes that function's
+#'   operator mutants as a group (line-deletion mutants are excluded
+#'   line-precisely).
 #'
 #' @return An invisible list with three components:
 #' \describe{
@@ -409,6 +536,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            timeout_seconds = NULL, config_dir = getwd(),
                            max_line_deletions = 5, cran = TRUE,
                            fail_fast = TRUE, isolate = FALSE,
+                           exclude_files = NULL,
                            strategy = c("auto", "testthat", "installed")) {
   strategy <- match.arg(strategy)
   timeout_multiplier <- 1.5
@@ -417,6 +545,11 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   max_line_deletions <- normalize_max_mutants(max_line_deletions, "max_line_deletions")
   if (is.null(max_line_deletions)) {
     stop("`max_line_deletions` must be a single non-negative whole number.", call. = FALSE)
+  }
+  if (!is.null(exclude_files) && !is.character(exclude_files)) {
+    stop("`exclude_files` must be NULL or a character vector of file patterns.",
+      call. = FALSE
+    )
   }
   if (!is.null(timeout_seconds)) {
     if (!is.numeric(timeout_seconds) || length(timeout_seconds) != 1 || !is.finite(timeout_seconds)) {
@@ -918,6 +1051,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     pattern = "\\.R$",
     full.names = TRUE
   )
+  r_files <- filter_excluded_files(r_files, exclude_files)
 
   link_or_copy <- function(from, to, recursive = FALSE) {
     from <- normalizePath(from, mustWork = TRUE)
