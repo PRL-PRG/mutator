@@ -554,35 +554,35 @@ test_that("coverage_guided yields the same verdicts as the full suite", {
   writeLines("test_that(\"nocov\", { expect_equal(nocov_fun(1), 11) })",
              file.path(pkg_dir, "tests", "testthat", "test-nocov.R"))
 
-  # Deterministic mutant set (no sampling, no line deletions) so the two runs
-  # produce identically-keyed results.
-  run <- function(cg) {
+  # Deterministic mutant set (no sampling, no line deletions) so the runs produce
+  # identically-keyed results.
+  run <- function(cg, backend = "record_tests") {
     suppressMessages(mutate_package(
       pkg_dir, cores = 1, max_line_deletions = 0,
-      strategy = "testthat", coverage_guided = cg
+      strategy = "testthat", coverage_guided = cg, coverage_backend = backend
     ))$test_results
   }
   off <- run(FALSE)
-  on <- run(TRUE)
-
-  expect_setequal(names(on), names(off))
-  # The key guarantee: coverage-guided selection never changes a verdict. Without
-  # the helper-attribution safeguard, helper_fun mutants would wrongly SURVIVE
-  # under coverage_guided while being KILLED by the full suite.
-  expect_identical(on[names(off)], off)
-
-  # And mutants in the untested file survive under both modes.
   dead_ids <- grep("^dead\\.R_", names(off), value = TRUE)
-  expect_true(length(dead_ids) > 0)
-  expect_true(all(vapply(dead_ids, function(id) identical(off[[id]], "SURVIVED"), logical(1))))
-
-  # The `# nocov`-wrapped function is exercised by test-nocov. Its mutants are
-  # KILLED by the full suite, and coverage_guided must reach the same verdict --
-  # proving covr's exclusions were disabled (otherwise the file looks uncovered
-  # and these mutants wrongly survive). Asserted via OFF (so the scenario is real)
-  # and ON==OFF (the soundness property, immune to any equivalent mutant).
   nocov_ids <- grep("^nocov_fn\\.R_", names(off), value = TRUE)
+  expect_true(length(dead_ids) > 0)
   expect_true(length(nocov_ids) > 0)
+  # The `# nocov`-wrapped function is exercised by test-nocov, so the full suite
+  # kills its mutants -- this makes the nocov assertion below meaningful.
   expect_true(any(vapply(nocov_ids, function(id) identical(off[[id]], "KILLED"), logical(1))))
-  expect_identical(on[nocov_ids], off[nocov_ids])
+
+  # Both coverage backends must reach the same verdicts as the full suite.
+  for (backend in c("record_tests", "per_file")) {
+    on <- run(TRUE, backend)
+    info <- paste("backend:", backend)
+    expect_setequal(names(on), names(off))
+    # The key guarantee: coverage-guided selection never changes a verdict.
+    # record_tests relies on the helper-attribution safeguard; per_file attributes
+    # per file directly -- either way verdicts must match the full suite.
+    expect_identical(on[names(off)], off, info = info)
+    # Mutants in the untested file survive; the `# nocov` file's mutants match OFF
+    # (proving covr's comment-exclusions were disabled for both backends).
+    expect_true(all(vapply(dead_ids, function(id) identical(on[[id]], "SURVIVED"), logical(1))), info = info)
+    expect_identical(on[nocov_ids], off[nocov_ids], info = info)
+  }
 })

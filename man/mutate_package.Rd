@@ -18,7 +18,8 @@ mutate_package(
   fail_fast = TRUE,
   isolate = FALSE,
   strategy = c("auto", "testthat", "installed"),
-  coverage_guided = FALSE
+  coverage_guided = FALSE,
+  coverage_backend = c("record_tests", "per_file")
 )
 }
 \arguments{
@@ -102,6 +103,17 @@ a line no test covers cannot be killed, so it is reported \code{SURVIVED} withou
 running any test. Selection is at the test-\emph{file} level (testthat filters by
 file), so it never changes a mutant's verdict, only which tests run. Requires
 the \code{testthat} strategy (errors otherwise). Defaults to \code{FALSE}.}
+
+\item{coverage_backend}{How \code{coverage_guided} attributes coverage to tests
+(ignored when \code{coverage_guided = FALSE}). \code{"record_tests"} (the default) uses
+covr's \code{record_tests} in a single run; it relies only on covr's public output
+but, because covr credits a covered line to the deepest test-directory frame,
+code reached through a \verb{helper-*.R}/\verb{setup-*.R} wrapper is attributed to the
+helper rather than the originating \verb{test-*.R} file, and such mutants
+conservatively run the whole suite. \code{"per_file"} instruments the package once
+and runs the suite a single time through a reporter that snapshots coverage
+per test file, giving exact file-level attribution (no helper fallback) at
+roughly the same cost; it depends on covr internals, so it is opt-in.}
 }
 \value{
 An invisible list with three components:

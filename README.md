@@ -217,14 +217,31 @@ own `tests/testthat.R` harness, which fails if any test fails), so the suite is
 not run twice. Selection is at the **test-file** level — testthat filters tests by
 file — so it changes *which* tests run, never a mutant's verdict.
 
-This is conservative by design: when a covered line is reached through a function
-defined in a `helper-*.R` / `setup-*.R` file, covr credits the helper rather than
-the originating `test-*.R` file, so the true triggering test is unknown — mutator
-then runs the **full suite** for that mutant rather than risk skipping the test
-that would kill it. Packages whose tests wrap the package API in shared helpers
-(a common pattern) therefore see less speed-up than packages whose tests call the
-API directly; the pay-off is largest when the suite is big, many lines are
-uncovered, and tests exercise the code directly. Requires the `covr` package.
+Requires the `covr` package. Selection is sound — it never changes a mutant's
+verdict, only which tests run — but how faithfully it attributes coverage to tests
+depends on the backend (`coverage_backend`):
+
+- **`"record_tests"`** (default) uses covr's `record_tests` in a single run and
+  relies only on covr's public output. Its limitation: covr credits a covered line
+  to the *deepest test-directory frame* on the call stack, so when a test reaches
+  package code through a function defined in a `helper-*.R` / `setup-*.R` file
+  (a common pattern), covr attributes it to the helper, not the originating
+  `test-*.R`. The true triggering test is then unknown, so mutator conservatively
+  runs the **full suite** for that mutant. Packages that wrap their API in shared
+  test helpers therefore see less speed-up.
+
+- **`"per_file"`** instruments the package once and runs the suite a single time
+  through a reporter that snapshots coverage per test file, giving **exact
+  file-level attribution** with no helper fallback — at roughly the same cost as
+  the single `record_tests` run (often faster overall, since more mutants get a
+  narrowed test set). It reaches into covr internals, so it is opt-in:
+
+  ```r
+  mutate_package("path/to/pkg", coverage_guided = TRUE, coverage_backend = "per_file")
+  ```
+
+Either way the pay-off is largest when the suite is big, many lines are uncovered,
+and tests exercise the code directly.
 
 ### Equivalent Mutant Detection
 

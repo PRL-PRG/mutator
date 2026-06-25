@@ -318,6 +318,18 @@ extract_harness_test_args <- function(harness_file) {
   list()
 }
 
+get_package_name <- function(pkg_path) {
+  description_path <- file.path(pkg_path, "DESCRIPTION")
+  if (!file.exists(description_path)) {
+    stop("Cannot determine package name: DESCRIPTION file is missing.", call. = FALSE)
+  }
+  desc <- read.dcf(description_path)
+  if (!"Package" %in% colnames(desc)) {
+    stop("Cannot determine package name: DESCRIPTION has no 'Package' field.", call. = FALSE)
+  }
+  desc[1, "Package"]
+}
+
 # --- Coverage-guided test selection (the `coverage_guided` optimization) ------
 # These helpers map, for the *unmutated* package, each source line to the set of
 # test files that exercise it, so a mutant on a given line only needs to run those
@@ -325,30 +337,42 @@ extract_harness_test_args <- function(harness_file) {
 # free-standing and argument-driven so they can be tested in isolation. Used only
 # under the testthat strategy; see mutate_package(coverage_guided=).
 
-# Run covr ONCE on the unmutated package with per-test recording and build a map
-# from source-file basename to a list of trace records, each
-# `list(first=<line>, last=<line>, tests=<character vector of test tokens>)`. A
-# "test token" is the test file's name with a leading "test-"/"test" and the ".R"
-# extension stripped -- exactly what testthat::test_dir(filter=) matches against.
-# covr runs the package's tests/testthat.R harness (test_check()), which errors on
-# any failing test, so a failing baseline surfaces here as an error (the caller
-# treats that as a fatal baseline failure). keyed by basename because covr reports
-# source paths relative to the package while mutation info uses absolute paths;
-# R file basenames are unique within R/.
-build_coverage_test_map <- function(pkg_dir) {
-  # Disable covr's comment-based exclusions (`# nocov`, `# nocov start/end`). They
-  # tell covr to emit *no coverage* for the marked code, but that code still runs
-  # and its mutants can still be killed -- so an excluded file would look UNCOVERED
-  # and be wrongly auto-SURVIVED. Vendored compat files (e.g. r-lib's
-  # compat-types-check.R) wrap the whole file in `# nocov`, which is exactly this
-  # trap. Point the exclusion markers at sentinels that never appear in source so
-  # covr instruments everything; genuinely unexecuted lines still stay uncovered.
-  old <- options(
-    covr.record_tests = TRUE,
-    covr.exclude_start = "<<mutator-no-exclude-start>>",
-    covr.exclude_end = "<<mutator-no-exclude-end>>",
-    covr.exclude_pattern = "<<mutator-no-exclude>>"
+# Disable covr's comment-based exclusions (`# nocov`, `# nocov start/end`). They
+# tell covr to emit *no coverage* for the marked code, but that code still runs
+# and its mutants can still be killed -- so an excluded file would look UNCOVERED
+# and be wrongly auto-SURVIVED. Vendored compat files (e.g. r-lib's
+# compat-types-check.R) wrap the whole file in `# nocov`, which is exactly this
+# trap. Point the exclusion markers at sentinels that never appear in source so
+# covr instruments everything; genuinely unexecuted lines still stay uncovered.
+covr_no_exclusions <- list(
+  covr.exclude_start = "<<mutator-no-exclude-start>>",
+  covr.exclude_end = "<<mutator-no-exclude-end>>",
+  covr.exclude_pattern = "<<mutator-no-exclude>>"
+)
+
+# Build the coverage-to-tests map with the chosen backend. Both backends return
+# the same structure: list(by_file = <named by source basename> of trace records
+# `list(first, last, tests = <test tokens>, ambiguous = <logical>)`), consumed by
+# select_test_files(). Both run the suite once, doubling as the baseline check
+# (errors / test failures here are fatal, like a failing baseline run).
+build_coverage_test_map <- function(pkg_dir, backend = "record_tests", cran = TRUE) {
+  switch(backend,
+    record_tests = build_coverage_map_record_tests(pkg_dir),
+    per_file = build_coverage_map_per_file(pkg_dir, cran = cran),
+    stop(sprintf("Unknown coverage backend '%s'.", backend), call. = FALSE)
   )
+}
+
+# record_tests backend: one covr run with covr.record_tests = TRUE. covr runs the
+# package's tests/testthat.R harness (test_check()), which errors on any failing
+# test, so a failing baseline surfaces as an error (fatal). Attribution comes from
+# covr's per-test recording; because covr credits a covered trace to the *deepest
+# test-directory frame*, code reached through a helper-*.R/setup-*.R wrapper is
+# credited to the helper, not the test-*.R file -- such traces are marked
+# "ambiguous" so select_test_files() falls back to the full suite. Keyed by source
+# basename (unique within R/) to sidestep covr's relative-vs-absolute paths.
+build_coverage_map_record_tests <- function(pkg_dir) {
+  old <- options(c(list(covr.record_tests = TRUE), covr_no_exclusions))
   on.exit(options(old), add = TRUE)
   cov <- covr::package_coverage(pkg_dir, type = "tests")
 
@@ -379,6 +403,96 @@ build_coverage_test_map <- function(pkg_dir) {
       ambiguous = any(!is_real_test[test_idx])
     )
     by_file[[fbase]] <- c(by_file[[fbase]], list(rec))
+  }
+  list(by_file = by_file)
+}
+
+# R code (a character vector of commands) run inside covr's instrumented session
+# by the per_file backend. It runs the suite ONCE through a testthat reporter that,
+# per test file, zeroes covr's trace counters on start_file and snapshots the
+# non-zero ones on end_file -- so each covered line is attributed to exactly the
+# test file that was running, with no helper/setup collapse. Counters are reset by
+# zeroing `$value` (covr's own clear_counters() *removes* entries, which breaks
+# counting). Failures are summed so the run also serves as the baseline check.
+perfile_collect_code <- function(testdir, out, not_cran, pkgname) {
+  c(
+    sprintf("Sys.setenv(NOT_CRAN = %s)", shQuote(not_cran)),
+    "local({",
+    "  ns <- asNamespace('covr'); CT <- get('.counters', ns)",
+    "  reset <- function() for (k in ls(CT)) { e <- CT[[k]]; if (is.list(e)) { e$value <- 0L; CT[[k]] <- e } }",
+    "  snap <- function() {",
+    "    recs <- list()",
+    "    for (k in ls(CT)) {",
+    "      e <- CT[[k]]; v <- tryCatch(e$value, error = function(...) NULL)",
+    "      if (!isTRUE(is.numeric(v) && length(v) == 1L && v > 0)) next",
+    "      sr <- e$srcref",
+    "      fn <- tryCatch(basename(attr(sr, 'srcfile')$filename), error = function(...) NA_character_)",
+    "      if (is.na(fn)) next",
+    "      recs[[length(recs) + 1L]] <- list(file = fn, first = as.integer(sr[[1L]]), last = as.integer(sr[[3L]]))",
+    "    }",
+    "    recs",
+    "  }",
+    "  Rep <- R6::R6Class('MutatorPerFileCov', inherit = testthat::Reporter, public = list(",
+    "    cov_cur = NA_character_, cov_captured = list(),",
+    "    start_file = function(filename, ...) { self$cov_cur <- as.character(filename); reset() },",
+    "    end_file = function(...) { self$cov_captured[[self$cov_cur]] <- snap() }))",
+    "  rep <- Rep$new(); nfail <- NA_integer_",
+    sprintf("  err <- tryCatch({ res <- testthat::test_dir(%s, package = %s, reporter = rep, stop_on_failure = FALSE, load_package = 'installed'); df <- as.data.frame(res); nfail <- sum(df$failed) + sum(df$error, na.rm = TRUE); NA_character_ }, error = function(e) conditionMessage(e))", shQuote(testdir), shQuote(pkgname)),
+    sprintf("  saveRDS(list(captured = rep$cov_captured, nfail = nfail, err = err), %s)", shQuote(out)),
+    "})"
+  )
+}
+
+# per_file backend: instrument the package once, then run the suite a single time
+# under perfile_collect_code()'s reporter, which attributes coverage per test file
+# directly (no record_tests, no helper-attribution collapse, so no "ambiguous"
+# fallback). Cost is ~one full instrumented run. Depends on covr internals
+# (.counters), so it is the opt-in backend.
+build_coverage_map_per_file <- function(pkg_dir, cran = TRUE) {
+  testdir <- file.path(pkg_dir, "tests", "testthat")
+  out <- tempfile("mutator_perfile_cov_", fileext = ".rds")
+  on.exit(unlink(out), add = TRUE)
+  code <- perfile_collect_code(
+    testdir = testdir, out = out,
+    not_cran = if (isTRUE(cran)) "false" else "true",
+    pkgname = get_package_name(pkg_dir)
+  )
+  old <- options(covr_no_exclusions)
+  on.exit(options(old), add = TRUE)
+  covr::package_coverage(pkg_dir, type = "none", code = code)
+
+  if (!file.exists(out)) {
+    stop("per_file coverage run produced no result (the instrumented test run did not complete).",
+      call. = FALSE)
+  }
+  res <- readRDS(out)
+  if (!is.na(res$err)) {
+    stop(sprintf("per_file coverage run failed: %s", res$err), call. = FALSE)
+  }
+  if (isTRUE(res$nfail > 0)) {
+    stop(sprintf("baseline test suite failed (%d failing test(s)) during per_file coverage.", res$nfail),
+      call. = FALSE)
+  }
+
+  # Invert per-file capture into the by_file record structure. Attribution is
+  # exact, so ambiguous is always FALSE; each (file, first, last) trace accumulates
+  # the set of test tokens whose run covered it.
+  tok <- function(f) sub("\\.[rR]$", "", sub("^test[-_]?", "", f))
+  agg <- list()
+  for (f in names(res$captured)) {
+    token <- tok(f)
+    for (h in res$captured[[f]]) {
+      key <- paste(h$file, h$first, h$last, sep = "\r")
+      if (is.null(agg[[key]])) {
+        agg[[key]] <- list(file = h$file, first = h$first, last = h$last, tests = character())
+      }
+      agg[[key]]$tests <- c(agg[[key]]$tests, token)
+    }
+  }
+  by_file <- list()
+  for (k in agg) {
+    rec <- list(first = k$first, last = k$last, tests = unique(k$tests), ambiguous = FALSE)
+    by_file[[k$file]] <- c(by_file[[k$file]], list(rec))
   }
   list(by_file = by_file)
 }
@@ -533,6 +647,16 @@ list_test_tokens <- function(pkg_dir) {
 #'   running any test. Selection is at the test-*file* level (testthat filters by
 #'   file), so it never changes a mutant's verdict, only which tests run. Requires
 #'   the `testthat` strategy (errors otherwise). Defaults to `FALSE`.
+#' @param coverage_backend How `coverage_guided` attributes coverage to tests
+#'   (ignored when `coverage_guided = FALSE`). `"record_tests"` (the default) uses
+#'   covr's `record_tests` in a single run; it relies only on covr's public output
+#'   but, because covr credits a covered line to the deepest test-directory frame,
+#'   code reached through a `helper-*.R`/`setup-*.R` wrapper is attributed to the
+#'   helper rather than the originating `test-*.R` file, and such mutants
+#'   conservatively run the whole suite. `"per_file"` instruments the package once
+#'   and runs the suite a single time through a reporter that snapshots coverage
+#'   per test file, giving exact file-level attribution (no helper fallback) at
+#'   roughly the same cost; it depends on covr internals, so it is opt-in.
 #'
 #' @return An invisible list with three components:
 #' \describe{
@@ -577,8 +701,10 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            max_line_deletions = 5, cran = TRUE,
                            fail_fast = TRUE, isolate = FALSE,
                            strategy = c("auto", "testthat", "installed"),
-                           coverage_guided = FALSE) {
+                           coverage_guided = FALSE,
+                           coverage_backend = c("record_tests", "per_file")) {
   strategy <- match.arg(strategy)
+  coverage_backend <- match.arg(coverage_backend)
   if (!is.logical(coverage_guided) || length(coverage_guided) != 1L ||
     is.na(coverage_guided)) {
     stop("`coverage_guided` must be a single TRUE or FALSE.", call. = FALSE)
@@ -643,18 +769,6 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       "No supported tests found. Expected either 'tests/testthat' or a 'tests/' directory.",
       call. = FALSE
     )
-  }
-
-  get_package_name <- function(pkg_path) {
-    description_path <- file.path(pkg_path, "DESCRIPTION")
-    if (!file.exists(description_path)) {
-      stop("Cannot determine package name: DESCRIPTION file is missing.", call. = FALSE)
-    }
-    desc <- read.dcf(description_path)
-    if (!"Package" %in% colnames(desc)) {
-      stop("Cannot determine package name: DESCRIPTION has no 'Package' field.", call. = FALSE)
-    }
-    desc[1, "Package"]
   }
 
   run_testthat_tests <- function(pkg_path, test_filter = NULL) {
@@ -1079,7 +1193,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           # real per-mutant timeout comes from the uninstrumented contended
           # calibration below. A covr error here (failing suite or broken covr
           # setup) is caught by the handler and surfaced as a fatal baseline failure.
-          cov_map <- build_coverage_test_map(pkg_dir)
+          cov_map <- build_coverage_test_map(pkg_dir, backend = coverage_backend, cran = cran)
           baseline_passed <- TRUE
         } else {
           baseline_passed <- run_tests(pkg_dir)
