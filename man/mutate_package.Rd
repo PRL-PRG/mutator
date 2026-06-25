@@ -17,7 +17,9 @@ mutate_package(
   cran = TRUE,
   fail_fast = TRUE,
   isolate = FALSE,
-  strategy = c("auto", "testthat", "installed")
+  strategy = c("auto", "testthat", "installed"),
+  coverage_guided = FALSE,
+  coverage_backend = c("record_tests", "per_file")
 )
 }
 \arguments{
@@ -91,6 +93,28 @@ template library; each mutant is then installed with \code{--no-libs} (R code
 only) and the template's prebuilt shared objects are restored before its
 tests run. This relies on compiled code never being mutated, and it also
 means concurrent mutant installs no longer write into a shared \verb{src/}.}
+
+\item{coverage_guided}{Logical; if \code{TRUE}, only the tests that actually
+exercise a mutant's mutated line(s) are run for that mutant, instead of the
+whole suite. Coverage is measured once on the unmutated package with
+\pkg{covr} (\code{options(covr.record_tests = TRUE)}); that single coverage run
+also doubles as the baseline check (the suite is not run twice). A mutant on
+a line no test covers cannot be killed, so it is reported \code{SURVIVED} without
+running any test. Selection is at the test-\emph{file} level (testthat filters by
+file); under the assumption that the suite deterministically exercises the code, it
+should not change a mutant's verdict, only which tests run. Requires
+the \code{testthat} strategy (errors otherwise). Defaults to \code{FALSE}.}
+
+\item{coverage_backend}{How \code{coverage_guided} attributes coverage to tests
+(ignored when \code{coverage_guided = FALSE}). \code{"record_tests"} (the default) uses
+covr's \code{record_tests} in a single run; it relies only on covr's public output
+but, because covr credits a covered line to the deepest test-directory frame,
+code reached through a \verb{helper-*.R}/\verb{setup-*.R} wrapper is attributed to the
+helper rather than the originating \verb{test-*.R} file, and such mutants
+conservatively run the whole suite. \code{"per_file"} instruments the package once
+and runs the suite a single time through a reporter that snapshots coverage
+per test file, giving exact file-level attribution (no helper fallback) at
+roughly the same cost; it depends on covr internals, so it is opt-in.}
 }
 \value{
 An invisible list with three components:

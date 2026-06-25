@@ -199,6 +199,50 @@ The default (`isolate = FALSE`) is fast and correct for hermetic test suites;
 reach for `isolate = TRUE` (or `cores = 1`) only when a package's tests are not
 hermetic and you see parallel-only `KILLED`/`HANG` results.
 
+### Coverage-guided test selection (`coverage_guided`)
+
+Most mutants are settled by a small subset of the suite, and a mutant on a line
+that **no test exercises** can never be killed. With `coverage_guided = TRUE`
+(`testthat` strategy only) mutator measures coverage once with
+[covr](https://covr.r-lib.org/) and then, for each mutant, runs only the test
+files that cover its mutated line — and skips running tests altogether for mutants
+on uncovered lines (reported `SURVIVED` immediately).
+
+```r
+mutate_package("path/to/pkg", coverage_guided = TRUE)
+```
+
+The single coverage run also serves as the baseline check (it runs the package's
+own `tests/testthat.R` harness, which fails if any test fails), so the suite is
+not run twice. Selection is at the **test-file** level — testthat filters tests by
+file — and assumes the suite deterministically exercises the code, so it changes
+*which* tests run without changing a mutant's verdict.
+
+Requires the `covr` package. Coverage attribution (and therefore speed-up) depends
+on the backend (`coverage_backend`):
+
+- **`"record_tests"`** (default) uses covr's `record_tests` in a single run and
+  relies only on covr's public output. Its limitation: covr credits a covered line
+  to the *deepest test-directory frame* on the call stack, so when a test reaches
+  package code through a function defined in a `helper-*.R` / `setup-*.R` file
+  (a common pattern), covr attributes it to the helper, not the originating
+  `test-*.R`. The true triggering test is then unknown, so mutator conservatively
+  runs the **full suite** for that mutant. Packages that wrap their API in shared
+  test helpers therefore see less speed-up.
+
+- **`"per_file"`** instruments the package once and runs the suite a single time
+  through a reporter that snapshots coverage per test file, giving **exact
+  file-level attribution** with no helper fallback — at roughly the same cost as
+  the single `record_tests` run (often faster overall, since more mutants get a
+  narrowed test set). It reaches into covr internals, so it is opt-in:
+
+  ```r
+  mutate_package("path/to/pkg", coverage_guided = TRUE, coverage_backend = "per_file")
+  ```
+
+Either way the pay-off is largest when the suite is big, many lines are uncovered,
+and tests exercise the code directly.
+
 ### Equivalent Mutant Detection
 
 Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API.
@@ -303,6 +347,7 @@ mutator depends on:
   - **pkgload**: For loading mutated package copies
   - **testthat**: For test execution
   - **xml2**: For running C++ tests through `testthat::run_cpp_tests()`
+  - **covr**: For coverage-guided test selection (`coverage_guided = TRUE`)
   - **future** and **furrr**: For parallel execution
   - **httr** and **jsonlite**: For OpenAI API integration
 - **LinkingTo**: `testthat` (for Catch2 C++ test headers)

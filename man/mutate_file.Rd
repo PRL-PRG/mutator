@@ -29,6 +29,8 @@ A list of mutants. Each element contains:
 \describe{
 \item{\code{path}}{Path to the mutant file.}
 \item{\code{info}}{Formatted mutation metadata (file, source range, and details).}
+\item{\code{loc}}{Machine-readable location: a list with \code{file_path},
+\code{start_line}, and \code{end_line} (the latter two \code{NA} when unavailable).}
 }
 }
 \description{

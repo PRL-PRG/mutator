@@ -21,7 +21,8 @@ Imports:
     testthat,
     future,
     furrr,
-    callr
+    callr,
+    covr
 Suggests:
     xml2,
     pkgbuild
