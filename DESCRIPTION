@@ -7,7 +7,10 @@ Authors@R: c(
 Description: Performs mutation testing for 'R' packages to assess the
     effectiveness of a test suite. It mutates source files, runs package tests
     against each mutant, and reports which mutants were killed, survived, or
-    timed out. Parallel execution is supported for larger code bases.
+    timed out. Parallel execution is supported for larger code bases. The
+    optional 'imputesrcref' package, available from
+    <https://github.com/PRL-PRG/imputesrcref>, improves source locations when
+    installed.
 URL: https://github.com/PRL-PRG/mutator, https://prl-prg.github.io/mutator/
 BugReports: https://github.com/PRL-PRG/mutator/issues
 License: GPL (>= 3)
@@ -22,10 +25,13 @@ Imports:
     future,
     furrr,
     callr,
-    covr
+    covr,
+    R6
 Suggests:
     xml2,
     pkgbuild
+Enhances:
+    imputesrcref
 LinkingTo:
     testthat
 Config/testthat/edition: 3

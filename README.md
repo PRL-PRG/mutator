@@ -300,8 +300,8 @@ is installed, `mutator` uses it to recover precise spans for many operator
 mutants — typically narrowing a whole-function range down to the exact
 sub-expression on a single line (in our `scales` measurements, ~58% of operator
 mutants became single-line, with the mean operator-mutant span dropping from ~34
-lines to ~11). It is a GitHub-only package, so it **cannot** be a declared
-dependency of a CRAN package; install it yourself to opt in:
+lines to ~11). It is a GitHub-only optional package listed in `Enhances`;
+install it yourself to opt in:
 
 ```r
 # install.packages("remotes")

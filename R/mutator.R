@@ -250,19 +250,13 @@ mutation_location <- function(src_file, raw_info = NULL) {
 # the whole function. The 'imputesrcref' package (GitHub: PRL-PRG/imputesrcref)
 # injects transparent `{ }` wrappers carrying parse-data-derived srcrefs around
 # sub-expressions, which lets us recover a precise span for many operator
-# mutants. It is an optional, GitHub-only dependency (not declarable in
-# DESCRIPTION for CRAN): used only when installed, as a read-only location
-# oracle. The imputed AST is never fed to the engine, so deparsed mutant output
-# is byte-for-byte identical whether or not the package is present.
-
-# The package name is held in a variable rather than written as a literal so
-# `R CMD check`'s dependency scan does not treat this optional, GitHub-only
-# package as an undeclared hard dependency (it cannot be a declared one for
-# CRAN). All access -- availability test and function lookup -- goes through it.
-.imputesrcref_pkg <- "imputesrcref"
+# mutants. It is an optional, GitHub-only package listed in Enhances and used
+# only when installed, as a read-only location oracle. The imputed AST is never
+# fed to the engine, so deparsed mutant output is byte-for-byte identical whether
+# or not the package is present.
 
 imputesrcref_available <- function() {
-  requireNamespace(.imputesrcref_pkg, quietly = TRUE)
+  requireNamespace("imputesrcref", quietly = TRUE)
 }
 
 # Index of the slot holding a `function(...) ...` definition in a top-level
@@ -297,7 +291,7 @@ build_imputed_exprs <- function(parsed) {
     if (!is.function(fn)) {
       return(expr)
     }
-    impute_srcrefs <- getExportedValue(.imputesrcref_pkg, "impute_srcrefs")
+    impute_srcrefs <- getExportedValue("imputesrcref", "impute_srcrefs")
     g <- tryCatch(impute_srcrefs(fn), error = function(e) NULL)
     if (is.null(g)) {
       return(expr)
@@ -746,6 +740,9 @@ perfile_collect_code <- function(testdir, out, not_cran, pkgname) {
 # fallback). Cost is ~one full instrumented run. Depends on covr internals
 # (.counters), so it is the opt-in backend.
 build_coverage_map_per_file <- function(pkg_dir, cran = TRUE) {
+  if (!requireNamespace("R6", quietly = TRUE)) {
+    stop("Package 'R6' is required for the per_file coverage backend.", call. = FALSE)
+  }
   testdir <- file.path(pkg_dir, "tests", "testthat")
   out <- tempfile("mutator_perfile_cov_", fileext = ".rds")
   on.exit(unlink(out), add = TRUE)
