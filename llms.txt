@@ -349,6 +349,46 @@ speed-up) depends on the backend (`coverage_backend`):
 Either way the pay-off is largest when the suite is big, many lines are
 uncovered, and tests exercise the code directly.
 
+### Precise mutant locations (optional `imputesrcref`)
+
+Each reported mutant carries a source `Range:` (`start:col-end:col`).
+For statement- and line-deletion mutants this is precise, but **operator
+mutants** (`+`, `<`, `&&`, …) are different: R attaches no `srcref` to
+nested call objects, so the engine can only report the bounds of the
+*enclosing top-level expression* — effectively the whole function. A
+surviving `==`-to-`!=` mutant in a 40-line function therefore points at
+all 40 lines.
+
+If the optional
+[`imputesrcref`](https://github.com/PRL-PRG/imputesrcref) package is
+installed, `mutator` uses it to recover precise spans for many operator
+mutants — typically narrowing a whole-function range down to the exact
+sub-expression on a single line (in our `scales` measurements, ~58% of
+operator mutants became single-line, with the mean operator-mutant span
+dropping from ~34 lines to ~11). It is a GitHub-only package, so it
+**cannot** be a declared dependency of a CRAN package; install it
+yourself to opt in:
+
+``` r
+
+# install.packages("remotes")
+remotes::install_github("PRL-PRG/imputesrcref")
+```
+
+When it is **not** installed, `mutator` behaves exactly as before
+(coarser operator ranges) — nothing else changes. The refinement is used
+only as a read-only source-location oracle: mutant files are deparsed
+from the original code and are **byte-for-byte identical** whether or
+not `imputesrcref` is present, and `# mutator:ignore-*` directives keep
+their function-granular semantics regardless. For best results, install
+the package under test from source with parse data retained, since
+`imputesrcref` reads it:
+
+``` r
+
+install.packages("<pkg>", INSTALL_opts = c("--with-keep.source", "--with-keep.parse.data"))
+```
+
 ### Equivalent Mutant Detection
 
 Equivalent-mutant detection calls an OpenAI-compatible Chat Completions

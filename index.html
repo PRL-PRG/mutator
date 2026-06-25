@@ -245,13 +245,25 @@
 <p>Either way the pay-off is largest when the suite is big, many lines are uncovered, and tests exercise the code directly.</p>
 </div>
 <div class="section level3">
+<h3 id="precise-mutant-locations-optional-imputesrcref">Precise mutant locations (optional <code>imputesrcref</code>)<a class="anchor" aria-label="anchor" href="#precise-mutant-locations-optional-imputesrcref"></a>
+</h3>
+<p>Each reported mutant carries a source <code>Range:</code> (<code>start:col-end:col</code>). For statement- and line-deletion mutants this is precise, but <strong>operator mutants</strong> (<code>+</code>, <code>&lt;</code>, <code>&amp;&amp;</code>, …) are different: R attaches no <code>srcref</code> to nested call objects, so the engine can only report the bounds of the <em>enclosing top-level expression</em> — effectively the whole function. A surviving <code>==</code>-to-<code>!=</code> mutant in a 40-line function therefore points at all 40 lines.</p>
+<p>If the optional <a href="https://github.com/PRL-PRG/imputesrcref" class="external-link"><code>imputesrcref</code></a> package is installed, <code>mutator</code> uses it to recover precise spans for many operator mutants — typically narrowing a whole-function range down to the exact sub-expression on a single line (in our <code>scales</code> measurements, ~58% of operator mutants became single-line, with the mean operator-mutant span dropping from ~34 lines to ~11). It is a GitHub-only package, so it <strong>cannot</strong> be a declared dependency of a CRAN package; install it yourself to opt in:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/imputesrcref"</span><span class="op">)</span></span></code></pre></div>
+<p>When it is <strong>not</strong> installed, <code>mutator</code> behaves exactly as before (coarser operator ranges) — nothing else changes. The refinement is used only as a read-only source-location oracle: mutant files are deparsed from the original code and are <strong>byte-for-byte identical</strong> whether or not <code>imputesrcref</code> is present, and <code># mutator:ignore-*</code> directives keep their function-granular semantics regardless. For best results, install the package under test from source with parse data retained, since <code>imputesrcref</code> reads it:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"&lt;pkg&gt;"</span>, INSTALL_opts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"--with-keep.source"</span>, <span class="st">"--with-keep.parse.data"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
 <h3 id="equivalent-mutant-detection">Equivalent Mutant Detection<a class="anchor" aria-label="anchor" href="#equivalent-mutant-detection"></a>
 </h3>
 <p>Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API. Configure it in any of these ways (listed highest precedence first; each setting is resolved independently, so they can be mixed):</p>
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>
