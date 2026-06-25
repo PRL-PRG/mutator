@@ -49,13 +49,18 @@ A list of mutants. Each element contains:
 
   Formatted mutation metadata (file, source range, and details).
 
+- `loc`:
+
+  Machine-readable location: a list with `file_path`, `start_line`, and
+  `end_line` (the latter two `NA` when unavailable).
+
 ## Examples
 
 ``` r
 src <- tempfile(fileext = ".R")
 writeLines("add <- function(x, y) x + y", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"), max_mutants = 1)
-#> Generated 1 AST-based mutants for file19c1e49829e.R
+#> Generated 1 AST-based mutants for file1aac3358ca11.R
 length(mutants)
 #> [1] 1
 ```

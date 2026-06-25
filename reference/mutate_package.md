@@ -20,7 +20,9 @@ mutate_package(
   cran = TRUE,
   fail_fast = TRUE,
   isolate = FALSE,
-  strategy = c("auto", "testthat", "installed")
+  strategy = c("auto", "testthat", "installed"),
+  coverage_guided = FALSE,
+  coverage_backend = c("record_tests", "per_file")
 )
 ```
 
@@ -83,9 +85,8 @@ mutate_package(
   / `skip_if_offline()` guards take effect and the same tests CRAN would
   run are used (skipping network/slow tests the package marks). Set to
   `FALSE` to run the full suite (`NOT_CRAN = "true"`), as
-  [`devtools::test()`](https://devtools.r-lib.org/reference/test.html)
-  does. Note this only affects tests the package actually guards;
-  unguarded network tests still run.
+  `devtools::test()` does. Note this only affects tests the package
+  actually guards; unguarded network tests still run.
 
 - fail_fast:
 
@@ -131,6 +132,34 @@ mutate_package(
   are restored before its tests run. This relies on compiled code never
   being mutated, and it also means concurrent mutant installs no longer
   write into a shared `src/`.
+
+- coverage_guided:
+
+  Logical; if `TRUE`, only the tests that actually exercise a mutant's
+  mutated line(s) are run for that mutant, instead of the whole suite.
+  Coverage is measured once on the unmutated package with covr
+  (`options(covr.record_tests = TRUE)`); that single coverage run also
+  doubles as the baseline check (the suite is not run twice). A mutant
+  on a line no test covers cannot be killed, so it is reported
+  `SURVIVED` without running any test. Selection is at the test-*file*
+  level (testthat filters by file); under the assumption that the suite
+  deterministically exercises the code, it should not change a mutant's
+  verdict, only which tests run. Requires the `testthat` strategy
+  (errors otherwise). Defaults to `FALSE`.
+
+- coverage_backend:
+
+  How `coverage_guided` attributes coverage to tests (ignored when
+  `coverage_guided = FALSE`). `"record_tests"` (the default) uses covr's
+  `record_tests` in a single run; it relies only on covr's public output
+  but, because covr credits a covered line to the deepest test-directory
+  frame, code reached through a `helper-*.R`/`setup-*.R` wrapper is
+  attributed to the helper rather than the originating `test-*.R` file,
+  and such mutants conservatively run the whole suite. `"per_file"`
+  instruments the package once and runs the suite a single time through
+  a reporter that snapshots coverage per test file, giving exact
+  file-level attribution (no helper fallback) at roughly the same cost;
+  it depends on covr internals, so it is opt-in.
 
 ## Value
 
@@ -227,7 +256,7 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        1.0
+#>   Test execution:        1.1
 #>   Equivalence detection: 0.0
 names(result)
 #> [1] "package_mutants" "test_results"    "timing"         

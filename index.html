@@ -92,12 +92,12 @@
 <span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"pkgload"</span>, <span class="st">"testthat"</span>, <span class="st">"httr"</span>, <span class="st">"jsonlite"</span>, <span class="st">"future"</span>, <span class="st">"furrr"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Install from GitHub (if available)</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/install-deprecated.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"PRL-PRG/mutator"</span><span class="op">)</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/mutator"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Or install from local source</span></span>
 <span><span class="co"># In R console</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="st">"path/to/mutator"</span><span class="op">)</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="quick-start-guide">Quick Start Guide<a class="anchor" aria-label="anchor" href="#quick-start-guide"></a>
@@ -153,7 +153,7 @@
 </ul>
 <p>Run the full test suite with:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/test.html" class="external-link">test</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="configuration">Configuration<a class="anchor" aria-label="anchor" href="#configuration"></a>
@@ -169,7 +169,7 @@
 <h3 id="cran-mode-test-selection">CRAN mode (test selection)<a class="anchor" aria-label="anchor" href="#cran-mode-test-selection"></a>
 </h3>
 <p>By default <code><a href="reference/mutate_package.html">mutate_package()</a></code> runs each mutant’s tests in <strong>CRAN mode</strong> (<code>cran = TRUE</code>): the <code>NOT_CRAN</code> environment variable is set to <code>"false"</code> in the test subprocess, so <code><a href="https://testthat.r-lib.org/reference/skip.html" class="external-link">testthat::skip_on_cran()</a></code> and <code>skip_if_offline()</code> guards take effect and mutator runs the same tests CRAN would. This skips the slow, flaky, or network-dependent tests that packages mark as CRAN-skippable — which keeps mutation runs fast and avoids spurious timeouts/kills from, e.g., tests that hit the network.</p>
-<p>Set <code>cran = FALSE</code> to run the <strong>full</strong> suite instead (<code>NOT_CRAN = "true"</code>, the behaviour of <code><a href="https://devtools.r-lib.org/reference/test.html" class="external-link">devtools::test()</a></code>):</p>
+<p>Set <code>cran = FALSE</code> to run the <strong>full</strong> suite instead (<code>NOT_CRAN = "true"</code>, the behaviour of <code>devtools::test()</code>):</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, cran <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>This applies to both test strategies (the <code>testthat</code> strategy and the installed-tests fallback). Note that it only affects tests the package <em>explicitly</em> guards with <code>skip_on_cran()</code> / <code>skip_if_offline()</code>; a package whose network test has no such guard will still run that test in either mode.</p>
@@ -203,13 +203,31 @@
 <p>The default (<code>isolate = FALSE</code>) is fast and correct for hermetic test suites; reach for <code>isolate = TRUE</code> (or <code>cores = 1</code>) only when a package’s tests are not hermetic and you see parallel-only <code>KILLED</code>/<code>HANG</code> results.</p>
 </div>
 <div class="section level3">
+<h3 id="coverage-guided-test-selection-coverage_guided">Coverage-guided test selection (<code>coverage_guided</code>)<a class="anchor" aria-label="anchor" href="#coverage-guided-test-selection-coverage_guided"></a>
+</h3>
+<p>Most mutants are settled by a small subset of the suite, and a mutant on a line that <strong>no test exercises</strong> can never be killed. With <code>coverage_guided = TRUE</code> (<code>testthat</code> strategy only) mutator measures coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr</a> and then, for each mutant, runs only the test files that cover its mutated line — and skips running tests altogether for mutants on uncovered lines (reported <code>SURVIVED</code> immediately).</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>The single coverage run also serves as the baseline check (it runs the package’s own <code>tests/testthat.R</code> harness, which fails if any test fails), so the suite is not run twice. Selection is at the <strong>test-file</strong> level — testthat filters tests by file — and assumes the suite deterministically exercises the code, so it changes <em>which</em> tests run without changing a mutant’s verdict.</p>
+<p>Requires the <code>covr</code> package. Coverage attribution (and therefore speed-up) depends on the backend (<code>coverage_backend</code>):</p>
+<ul>
+<li><p><strong><code>"record_tests"</code></strong> (default) uses covr’s <code>record_tests</code> in a single run and relies only on covr’s public output. Its limitation: covr credits a covered line to the <em>deepest test-directory frame</em> on the call stack, so when a test reaches package code through a function defined in a <code>helper-*.R</code> / <code>setup-*.R</code> file (a common pattern), covr attributes it to the helper, not the originating <code>test-*.R</code>. The true triggering test is then unknown, so mutator conservatively runs the <strong>full suite</strong> for that mutant. Packages that wrap their API in shared test helpers therefore see less speed-up.</p></li>
+<li>
+<p><strong><code>"per_file"</code></strong> instruments the package once and runs the suite a single time through a reporter that snapshots coverage per test file, giving <strong>exact file-level attribution</strong> with no helper fallback — at roughly the same cost as the single <code>record_tests</code> run (often faster overall, since more mutants get a narrowed test set). It reaches into covr internals, so it is opt-in:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>, coverage_backend <span class="op">=</span> <span class="st">"per_file"</span><span class="op">)</span></span></code></pre></div>
+</li>
+</ul>
+<p>Either way the pay-off is largest when the suite is big, many lines are uncovered, and tests exercise the code directly.</p>
+</div>
+<div class="section level3">
 <h3 id="equivalent-mutant-detection">Equivalent Mutant Detection<a class="anchor" aria-label="anchor" href="#equivalent-mutant-detection"></a>
 </h3>
 <p>Equivalent-mutant detection calls an OpenAI-compatible Chat Completions API. Configure it in any of these ways (listed highest precedence first; each setting is resolved independently, so they can be mixed):</p>
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>
@@ -486,6 +504,8 @@ base_url: https://api.openai.com/v1</code></pre>
 <li>
 <strong>xml2</strong>: For running C++ tests through <code><a href="https://testthat.r-lib.org/reference/run_cpp_tests.html" class="external-link">testthat::run_cpp_tests()</a></code>
 </li>
+<li>
+<strong>covr</strong>: For coverage-guided test selection (<code>coverage_guided = TRUE</code>)</li>
 <li>
 <strong>future</strong> and <strong>furrr</strong>: For parallel execution</li>
 <li>

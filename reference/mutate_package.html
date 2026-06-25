@@ -55,7 +55,9 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <span>  cran <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  fail_fast <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  isolate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"installed"</span><span class="op">)</span></span>
+<span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"installed"</span><span class="op">)</span>,</span>
+<span>  coverage_guided <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  coverage_backend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"record_tests"</span>, <span class="st">"per_file"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -115,7 +117,7 @@ file (passed to <code><a href="mutate_file.html">mutate_file()</a></code>); <cod
 so <code><a href="https://testthat.r-lib.org/reference/skip.html" class="external-link">testthat::skip_on_cran()</a></code> / <code>skip_if_offline()</code> guards take effect and
 the same tests CRAN would run are used (skipping network/slow tests the
 package marks). Set to <code>FALSE</code> to run the full suite (<code>NOT_CRAN = "true"</code>),
-as <code><a href="https://devtools.r-lib.org/reference/test.html" class="external-link">devtools::test()</a></code> does. Note this only affects tests the package
+as <code>devtools::test()</code> does. Note this only affects tests the package
 actually guards; unguarded network tests still run.</p></dd>
 
 
@@ -158,6 +160,32 @@ template library; each mutant is then installed with <code>--no-libs</code> (R c
 only) and the template's prebuilt shared objects are restored before its
 tests run. This relies on compiled code never being mutated, and it also
 means concurrent mutant installs no longer write into a shared <code>src/</code>.</p></dd>
+
+
+<dt id="arg-coverage-guided">coverage_guided<a class="anchor" aria-label="anchor" href="#arg-coverage-guided"></a></dt>
+<dd><p>Logical; if <code>TRUE</code>, only the tests that actually
+exercise a mutant's mutated line(s) are run for that mutant, instead of the
+whole suite. Coverage is measured once on the unmutated package with
+<span class="pkg">covr</span> (<code>options(covr.record_tests = TRUE)</code>); that single coverage run
+also doubles as the baseline check (the suite is not run twice). A mutant on
+a line no test covers cannot be killed, so it is reported <code>SURVIVED</code> without
+running any test. Selection is at the test-<em>file</em> level (testthat filters by
+file); under the assumption that the suite deterministically exercises the code, it
+should not change a mutant's verdict, only which tests run. Requires
+the <code>testthat</code> strategy (errors otherwise). Defaults to <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-coverage-backend">coverage_backend<a class="anchor" aria-label="anchor" href="#arg-coverage-backend"></a></dt>
+<dd><p>How <code>coverage_guided</code> attributes coverage to tests
+(ignored when <code>coverage_guided = FALSE</code>). <code>"record_tests"</code> (the default) uses
+covr's <code>record_tests</code> in a single run; it relies only on covr's public output
+but, because covr credits a covered line to the deepest test-directory frame,
+code reached through a <code>helper-*.R</code>/<code>setup-*.R</code> wrapper is attributed to the
+helper rather than the originating <code>test-*.R</code> file, and such mutants
+conservatively run the whole suite. <code>"per_file"</code> instruments the package once
+and runs the suite a single time through a reporter that snapshots coverage
+per test file, giving exact file-level attribution (no helper fallback) at
+roughly the same cost; it depends on covr internals, so it is opt-in.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -244,7 +272,7 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Timing (seconds):</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          0.8</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutant generation:     0.0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.0</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.1</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Equivalence detection: 0.0</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "package_mutants" "test_results"    "timing"         </span>
