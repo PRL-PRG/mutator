@@ -20,6 +20,7 @@ mutate_package(
   cran = TRUE,
   fail_fast = TRUE,
   isolate = FALSE,
+  exclude_files = NULL,
   strategy = c("auto", "testthat", "installed"),
   coverage_guided = FALSE,
   coverage_backend = c("record_tests", "per_file")
@@ -114,6 +115,22 @@ mutate_package(
   therefore produce spurious `KILLED`/`HANG` verdicts; it gives each
   worker its own copy at the cost of extra disk. Running with
   `cores = 1` avoids such contention without the copy cost.
+
+- exclude_files:
+
+  Optional character vector of shell-style glob patterns (e.g.
+  `"import-standalone-*"`) matched against the **base names** of the
+  `.R` files in `R/`. Matching files are skipped entirely before any
+  mutants are generated — useful for vendored/standalone code, generated
+  files, or anything the test suite is not meant to cover. `NULL` (the
+  default) mutates every file. This complements the in-source
+  `# mutator:ignore-file` and `# mutator:ignore-start` /
+  `# mutator:ignore-end` directives, which exclude a whole file or a
+  line region from within the source itself. Note that for operator
+  mutations the engine only resolves positions to the enclosing
+  top-level definition, so a region directive excludes that function's
+  operator mutants as a group (line-deletion mutants are excluded
+  line-precisely).
 
 - strategy:
 
@@ -231,6 +248,8 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> 
 #> ══ Results ═════════════════════════════════════════════════════════════════════
 #> [ FAIL 0 | WARN 0 | SKIP 0 | PASS 1 ]
+#> 
+#> Way to go!
 #> Generated 1 AST-based mutants for add.R
 #> ✔ | F W  S  OK | Context
 #> 

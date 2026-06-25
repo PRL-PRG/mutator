@@ -55,6 +55,7 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <span>  cran <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  fail_fast <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  isolate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  exclude_files <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"installed"</span><span class="op">)</span>,</span>
 <span>  coverage_guided <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  coverage_backend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"record_tests"</span>, <span class="st">"per_file"</span><span class="op">)</span></span>
@@ -147,6 +148,21 @@ each worker its own copy at the cost of extra disk. Running with <code>cores = 1
 avoids such contention without the copy cost.</p></dd>
 
 
+<dt id="arg-exclude-files">exclude_files<a class="anchor" aria-label="anchor" href="#arg-exclude-files"></a></dt>
+<dd><p>Optional character vector of shell-style glob patterns
+(e.g. <code>"import-standalone-*"</code>) matched against the <strong>base names</strong> of the
+<code>.R</code> files in <code>R/</code>. Matching files are skipped entirely before any mutants
+are generated — useful for vendored/standalone code, generated files, or
+anything the test suite is not meant to cover. <code>NULL</code> (the default) mutates
+every file. This complements the in-source <code># mutator:ignore-file</code> and
+<code># mutator:ignore-start</code> / <code># mutator:ignore-end</code> directives, which exclude
+a whole file or a line region from within the source itself. Note that for
+operator mutations the engine only resolves positions to the enclosing
+top-level definition, so a region directive excludes that function's
+operator mutants as a group (line-deletion mutants are excluded
+line-precisely).</p></dd>
+
+
 <dt id="arg-strategy">strategy<a class="anchor" aria-label="anchor" href="#arg-strategy"></a></dt>
 <dd><p>Test strategy to use. <code>"auto"</code> (the default) picks the
 <code>testthat</code> strategy when <code>tests/testthat/</code> exists and the installed-tests
@@ -170,8 +186,8 @@ whole suite. Coverage is measured once on the unmutated package with
 also doubles as the baseline check (the suite is not run twice). A mutant on
 a line no test covers cannot be killed, so it is reported <code>SURVIVED</code> without
 running any test. Selection is at the test-<em>file</em> level (testthat filters by
-file); under the assumption that the suite deterministically exercises the code, it
-should not change a mutant's verdict, only which tests run. Requires
+file); under the assumption that the suite deterministically exercises the code,
+it should not change a mutant's verdict, only which tests run. Requires
 the <code>testthat</code> strategy (errors otherwise). Defaults to <code>FALSE</code>.</p></dd>
 
 
@@ -247,6 +263,8 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ══ Results ═════════════════════════════════════════════════════════════════════</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> [ FAIL 0 | WARN 0 | SKIP 0 | PASS 1 ]</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Way to go!</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 1 AST-based mutants for add.R</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ✔ | F W  S  OK | Context</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>

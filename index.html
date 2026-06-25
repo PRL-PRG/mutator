@@ -203,10 +203,34 @@
 <p>The default (<code>isolate = FALSE</code>) is fast and correct for hermetic test suites; reach for <code>isolate = TRUE</code> (or <code>cores = 1</code>) only when a package’s tests are not hermetic and you see parallel-only <code>KILLED</code>/<code>HANG</code> results.</p>
 </div>
 <div class="section level3">
+<h3 id="excluding-code-from-mutation">Excluding code from mutation<a class="anchor" aria-label="anchor" href="#excluding-code-from-mutation"></a>
+</h3>
+<p>Not all code should be mutation-tested. Vendored/standalone files, generated code, or deprecated paths a suite is not meant to cover will mostly produce <code>SURVIVED</code> mutants and depress the score without telling you anything useful. (For example, mutating <code>scales</code> turns up dozens of survivors in its vendored <code>import-standalone-*.R</code> files — rlang snippets <code>scales</code> does not test.) There are two ways to exclude code.</p>
+<p><strong>1. By file, at the call site — <code>exclude_files</code>.</strong> A character vector of shell-style glob patterns matched against the base names of the <code>.R</code> files in <code>R/</code>. Matching files are skipped entirely before any mutants are generated:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/scales"</span>, exclude_files <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"import-standalone-*"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><strong>2. In the source, with <code># mutator:ignore</code> directives.</strong> Place markers in the <code>.R</code> file itself:</p>
+<ul>
+<li><p><code># mutator:ignore-file</code> anywhere in a file excludes the <strong>whole file</strong>.</p></li>
+<li>
+<p><code># mutator:ignore-start</code> / <code># mutator:ignore-end</code> exclude the <strong>line region</strong> between them (wrap a function to exclude it):</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># mutator:ignore-start</span></span>
+<span><span class="va">legacy_helper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="co"># not worth mutation-testing</span></span>
+<span>  <span class="va">x</span> <span class="op">*</span> <span class="fl">2</span></span>
+<span><span class="op">}</span></span>
+<span><span class="co"># mutator:ignore-end</span></span></code></pre></div>
+<p>An unmatched <code>-start</code> excludes through the end of the file.</p>
+</li>
+</ul>
+<p><strong>Granularity caveat.</strong> Excluding whole <em>files</em> and whole <em>functions</em> is reliable. Finer than that is not, for operator mutations: R does not attach source references to nested expressions, so the engine resolves an operator mutant’s position only to its enclosing top-level definition. A region directive inside a function therefore excludes that function’s operator mutants as a group — you cannot single out one operator mid-function. Line-deletion mutants <em>are</em> excluded line-precisely. In practice, wrap whole functions, not fragments.</p>
+</div>
+<div class="section level3">
 <h3 id="coverage-guided-test-selection-coverage_guided">Coverage-guided test selection (<code>coverage_guided</code>)<a class="anchor" aria-label="anchor" href="#coverage-guided-test-selection-coverage_guided"></a>
 </h3>
 <p>Most mutants are settled by a small subset of the suite, and a mutant on a line that <strong>no test exercises</strong> can never be killed. With <code>coverage_guided = TRUE</code> (<code>testthat</code> strategy only) mutator measures coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr</a> and then, for each mutant, runs only the test files that cover its mutated line — and skips running tests altogether for mutants on uncovered lines (reported <code>SURVIVED</code> immediately).</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>The single coverage run also serves as the baseline check (it runs the package’s own <code>tests/testthat.R</code> harness, which fails if any test fails), so the suite is not run twice. Selection is at the <strong>test-file</strong> level — testthat filters tests by file — and assumes the suite deterministically exercises the code, so it changes <em>which</em> tests run without changing a mutant’s verdict.</p>
 <p>Requires the <code>covr</code> package. Coverage attribution (and therefore speed-up) depends on the backend (<code>coverage_backend</code>):</p>
@@ -214,7 +238,7 @@
 <li><p><strong><code>"record_tests"</code></strong> (default) uses covr’s <code>record_tests</code> in a single run and relies only on covr’s public output. Its limitation: covr credits a covered line to the <em>deepest test-directory frame</em> on the call stack, so when a test reaches package code through a function defined in a <code>helper-*.R</code> / <code>setup-*.R</code> file (a common pattern), covr attributes it to the helper, not the originating <code>test-*.R</code>. The true triggering test is then unknown, so mutator conservatively runs the <strong>full suite</strong> for that mutant. Packages that wrap their API in shared test helpers therefore see less speed-up.</p></li>
 <li>
 <p><strong><code>"per_file"</code></strong> instruments the package once and runs the suite a single time through a reporter that snapshots coverage per test file, giving <strong>exact file-level attribution</strong> with no helper fallback — at roughly the same cost as the single <code>record_tests</code> run (often faster overall, since more mutants get a narrowed test set). It reaches into covr internals, so it is opt-in:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>, coverage_backend <span class="op">=</span> <span class="st">"per_file"</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ul>
@@ -227,7 +251,7 @@
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>

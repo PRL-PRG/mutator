@@ -250,6 +250,55 @@ suites; reach for `isolate = TRUE` (or `cores = 1`) only when a
 package’s tests are not hermetic and you see parallel-only
 `KILLED`/`HANG` results.
 
+### Excluding code from mutation
+
+Not all code should be mutation-tested. Vendored/standalone files,
+generated code, or deprecated paths a suite is not meant to cover will
+mostly produce `SURVIVED` mutants and depress the score without telling
+you anything useful. (For example, mutating `scales` turns up dozens of
+survivors in its vendored `import-standalone-*.R` files — rlang snippets
+`scales` does not test.) There are two ways to exclude code.
+
+**1. By file, at the call site — `exclude_files`.** A character vector
+of shell-style glob patterns matched against the base names of the `.R`
+files in `R/`. Matching files are skipped entirely before any mutants
+are generated:
+
+``` r
+
+mutate_package("path/to/scales", exclude_files = c("import-standalone-*"))
+```
+
+**2. In the source, with `# mutator:ignore` directives.** Place markers
+in the `.R` file itself:
+
+- `# mutator:ignore-file` anywhere in a file excludes the **whole
+  file**.
+
+- `# mutator:ignore-start` / `# mutator:ignore-end` exclude the **line
+  region** between them (wrap a function to exclude it):
+
+  ``` r
+
+  # mutator:ignore-start
+  legacy_helper <- function(x) {
+    # not worth mutation-testing
+    x * 2
+  }
+  # mutator:ignore-end
+  ```
+
+  An unmatched `-start` excludes through the end of the file.
+
+**Granularity caveat.** Excluding whole *files* and whole *functions* is
+reliable. Finer than that is not, for operator mutations: R does not
+attach source references to nested expressions, so the engine resolves
+an operator mutant’s position only to its enclosing top-level
+definition. A region directive inside a function therefore excludes that
+function’s operator mutants as a group — you cannot single out one
+operator mid-function. Line-deletion mutants *are* excluded
+line-precisely. In practice, wrap whole functions, not fragments.
+
 ### Coverage-guided test selection (`coverage_guided`)
 
 Most mutants are settled by a small subset of the suite, and a mutant on
