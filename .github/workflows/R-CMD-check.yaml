@@ -45,6 +45,7 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
           dependencies: 'c("Depends", "Imports", "LinkingTo", "Suggests")'
+          install-pandoc: false
 
       - uses: r-lib/actions/check-r-package@v2
         with:

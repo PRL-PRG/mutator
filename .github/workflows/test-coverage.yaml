@@ -30,6 +30,7 @@ jobs:
           extra-packages: any::covr, any::xml2
           needs: coverage
           dependencies: 'c("Depends", "Imports", "LinkingTo", "Suggests")'
+          install-pandoc: false
 
       - name: Test coverage
         run: |
