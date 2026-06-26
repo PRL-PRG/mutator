@@ -32,6 +32,8 @@ Suggests:
     pkgbuild
 Enhances:
     imputesrcref
+Config/Needs/check:
+    PRL-PRG/imputesrcref
 LinkingTo:
     testthat
 Config/testthat/edition: 3
