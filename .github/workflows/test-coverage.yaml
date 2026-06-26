@@ -29,6 +29,7 @@ jobs:
         with:
           extra-packages: any::covr, any::xml2
           needs: coverage
+          dependencies: 'c("Depends", "Imports", "LinkingTo", "Suggests")'
 
       - name: Test coverage
         run: |
