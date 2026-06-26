@@ -271,9 +271,9 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   Survived:         1
 #>   Mutation Score:   0.00%
 #> Timing (seconds):
-#>   Baseline run:          0.7
+#>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        0.9
+#>   Test execution:        1.0
 #>   Equivalence detection: 0.0
 names(result)
 #> [1] "package_mutants" "test_results"    "timing"         
