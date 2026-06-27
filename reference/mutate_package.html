@@ -286,37 +286,32 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ══ Results ═════════════════════════════════════════════════════════════════════</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> [ FAIL 0 | WARN 0 | SKIP 0 | PASS 1 ]</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 2 AST-based mutants for add.R</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 1 AST-based mutants for add.R</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ✔ | F W  S  OK | Context</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠏ |          0 | add                                                            </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠋ | 1        0 | add                                                            </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ✖ | 1        0 | add</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ────────────────────────────────────────────────────────────────────────────────</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Error ('test-add.R:1:1'): (code run outside of `test_that()`)</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Error in `add(1, 2)`: could not find function "add"</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Backtrace:</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>     ▆</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>  1. └─testthat::expect_equal(add(1, 2), 3) at test-add.R:1:1</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>  2.   └─testthat::quasi_label(enquo(object), label)</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>  3.     └─rlang::eval_bare(expr, quo_get_env(quo))</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Failure ('test-add.R:1:1'): (code run outside of `test_that()`)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Expected `add(1, 2)` to equal 3.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Differences:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> 1/1 mismatches</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> [1] -1 - 3 == -4</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ────────────────────────────────────────────────────────────────────────────────</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Maximum number of failures exceeded; quitting.</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ℹ Increase this number with (e.g.) `testthat::set_max_fails(Inf)` </span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Warning message:</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Objects listed as exports, but not present in namespace:</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> • add </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Mutation Testing Summary:</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Total mutants:    1</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Killed:           0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Hanged:           0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Survived:         1</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 3)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 2)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Timing (seconds):</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          0.8</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutant generation:     0.0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Equivalence detection: 0.0</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "package_mutants" "test_results"    "timing"          "summary"        </span>
