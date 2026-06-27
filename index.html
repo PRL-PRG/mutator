@@ -47,7 +47,7 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><p><!-- badges: start --></p>
-<p><a href="https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://app.codecov.io/gh/PRL-PRG/mutator" class="external-link"><img src="https://codecov.io/gh/PRL-PRG/mutator/graph/badge.svg" alt="Codecov test coverage"></a></p>
+<p><a href="https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://app.codecov.io/gh/PRL-PRG/mutator" class="external-link"><img src="https://codecov.io/gh/PRL-PRG/mutator/graph/badge.svg" alt="Codecov test coverage"></a> <a href="https://prl-prg.github.io/mutator/"><img src="https://img.shields.io/badge/pkgdown-reference-blue.svg" alt="pkgdown reference"></a></p>
 <!-- badges: end -->
 <div class="section level1">
 <div class="page-header"><h1 id="mutator">mutator<a class="anchor" aria-label="anchor" href="#mutator"></a>
@@ -68,41 +68,30 @@
 <li>
 <strong>Parallel Test Execution</strong>: Runs tests in parallel for improved performance</li>
 <li>
+<strong>Coverage-guided Test Selection</strong>: Runs only the tests that cover mutated lines, also for improved performance</li>
+<li>
 <strong>Equivalent Mutant Detection</strong>: Uses AI to identify mutants that are functionally equivalent to the original code</li>
 <li>
 <strong>Detailed Reporting</strong>: Provides mutation scores and analysis of test suite effectiveness</li>
 </ul>
 </div>
 <div class="section level2">
-<h2 id="package-structure">Package Structure<a class="anchor" aria-label="anchor" href="#package-structure"></a>
-</h2>
-<pre><code>mutator/
-├── R/                      # R source code
-│   ├── mutator.R           # Core functionality
-│   └── init.R
-├── src/                    # C++ source + Catch2 C++ tests (testthat integration)
-├── tests/                  # R tests (includes compiled C++ test entrypoint)
-└── DESCRIPTION             # Package metadata</code></pre>
-</div>
-<div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Install dependencies</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"pkgload"</span>, <span class="st">"testthat"</span>, <span class="st">"httr"</span>, <span class="st">"jsonlite"</span>, <span class="st">"future"</span>, <span class="st">"furrr"</span><span class="op">)</span><span class="op">)</span></span>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Install from GitHub; package dependencies are installed automatically</span></span>
+<span><span class="co"># install.packages("remotes")</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/mutator"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Install from GitHub (if available)</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/mutator"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Or install from local source</span></span>
-<span><span class="co"># In R console</span></span>
+<span><span class="co"># Or install from local source, in an R console</span></span>
+<span><span class="co"># install.packages("devtools")</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="st">"path/to/mutator"</span><span class="op">)</span></span>
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="quick-start-guide">Quick Start Guide<a class="anchor" aria-label="anchor" href="#quick-start-guide"></a>
 </h2>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/PRL-PRG/mutator" class="external-link">mutator</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Mutate a single file</span></span>
@@ -122,17 +111,18 @@
 <span></span>
 <span><span class="co"># Optional: control where mutant files are written</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/your/package"</span>, mutation_dir <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>See the <a href="https://prl-prg.github.io/mutator/reference/">pkgdown reference</a> for the full argument and return-value documentation.</p>
 </div>
 <div class="section level2">
-<h2 id="testing">Testing<a class="anchor" aria-label="anchor" href="#testing"></a>
+<h2 id="mutation-testing-modes">Mutation testing modes<a class="anchor" aria-label="anchor" href="#mutation-testing-modes"></a>
 </h2>
 <p>mutator selects a package test strategy automatically:</p>
 <ul>
-<li>If <code>tests/testthat/</code> exists, mutator loads the mutant in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and runs its tests the way the package’s own <code>tests/testthat.R</code> harness does — forwarding the same arguments (notably any <code>filter</code>) that the harness passes to <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> to <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>. This means mutator runs exactly the tests the package author (and <code>R CMD check</code>) run, without paying for an install per mutant.</li>
+<li>If <code>tests/testthat/</code> exists, mutator loads the mutant in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and mirrors the package’s own <code>tests/testthat.R</code> harness by forwarding extractable arguments (notably any <code>filter</code>) from <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> to <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>, without paying for an install per mutant.</li>
 <li>Otherwise, if <code>tests/</code> exists, mutator falls back to <code>tools::testInstalledPackage(..., types = "tests")</code> after installing each mutant with <code>--install-tests</code>.</li>
 </ul>
-<p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts). To avoid recompiling C/C++ on every mutant, mutator installs the unmutated package — compiling its shared objects — <strong>once</strong> into a template library, then installs each mutant with <code>--no-libs</code> (R code only) and restores the template’s prebuilt shared objects before running its tests. This is safe because mutator does not mutate compiled code, so the shared object is identical for every mutant; it also means concurrent mutant installs no longer write into a shared <code>src/</code> (see “Parallel execution and isolation” below).</p>
-<p>Each mutant test run uses a timeout. By default, mutator runs the baseline suite first and derives the per-mutant timeout as <code>baseline_elapsed_seconds * 1.5</code>. You can override this by setting <code>timeout_seconds</code> explicitly.</p>
+<p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts). To avoid recompiling C/C++ on every mutant, mutator installs the unmutated package, compiling its shared objects, <strong>once</strong> into a template library, then installs each mutant with <code>--no-libs</code> (R code only) and restores the template’s prebuilt shared objects before running its tests. This is safe because mutator does not mutate compiled code, so the shared object is identical for every mutant; it also means concurrent mutant installs no longer write into a shared <code>src/</code> (see “Parallel execution and isolation” below).</p>
+<p>Each mutant test run uses a timeout. By default, mutator calibrates it from the baseline suite runtime under the current parallelism, with a small floor. You can override this by setting <code>timeout_seconds</code> explicitly.</p>
 <p>Mutant outcomes are reported as:</p>
 <ul>
 <li>
@@ -142,18 +132,6 @@
 <li>
 <code>HANG</code>: mutant exceeded timeout</li>
 </ul>
-<p>mutator itself uses <code>testthat</code> for its own R tests and <code>testthat</code> + Catch2 for C++ tests.</p>
-<ul>
-<li>C++ tests are located in <code>src/test-*.cpp</code>
-</li>
-<li>The C++ test runner is <code>src/test-runner.cpp</code>
-</li>
-<li>C++ tests are executed from <code>tests/testthat/test-cpp.R</code> via <code>run_cpp_tests("mutator")</code>
-</li>
-</ul>
-<p>Run the full test suite with:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="configuration">Configuration<a class="anchor" aria-label="anchor" href="#configuration"></a>
@@ -162,26 +140,26 @@
 <h3 id="timeouts-and-the-contended-baseline">Timeouts and the contended baseline<a class="anchor" aria-label="anchor" href="#timeouts-and-the-contended-baseline"></a>
 </h3>
 <p>Each mutant is run with a wall-clock timeout; exceeding it is reported as <code>HANG</code>. The timeout is derived from how long the package’s own test suite takes, unless you pass <code>timeout_seconds</code> explicitly.</p>
-<p>Because mutants run in parallel (<code>cores</code> at a time), the timeout must account for <strong>contention</strong>: with many workers, each test run is slower than it would be alone — for packages that load many dependencies, or do heavy per-mutant install work, dramatically so. A timeout based on a single, <em>uncontended</em> baseline run would then fire on nearly every mutant (a wave of false <code>HANG</code>s).</p>
-<p>To avoid this, <code><a href="reference/mutate_package.html">mutate_package()</a></code> first runs the baseline suite once on its own (to confirm it passes and fail fast otherwise), then runs it <code>cores</code> times <strong>concurrently</strong> and takes the slowest of those as the <em>contended baseline</em>. The timeout is <code>max(contended_baseline * 1.5, 5s)</code>. This self-calibrates to the machine, the chosen parallelism, and the package’s real load/compile cost — no manual tuning. Pass <code>timeout_seconds</code> to override it entirely. (When <code>cores = 1</code>, or when forking is unavailable, the solo baseline is used.)</p>
+<p>Because mutants run in parallel (<code>cores</code> at a time), the timeout must account for <strong>contention</strong>: with many workers, each test run is slower than it would be alone for packages that load many dependencies, or do heavy per-mutant install work, dramatically so. A timeout based on a single, <em>uncontended</em> baseline run would then fire on nearly every mutant (a wave of false <code>HANG</code>s).</p>
+<p>To avoid this, <code><a href="reference/mutate_package.html">mutate_package()</a></code> first runs the baseline suite once on its own (to confirm it passes and fail fast otherwise), then runs it <code>cores</code> times <strong>concurrently</strong> and takes the slowest of those as the <em>contended baseline</em>. The timeout is <code>max(contended_baseline * 1.5, 5s)</code>. This self-calibrates to the machine, the chosen parallelism, and the package’s real load/compile cost, avoiding manual tuning. Pass <code>timeout_seconds</code> to override it entirely. (When <code>cores = 1</code>, or when forking is unavailable, the solo baseline is used.)</p>
 </div>
 <div class="section level3">
 <h3 id="cran-mode-test-selection">CRAN mode (test selection)<a class="anchor" aria-label="anchor" href="#cran-mode-test-selection"></a>
 </h3>
-<p>By default <code><a href="reference/mutate_package.html">mutate_package()</a></code> runs each mutant’s tests in <strong>CRAN mode</strong> (<code>cran = TRUE</code>): the <code>NOT_CRAN</code> environment variable is set to <code>"false"</code> in the test subprocess, so <code><a href="https://testthat.r-lib.org/reference/skip.html" class="external-link">testthat::skip_on_cran()</a></code> and <code>skip_if_offline()</code> guards take effect and mutator runs the same tests CRAN would. This skips the slow, flaky, or network-dependent tests that packages mark as CRAN-skippable — which keeps mutation runs fast and avoids spurious timeouts/kills from, e.g., tests that hit the network.</p>
+<p>By default <code><a href="reference/mutate_package.html">mutate_package()</a></code> runs each mutant’s tests in <strong>CRAN mode</strong> (<code>cran = TRUE</code>): the <code>NOT_CRAN</code> environment variable is set to <code>"false"</code> in the test subprocess, so <code><a href="https://testthat.r-lib.org/reference/skip.html" class="external-link">testthat::skip_on_cran()</a></code> and <code>skip_if_offline()</code> guards take effect and mutator runs the same tests CRAN would. This skips the slow, flaky, or network-dependent tests that packages mark as CRAN-skippable, which keeps mutation runs fast and avoids spurious timeouts/kills from, e.g., tests that hit the network.</p>
 <p>Set <code>cran = FALSE</code> to run the <strong>full</strong> suite instead (<code>NOT_CRAN = "true"</code>, the behaviour of <code>devtools::test()</code>):</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, cran <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>This applies to both test strategies (the <code>testthat</code> strategy and the installed-tests fallback). Note that it only affects tests the package <em>explicitly</em> guards with <code>skip_on_cran()</code> / <code>skip_if_offline()</code>; a package whose network test has no such guard will still run that test in either mode.</p>
 </div>
 <div class="section level3">
 <h3 id="fail-fast-stop-at-the-first-failing-test">Fail-fast (stop at the first failing test)<a class="anchor" aria-label="anchor" href="#fail-fast-stop-at-the-first-failing-test"></a>
 </h3>
-<p>A mutant is <code>KILLED</code> the instant any one test detects it, so running the rest of its suite is wasted work. By default (<code>fail_fast = TRUE</code>) each mutant’s test run <strong>stops at the first failing test</strong> instead of finishing the suite, which speeds up the test-running phase — often substantially for packages with large suites — without changing any mutant’s verdict (the early-aborted run still reports the failure, so the mutant is still <code>KILLED</code>).</p>
+<p>A mutant is <code>KILLED</code> the instant any one test detects it, so running the rest of its suite is wasted work. By default (<code>fail_fast = TRUE</code>) each mutant’s test run <strong>stops at the first failing test</strong> instead of finishing the suite, which speeds up the test-running phase (often substantially for packages with large suites) without changing any mutant’s verdict (the early-aborted run still reports the failure, so the mutant is still <code>KILLED</code>).</p>
 <p>Set <code>fail_fast = FALSE</code> to run the full suite for every mutant:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, fail_fast <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
-<p>This applies to the <code>testthat</code> strategy (it sets <code>TESTTHAT_MAX_FAILS = 1</code> in the test subprocess and uses the progress reporter, which aborts the run at the first failing <code>test_that()</code> block). <code>SURVIVED</code> mutants are unaffected — they have no failure to short-circuit on — so baseline timing and timeout calibration are unchanged. The installed-tests fallback already stops at the first failing test <em>file</em> regardless of this flag.</p>
+<p>This applies to the <code>testthat</code> strategy (it sets <code>TESTTHAT_MAX_FAILS = 1</code> in the test subprocess and uses the progress reporter, which aborts the run at the first failing <code>test_that()</code> block). <code>SURVIVED</code> mutants are unaffected, as they have no failure to short-circuit on, so baseline timing and timeout calibration are unchanged. The installed-tests fallback already stops at the first failing test <em>file</em> regardless of this flag.</p>
 </div>
 <div class="section level3">
 <h3 id="parallel-execution-and-isolation-isolate">Parallel execution and isolation (<code>isolate</code>)<a class="anchor" aria-label="anchor" href="#parallel-execution-and-isolation-isolate"></a>
@@ -190,13 +168,15 @@
 <ul>
 <li>
 <strong>Compiled code is built once, not per mutant.</strong> Earlier, the <code>installed</code> strategy recompiled into <code>src/</code> on every <code>R CMD INSTALL</code>; with several installs running at once against the same (symlinked) <code>src/</code> they clobbered each other’s <code>.o</code>/<code>.so</code> (<code>shared object not found</code>), so genuine survivors were misreported as <code>KILLED</code>/<code>HANG</code>. The strategy now compiles once into a template library and installs each mutant with <code>--no-libs</code>, which never writes into <code>src/</code>, so the race is gone. (The <code>testthat</code> strategy was always immune: <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> reuses the baseline’s compiled <code>src/</code> since C code is never mutated.)</li>
+<li>
+<strong>Snapshot references are not shared.</strong> For <code>testthat</code> packages with <code>_snaps</code> directories, mutator gives each mutant its own snapshot copy while symlinking the rest of <code>tests/</code>, so filtered or parallel runs cannot rewrite shared snapshot references.</li>
 </ul>
 <p>The one remaining hazard is <strong>non-hermetic tests that write files</strong> into a shared directory (most often <code>tests/</code>). When parallel workers’ tests fight over the same files you can still see spurious <code>KILLED</code>/<code>HANG</code>. Two ways to attenuate it:</p>
 <ol style="list-style-type: decimal">
-<li><p><strong>Run without parallelism:</strong> <code>cores = 1</code>. No contention, no extra disk — but the slowest option.</p></li>
+<li><p><strong>Run without parallelism:</strong> <code>cores = 1</code>. No contention, no extra disk, but the slowest option.</p></li>
 <li>
 <p><strong>Isolate file state:</strong> <code>isolate = TRUE</code>. Each mutant gets its own deep copy of <code>src/</code> and <code>tests/</code> instead of a symlink, so file-writing tests can’t collide:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, isolate <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ol>
@@ -205,16 +185,16 @@
 <div class="section level3">
 <h3 id="excluding-code-from-mutation">Excluding code from mutation<a class="anchor" aria-label="anchor" href="#excluding-code-from-mutation"></a>
 </h3>
-<p>Not all code should be mutation-tested. Vendored/standalone files, generated code, or deprecated paths a suite is not meant to cover will mostly produce <code>SURVIVED</code> mutants and depress the score without telling you anything useful. (For example, mutating <code>scales</code> turns up dozens of survivors in its vendored <code>import-standalone-*.R</code> files — rlang snippets <code>scales</code> does not test.) There are two ways to exclude code.</p>
-<p><strong>1. By file, at the call site — <code>exclude_files</code>.</strong> A character vector of shell-style glob patterns matched against the base names of the <code>.R</code> files in <code>R/</code>. Matching files are skipped entirely before any mutants are generated:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<p>Not all code should be mutation-tested. Vendored/standalone files, generated code, or deprecated paths a suite is not meant to cover will mostly produce <code>SURVIVED</code> mutants and depress the score without telling you anything useful. There are two ways to exclude code.</p>
+<p><strong>1. By file, at the call site, with <code>exclude_files</code>.</strong> A character vector of shell-style glob patterns matched against the base names of the <code>.R</code> files in <code>R/</code>. Matching files are skipped entirely before any mutants are generated:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/scales"</span>, exclude_files <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"import-standalone-*"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><strong>2. In the source, with <code># mutator:ignore</code> directives.</strong> Place markers in the <code>.R</code> file itself:</p>
 <ul>
 <li><p><code># mutator:ignore-file</code> anywhere in a file excludes the <strong>whole file</strong>.</p></li>
 <li>
 <p><code># mutator:ignore-start</code> / <code># mutator:ignore-end</code> exclude the <strong>line region</strong> between them (wrap a function to exclude it):</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># mutator:ignore-start</span></span>
 <span><span class="va">legacy_helper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="co"># not worth mutation-testing</span></span>
@@ -224,21 +204,21 @@
 <p>An unmatched <code>-start</code> excludes through the end of the file.</p>
 </li>
 </ul>
-<p><strong>Granularity caveat.</strong> Excluding whole <em>files</em> and whole <em>functions</em> is reliable. Finer than that is not, for operator mutations: R does not attach source references to nested expressions, so the engine resolves an operator mutant’s position only to its enclosing top-level definition. A region directive inside a function therefore excludes that function’s operator mutants as a group — you cannot single out one operator mid-function. Line-deletion mutants <em>are</em> excluded line-precisely. In practice, wrap whole functions, not fragments.</p>
+<p><strong>Granularity caveat.</strong> Excluding whole <em>files</em> and whole <em>functions</em> is reliable. Finer than that is not, for operator mutations: R does not attach source references to nested expressions, so the engine resolves an operator mutant’s position only to its enclosing top-level definition. A region directive inside a function therefore excludes that function’s operator mutants as a group: you cannot single out one operator mid-function. Line-deletion mutants <em>are</em> excluded line-precisely. In practice, wrap whole functions, not fragments.</p>
 </div>
 <div class="section level3">
 <h3 id="coverage-guided-test-selection-coverage_guided">Coverage-guided test selection (<code>coverage_guided</code>)<a class="anchor" aria-label="anchor" href="#coverage-guided-test-selection-coverage_guided"></a>
 </h3>
-<p>Most mutants are settled by a small subset of the suite, and a mutant on a line that <strong>no test exercises</strong> can never be killed. With <code>coverage_guided = TRUE</code> (<code>testthat</code> strategy only) mutator measures coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr</a> and then, for each mutant, runs only the test files that cover its mutated line — and skips running tests altogether for mutants on uncovered lines (reported <code>SURVIVED</code> immediately).</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<p>Most mutants are settled by a small subset of the suite, and a mutant on a line that <strong>no test exercises</strong> can never be killed. With <code>coverage_guided = TRUE</code> (<code>testthat</code> strategy only) mutator measures coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr</a> and then, for each mutant, runs only the test files that cover its mutated line, and skips running tests altogether for mutants on uncovered lines (reported <code>SURVIVED</code> immediately).</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<p>The single coverage run also serves as the baseline check (it runs the package’s own <code>tests/testthat.R</code> harness, which fails if any test fails), so the suite is not run twice. Selection is at the <strong>test-file</strong> level — testthat filters tests by file — and assumes the suite deterministically exercises the code, so it changes <em>which</em> tests run without changing a mutant’s verdict.</p>
+<p>The single coverage run also serves as the baseline check (it runs the package’s own <code>tests/testthat.R</code> harness, which fails if any test fails), so the suite is not run twice. Selection is at the <strong>test-file</strong> level, as testthat filters tests by file, and assumes the suite deterministically exercises the code, so it changes <em>which</em> tests run without changing a mutant’s verdict.</p>
 <p>Requires the <code>covr</code> package. Coverage attribution (and therefore speed-up) depends on the backend (<code>coverage_backend</code>):</p>
 <ul>
 <li><p><strong><code>"record_tests"</code></strong> (default) uses covr’s <code>record_tests</code> in a single run and relies only on covr’s public output. Its limitation: covr credits a covered line to the <em>deepest test-directory frame</em> on the call stack, so when a test reaches package code through a function defined in a <code>helper-*.R</code> / <code>setup-*.R</code> file (a common pattern), covr attributes it to the helper, not the originating <code>test-*.R</code>. The true triggering test is then unknown, so mutator conservatively runs the <strong>full suite</strong> for that mutant. Packages that wrap their API in shared test helpers therefore see less speed-up.</p></li>
 <li>
-<p><strong><code>"per_file"</code></strong> instruments the package once and runs the suite a single time through a reporter that snapshots coverage per test file, giving <strong>exact file-level attribution</strong> with no helper fallback — at roughly the same cost as the single <code>record_tests</code> run (often faster overall, since more mutants get a narrowed test set). It reaches into covr internals, so it is opt-in:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<p><strong><code>"per_file"</code></strong> instruments the package once and runs the suite a single time through a reporter that snapshots coverage per test file, giving <strong>exact file-level attribution</strong> with no helper fallback, at roughly the same cost as the single <code>record_tests</code> run (often faster overall, since more mutants get a narrowed test set). It reaches into covr internals, so it is opt-in:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>, coverage_backend <span class="op">=</span> <span class="st">"per_file"</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ul>
@@ -247,13 +227,13 @@
 <div class="section level3">
 <h3 id="precise-mutant-locations-optional-imputesrcref">Precise mutant locations (optional <code>imputesrcref</code>)<a class="anchor" aria-label="anchor" href="#precise-mutant-locations-optional-imputesrcref"></a>
 </h3>
-<p>Each reported mutant carries a source <code>Range:</code> (<code>start:col-end:col</code>). For statement- and line-deletion mutants this is precise, but <strong>operator mutants</strong> (<code>+</code>, <code>&lt;</code>, <code>&amp;&amp;</code>, …) are different: R attaches no <code>srcref</code> to nested call objects, so the engine can only report the bounds of the <em>enclosing top-level expression</em> — effectively the whole function. A surviving <code>==</code>-to-<code>!=</code> mutant in a 40-line function therefore points at all 40 lines.</p>
-<p>If the optional <a href="https://github.com/PRL-PRG/imputesrcref" class="external-link"><code>imputesrcref</code></a> package is installed, <code>mutator</code> uses it to recover precise spans for many operator mutants — typically narrowing a whole-function range down to the exact sub-expression on a single line (in our <code>scales</code> measurements, ~58% of operator mutants became single-line, with the mean operator-mutant span dropping from ~34 lines to ~11). It is a GitHub-only optional package listed in <code>Enhances</code>; install it yourself to opt in:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<p>Each reported mutant carries a source <code>Range:</code> (<code>start:col-end:col</code>). For statement- and line-deletion mutants this is precise, but <strong>operator mutants</strong> (<code>+</code>, <code>&lt;</code>, <code>&amp;&amp;</code>, …) are different: R attaches no <code>srcref</code> to nested call objects, so the engine can only report the bounds of the <em>enclosing top-level expression</em>, effectively a loop body or even the whole function. A surviving <code>==</code>-to-<code>!=</code> mutant in a 40-line function therefore points at all 40 lines.</p>
+<p>If the optional <a href="https://github.com/PRL-PRG/imputesrcref" class="external-link"><code>imputesrcref</code></a> package is installed, <code>mutator</code> uses it to recover precise spans for many operator mutants, typically narrowing a whole-function range down to the exact sub-expression on a single line. It is a GitHub-only optional package listed in <code>Enhances</code>; install it yourself to opt in:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/imputesrcref"</span><span class="op">)</span></span></code></pre></div>
-<p>When it is <strong>not</strong> installed, <code>mutator</code> behaves exactly as before (coarser operator ranges) — nothing else changes. The refinement is used only as a read-only source-location oracle: mutant files are deparsed from the original code and are <strong>byte-for-byte identical</strong> whether or not <code>imputesrcref</code> is present, and <code># mutator:ignore-*</code> directives keep their function-granular semantics regardless. For best results, install the package under test from source with parse data retained, since <code>imputesrcref</code> reads it:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<p>When it is <strong>not</strong> installed, <code>mutator</code> behaves exactly as before (coarser operator ranges); nothing else changes. The refinement is used only as a read-only source-location oracle: mutant files are deparsed from the original code and are <strong>byte-for-byte identical</strong> whether or not <code>imputesrcref</code> is present, and <code># mutator:ignore-*</code> directives keep their function-granular semantics regardless. For best results, install the package under test from source with parse data retained, since <code>imputesrcref</code> reads it:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"&lt;pkg&gt;"</span>, INSTALL_opts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"--with-keep.source"</span>, <span class="st">"--with-keep.parse.data"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -263,7 +243,7 @@
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>
@@ -275,13 +255,16 @@
 <pre><code>api_key: sk-...
 model: gpt-4
 base_url: https://api.openai.com/v1</code></pre>
-<p>Only the given directory is consulted — parent directories are not searched.</p>
+<p>Only the given directory is consulted. Parent directories are not searched.</p>
 </li>
 <li><p><strong>Environment variables</strong> <code>OPENAI_API_KEY</code>, <code>OPENAI_MODEL</code> and <code>OPENAI_BASE_URL</code>.</p></li>
 </ol>
 <p>If nothing is configured, the model defaults to <code>gpt-4</code> and the base URL to the public OpenAI API. Set <code>base_url</code> to target a self-hosted or alternative OpenAI-compatible service (for example <code>http://localhost:11434/v1</code>).</p>
-<p>Survived mutants are analyzed in <strong>bounded batches</strong> (default 25 per request), and each mutant is shown to the model as a small <strong>unified diff</strong> of its edit (plus a short change label) rather than its full mutated source — compact, unambiguous, and in a format LLMs read natively. When <code><a href="reference/mutate_package.html">mutate_package()</a></code> runs with <code>cores &gt; 1</code> the batches are sent <strong>concurrently</strong>, which (with the bounded size) keeps the equivalence pass fast and avoids the truncated responses that otherwise drop verdicts.</p>
-<p>For mutants the model flags as <strong>EQUIVALENT</strong> (the rare, high-stakes calls — they are excluded from the adjusted mutation score), it also returns a one-sentence <strong>reason</strong>, stored as <code>equivalence_reason</code> on the mutant so the call can be audited. No reason is requested for <code>NOT_EQUIVALENT</code>/<code>DONT_KNOW</code>, keeping responses small.</p>
+<p>Enable the analysis when running package mutation tests:</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, detectEqMutants <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p>Survived mutants are analyzed in <strong>bounded batches</strong> (default 25 per request), and each mutant is shown to the model as a small <strong>unified diff</strong> of its edit (plus a short change label) rather than its full mutated source. This is compact, unambiguous, and in a format LLMs read natively. When <code><a href="reference/mutate_package.html">mutate_package()</a></code> runs with <code>cores &gt; 1</code> the batches are sent <strong>concurrently</strong>, which (with the bounded size) keeps the equivalence pass fast and avoids the truncated responses that otherwise drop verdicts.</p>
+<p>For mutants the model flags as <strong>EQUIVALENT</strong> (they are excluded from the adjusted mutation score), it also returns a one-sentence <strong>reason</strong>, stored as <code>equivalence_reason</code> on the mutant so the call can be audited. No reason is requested for <code>NOT_EQUIVALENT</code>/<code>DONT_KNOW</code>, keeping responses small.</p>
 <p>Progress and the results summary are emitted via <code><a href="https://rdrr.io/r/base/message.html" class="external-link">message()</a></code> (so they can be silenced with <code><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressMessages()</a></code>). The full prompts and model responses are not printed by default; set <code>options(mutator.verbose = TRUE)</code> to log them.</p>
 </div>
 </div>
@@ -545,6 +528,10 @@ base_url: https://api.openai.com/v1</code></pre>
 <li>
 <strong>future</strong> and <strong>furrr</strong>: For parallel execution</li>
 <li>
+<strong>callr</strong>: For subprocess test execution and hard timeouts</li>
+<li>
+<strong>R6</strong>: For the <code>per_file</code> coverage backend reporter</li>
+<li>
 <strong>httr</strong> and <strong>jsonlite</strong>: For OpenAI API integration</li>
 </ul>
 </li>
@@ -553,6 +540,22 @@ base_url: https://api.openai.com/v1</code></pre>
 <li>
 <strong>C++17</strong>: For native mutation engine implementation</li>
 </ul>
+</div>
+<div class="section level2">
+<h2 id="mutators-test-suite">mutator’s test suite<a class="anchor" aria-label="anchor" href="#mutators-test-suite"></a>
+</h2>
+<p>mutator itself uses <code>testthat</code> for its own R tests and <code>testthat</code> + Catch2 for C++ tests.</p>
+<ul>
+<li>C++ tests are located in <code>src/test-*.cpp</code>
+</li>
+<li>The C++ test runner is <code>src/test-runner.cpp</code>
+</li>
+<li>C++ tests are executed from <code>tests/testthat/test-cpp.R</code> via <code>run_cpp_tests("mutator")</code>
+</li>
+</ul>
+<p>Run the full test suite with:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
 
