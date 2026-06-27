@@ -3,6 +3,7 @@
 #include <Rinternals.h>
 #include "ASTHandler.h"
 #include "DeleteOperator.h"
+#include "NodeReplacementOperator.h"
 
 static SEXP makeSrcref()
 {
@@ -52,7 +53,7 @@ context("ASTHandler C++ tests")
         }
     }
 
-    test_that("gatherOperators returns empty for non call expressions")
+    test_that("gatherOperators creates value mutations for constants")
     {
         SEXP expr = PROTECT(Rf_ScalarInteger(42));
         SEXP srcref = PROTECT(makeSrcref());
@@ -60,7 +61,8 @@ context("ASTHandler C++ tests")
         ASTHandler handler;
         std::vector<OperatorPos> ops = handler.gatherOperators(expr, srcref, false);
 
-        expect_true(ops.empty());
+        expect_true(!ops.empty());
+        expect_true(dynamic_cast<NodeReplacementOperator *>(ops[0].op.get()) != nullptr);
         UNPROTECT(2);
     }
 

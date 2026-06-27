@@ -148,8 +148,50 @@ test_that("C_mutate_file generates all operator mutants for a single expression"
   )
   symbols <- symbols[!is.na(symbols)]
 
-  expect_length(mutants, 3)
-  expect_equal(sort(unique(symbols)), c("*", "+", "-"))
+  # Three operator mutants plus three value mutations for each of four numeric
+  # constants (value flip, typed NA, NULL).
+  expect_length(mutants, 3 + 4 * 3)
+  expect_true(all(c("*", "+", "-") %in% sort(unique(symbols))))
+})
+
+test_that("C_mutate_file generates value and assignment mutants", {
+  exprs <- parse(text = "x <- f(0, 3L, \"a\", TRUE)", keep.source = TRUE)
+
+  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  code <- vapply(mutants, function(m) {
+    paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
+  }, character(1))
+
+  expect_true(any(grepl("x <- 42", code, fixed = TRUE)))
+  expect_true(any(grepl("f(0, 0L", code, fixed = TRUE)))
+  expect_true(any(grepl("NA_integer_", code, fixed = TRUE)))
+  expect_true(any(grepl("NA_character_", code, fixed = TRUE)))
+  expect_true(any(grepl("NA", code, fixed = TRUE)))
+  expect_true(any(grepl("NULL", code, fixed = TRUE)))
+})
+
+test_that("C_mutate_file restores logical negation mutants", {
+  exprs <- parse(text = "f <- function(x) { if (x) y <- !x }", keep.source = TRUE)
+
+  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  code <- vapply(mutants, function(m) {
+    paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
+  }, character(1))
+
+  expect_true(any(grepl("if (!x)", code, fixed = TRUE)))
+  expect_true(any(grepl("y <- x", code, fixed = TRUE)))
+})
+
+test_that("C_mutate_file replaces only non-constant direct return values with NULL", {
+  exprs <- parse(text = "f <- function(x) { return(x); return(1); return(\"a\") }", keep.source = TRUE)
+
+  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  code <- vapply(mutants, function(m) {
+    paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
+  }, character(1))
+
+  expect_true(any(grepl("return(NULL)", code, fixed = TRUE)))
+  expect_false(any(grepl("return(x)", code, fixed = TRUE) & grepl("return(NULL)", code, fixed = TRUE)))
 })
 
 test_that("C_mutate_file keeps accumulated mutants alive across expressions", {
@@ -158,7 +200,9 @@ test_that("C_mutate_file keeps accumulated mutants alive across expressions", {
 
   mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
 
-  expect_length(mutants, 80)
+  # Per expression: assignment RHS -> 42, `+` -> `-`, and three mutations
+  # for each of the two numeric constants (value flip, typed NA, NULL).
+  expect_length(mutants, 80 * 8)
   invisible(gc())
   expect_true(all(vapply(mutants, is.expression, logical(1))))
 })

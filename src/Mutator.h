@@ -23,6 +23,8 @@ public:
     std::pair<SEXP, bool> applyFlipMutation(SEXP expr, const std::vector<OperatorPos>& ops,int whichOpIndex);
 
     std::pair<SEXP, bool> applyDeleteMutation(SEXP expr, const std::vector<OperatorPos>& ops, int whichOpIndex);
+
+    std::pair<SEXP, bool> applyNodeReplacementMutation(SEXP expr, const std::vector<OperatorPos>& ops, int whichOpIndex);
 };
 
 #endif // MUTATOR_H

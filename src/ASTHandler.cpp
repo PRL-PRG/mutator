@@ -20,6 +20,7 @@
 #include "LogicalOrOperator.h"
 #include "LogicalAndOperator.h"
 #include "DeleteOperator.h"
+#include "NodeReplacementOperator.h"
 
 static struct CachedSyms
 {
@@ -40,9 +41,205 @@ static struct CachedSyms
     SEXP s_or = Rf_install("|");
     SEXP s_land = Rf_install("&&");
     SEXP s_lor = Rf_install("||");
+    SEXP s_not = Rf_install("!");
+    SEXP s_if = Rf_install("if");
+    SEXP s_while = Rf_install("while");
+    SEXP s_for = Rf_install("for");
+    SEXP s_repeat = Rf_install("repeat");
+    SEXP s_function = Rf_install("function");
+    SEXP s_return = Rf_install("return");
+    SEXP s_break = Rf_install("break");
+    SEXP s_next = Rf_install("next");
+    SEXP s_lparen = Rf_install("(");
+    SEXP s_assign = Rf_install("<-");
+    SEXP s_eq_assign = Rf_install("=");
+    SEXP s_super_assign = Rf_install("<<-");
     SEXP s_srcref = Rf_install("srcref");
     SEXP s_mutinfo = Rf_install("mutation_info");
 } SYM;
+
+static bool isSymbol(SEXP x, SEXP sym)
+{
+    return TYPEOF(x) == SYMSXP && x == sym;
+}
+
+static bool isCallTo(SEXP x, SEXP sym)
+{
+    return TYPEOF(x) == LANGSXP && isSymbol(CAR(x), sym);
+}
+
+static bool isAssignmentSymbol(SEXP fun)
+{
+    return isSymbol(fun, SYM.s_assign) ||
+           isSymbol(fun, SYM.s_eq_assign) ||
+           isSymbol(fun, SYM.s_super_assign);
+}
+
+static bool isScalarConstant(SEXP x)
+{
+    switch (TYPEOF(x))
+    {
+    case LGLSXP:
+    case INTSXP:
+    case REALSXP:
+    case STRSXP:
+    case CPLXSXP:
+        return Rf_length(x) == 1;
+    default:
+        return x == R_NilValue;
+    }
+}
+
+static bool isMutableScalarConstant(SEXP x)
+{
+    return x != R_NilValue && isScalarConstant(x);
+}
+
+static bool isNumericScalarConstant(SEXP x)
+{
+    return (TYPEOF(x) == INTSXP || TYPEOF(x) == REALSXP) && Rf_length(x) == 1;
+}
+
+static bool isNAConstant(SEXP x)
+{
+    if (!isScalarConstant(x) || x == R_NilValue)
+        return false;
+    switch (TYPEOF(x))
+    {
+    case LGLSXP:
+        return LOGICAL(x)[0] == NA_LOGICAL;
+    case INTSXP:
+        return INTEGER(x)[0] == NA_INTEGER;
+    case REALSXP:
+        return ISNA(REAL(x)[0]);
+    case STRSXP:
+        return STRING_ELT(x, 0) == NA_STRING;
+    case CPLXSXP:
+        return ISNA(COMPLEX(x)[0].r) && ISNA(COMPLEX(x)[0].i);
+    default:
+        return false;
+    }
+}
+
+static bool isFortyTwo(SEXP x)
+{
+    if (!isNumericScalarConstant(x))
+        return false;
+    if (TYPEOF(x) == INTSXP)
+        return INTEGER(x)[0] != NA_INTEGER && INTEGER(x)[0] == 42;
+    return !ISNA(REAL(x)[0]) && !ISNAN(REAL(x)[0]) && REAL(x)[0] == 42.0;
+}
+
+static SEXP makeScalarValueReplacement(SEXP x)
+{
+    if (!isNumericScalarConstant(x))
+        return R_NilValue;
+
+    if (TYPEOF(x) == INTSXP)
+    {
+        int value = INTEGER(x)[0];
+        if (value == NA_INTEGER)
+            return R_NilValue;
+        return Rf_ScalarInteger(value == 0 ? 42 : 0);
+    }
+
+    double value = REAL(x)[0];
+    if (ISNA(value) || ISNAN(value))
+        return R_NilValue;
+    return Rf_ScalarReal(value == 0.0 ? 42.0 : 0.0);
+}
+
+static SEXP makeNAReplacement(SEXP x)
+{
+    switch (TYPEOF(x))
+    {
+    case LGLSXP:
+        return Rf_ScalarLogical(NA_LOGICAL);
+    case INTSXP:
+        return Rf_ScalarInteger(NA_INTEGER);
+    case REALSXP:
+        return Rf_ScalarReal(NA_REAL);
+    case STRSXP:
+        return Rf_ScalarString(NA_STRING);
+    case CPLXSXP:
+    {
+        Rcomplex z;
+        z.r = NA_REAL;
+        z.i = NA_REAL;
+        return Rf_ScalarComplex(z);
+    }
+    default:
+        return R_NilValue;
+    }
+}
+
+static SEXP makeFortyTwo()
+{
+    return Rf_ScalarReal(42.0);
+}
+
+static SEXP makeNotCall(SEXP expr)
+{
+    return Rf_lang2(SYM.s_not, Rf_duplicate(expr));
+}
+
+static bool isOrdinaryFunctionCall(SEXP expr)
+{
+    if (TYPEOF(expr) != LANGSXP || TYPEOF(CAR(expr)) != SYMSXP)
+        return false;
+
+    SEXP fun = CAR(expr);
+    if (isAssignmentSymbol(fun))
+        return false;
+
+    return !(isSymbol(fun, SYM.s_plus) ||
+             isSymbol(fun, SYM.s_minus) ||
+             isSymbol(fun, SYM.s_mul) ||
+             isSymbol(fun, SYM.s_div) ||
+             isSymbol(fun, SYM.s_eq) ||
+             isSymbol(fun, SYM.s_neq) ||
+             isSymbol(fun, SYM.s_lt) ||
+             isSymbol(fun, SYM.s_gt) ||
+             isSymbol(fun, SYM.s_le) ||
+             isSymbol(fun, SYM.s_ge) ||
+             isSymbol(fun, SYM.s_and) ||
+             isSymbol(fun, SYM.s_or) ||
+             isSymbol(fun, SYM.s_land) ||
+             isSymbol(fun, SYM.s_lor) ||
+             isSymbol(fun, SYM.s_not) ||
+             isSymbol(fun, SYM.s_if) ||
+             isSymbol(fun, SYM.s_while) ||
+             isSymbol(fun, SYM.s_for) ||
+             isSymbol(fun, SYM.s_repeat) ||
+             isSymbol(fun, SYM.s_function) ||
+             isSymbol(fun, SYM.s_return) ||
+             isSymbol(fun, SYM.s_break) ||
+             isSymbol(fun, SYM.s_next) ||
+             isSymbol(fun, SYM.s_lbrace) ||
+             isSymbol(fun, SYM.s_lparen));
+}
+
+static void addNodeReplacement(std::vector<OperatorPos> &ops,
+                               const std::vector<int> &path,
+                               int start_line,
+                               int start_col,
+                               int end_line,
+                               int end_col,
+                               SEXP original,
+                               SEXP replacement,
+                               const std::string &file_path)
+{
+    SEXP protected_replacement = PROTECT(replacement);
+    ops.push_back({path,
+                   std::make_unique<NodeReplacementOperator>(original, protected_replacement),
+                   start_line,
+                   start_col,
+                   end_line,
+                   end_col,
+                   original,
+                   file_path});
+    UNPROTECT(1);
+}
 
 static SEXP getVarFromFrame(SEXP env, SEXP name)
 {
@@ -124,7 +321,31 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                                           std::vector<OperatorPos> &ops)
 {
     if (TYPEOF(expr) != LANGSXP)
+    {
+        if (isMutableScalarConstant(expr))
+        {
+            SEXP scalar_replacement = makeScalarValueReplacement(expr);
+            if (scalar_replacement != R_NilValue)
+            {
+                addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
+                                   expr, scalar_replacement, _file_path);
+            }
+
+            if (!isNAConstant(expr))
+            {
+                SEXP na_replacement = makeNAReplacement(expr);
+                if (na_replacement != R_NilValue)
+                {
+                    addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
+                                       expr, na_replacement, _file_path);
+                }
+            }
+
+            addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
+                               expr, R_NilValue, _file_path);
+        }
         return;
+    }
 
     int node_start_line = _start_line;
     int node_start_col = _start_col;
@@ -178,6 +399,56 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                        node_end_line, node_end_col, fun, _file_path});
     }
 
+    if (isSymbol(fun, SYM.s_not) && CDR(expr) != R_NilValue)
+    {
+        SEXP arg = CADR(expr);
+        addNodeReplacement(ops, path, node_start_line, node_start_col,
+                           node_end_line, node_end_col, expr, arg, _file_path);
+    }
+
+    if ((isSymbol(fun, SYM.s_if) || isSymbol(fun, SYM.s_while)) && CDR(expr) != R_NilValue)
+    {
+        SEXP condition = CADR(expr);
+        if (!isCallTo(condition, SYM.s_not))
+        {
+            std::vector<int> condition_path = path;
+            condition_path.push_back(0);
+            addNodeReplacement(ops, condition_path, node_start_line, node_start_col,
+                               node_end_line, node_end_col, condition,
+                               makeNotCall(condition), _file_path);
+        }
+    }
+
+    if (isAssignmentSymbol(fun) && CDR(expr) != R_NilValue && CDDR(expr) != R_NilValue)
+    {
+        SEXP rhs = CADDR(expr);
+        if (!isFortyTwo(rhs))
+        {
+            std::vector<int> rhs_path = path;
+            rhs_path.push_back(1);
+            addNodeReplacement(ops, rhs_path, node_start_line, node_start_col,
+                               node_end_line, node_end_col, rhs, makeFortyTwo(), _file_path);
+        }
+    }
+
+    if (isSymbol(fun, SYM.s_return) && CDR(expr) != R_NilValue)
+    {
+        SEXP value = CADR(expr);
+        if (!isScalarConstant(value))
+        {
+            std::vector<int> return_value_path = path;
+            return_value_path.push_back(0);
+            addNodeReplacement(ops, return_value_path, node_start_line, node_start_col,
+                               node_end_line, node_end_col, value, R_NilValue, _file_path);
+        }
+    }
+
+    if (isOrdinaryFunctionCall(expr))
+    {
+        addNodeReplacement(ops, path, node_start_line, node_start_col,
+                           node_end_line, node_end_col, expr, makeFortyTwo(), _file_path);
+    }
+
     // A `{ ... }` block exposes each of its direct children as a statement that
     // can be deleted. Detecting this here -- rather than via a single whole-tree
     // flag -- means deletion is offered for real block statements at any nesting
@@ -226,6 +497,9 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             ops.push_back({child_path, std::move(del), del_start_line, del_start_col,
                            del_end_line, del_end_col, del_symbol, _file_path});
         }
+
+        if (isSymbol(fun, SYM.s_return) && idx == 0 && isScalarConstant(child))
+            continue;
 
         gatherOperatorsRecursive(child, child_path, ops);
     }

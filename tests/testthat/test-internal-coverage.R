@@ -1222,9 +1222,12 @@ test_that("location refinement sharpens operator mutants when imputesrcref is pr
 
     # Mutant files must never contain injected transparent braces: the imputed
     # AST is only a location oracle, never deparsed into output.
+    texts <- vapply(mutants, function(m) {
+        paste(readLines(m$path, warn = FALSE), collapse = "\n")
+    }, character(1))
+    expect_true(any(grepl("h\\(a - b\\)", texts)))
     for (m in mutants) {
         txt <- paste(readLines(m$path, warn = FALSE), collapse = "\n")
-        expect_match(txt, "h\\(a [+-] b\\)|h\\(a\\)|z <- 0", all = FALSE)
         expect_false(grepl("\\{\\s*\\n\\s*a [+-] b\\s*\\n\\s*\\}", txt))
     }
 })

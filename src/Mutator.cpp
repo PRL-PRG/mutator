@@ -1,6 +1,7 @@
 // Mutator.cpp
 #include "Mutator.h"
 #include "DeleteOperator.h"
+#include "NodeReplacementOperator.h"
 #include "ReplacementOperator.h"
 
 static SEXP asStringOrNA(SEXP x)
@@ -16,6 +17,19 @@ static SEXP asStringOrNA(SEXP x)
 
     if (TYPEOF(x) == STRSXP && Rf_length(x) > 0)
         return Rf_ScalarString(STRING_ELT(x, 0));
+
+    int error = 0;
+    SEXP quoted = PROTECT(Rf_lang2(Rf_install("quote"), x));
+    SEXP deparse_call = PROTECT(Rf_lang2(Rf_install("deparse"), quoted));
+    SEXP text = R_tryEval(deparse_call, R_BaseEnv, &error);
+    if (error == 0 && TYPEOF(text) == STRSXP && Rf_length(text) > 0)
+    {
+        PROTECT(text);
+        SEXP out = PROTECT(Rf_ScalarString(STRING_ELT(text, 0)));
+        UNPROTECT(4);
+        return out;
+    }
+    UNPROTECT(2);
 
     return Rf_ScalarString(NA_STRING);
 }
@@ -95,6 +109,8 @@ std::pair<SEXP, bool> Mutator::applyMutation(SEXP expr, const std::vector<Operat
 
     if (dynamic_cast<DeleteOperator *>(ops[which].op.get()))
         return applyDeleteMutation(expr, ops, which);
+    if (dynamic_cast<NodeReplacementOperator *>(ops[which].op.get()))
+        return applyNodeReplacementMutation(expr, ops, which);
     return applyFlipMutation(expr, ops, which);
 }
 
@@ -236,5 +252,94 @@ std::pair<SEXP, bool> Mutator::applyDeleteMutation(SEXP expr, const std::vector<
     SEXP info = PROTECT(buildMutationInfo(pos, R_NilValue)); // [1]
     Rf_setAttrib(dup, Rf_install("mutation_info"), info);
     UNPROTECT(1); // drop info, dup still protected
+    return {dup, true};
+}
+
+std::pair<SEXP, bool> Mutator::applyNodeReplacementMutation(SEXP expr, const std::vector<OperatorPos> &ops, int which)
+{
+    if (which < 0 || which >= static_cast<int>(ops.size()))
+        return {R_NilValue, false};
+
+    const OperatorPos &pos = ops[which];
+    const auto *repl = dynamic_cast<const NodeReplacementOperator *>(pos.op.get());
+    if (repl == nullptr)
+        return {R_NilValue, false};
+
+    SEXP dup = PROTECT(Rf_duplicate(expr)); // [0]
+    int n_protect = 1;
+
+    SEXP replacement = PROTECT(repl->makeReplacement()); // [1]
+    ++n_protect;
+
+    if (pos.path.empty())
+    {
+        SEXP root = replacement;
+        SEXP info = PROTECT(buildMutationInfo(pos, repl->infoReplacement())); // [2]
+        ++n_protect;
+        if (root != R_NilValue)
+            Rf_setAttrib(root, Rf_install("mutation_info"), info);
+        UNPROTECT(n_protect);
+        PROTECT(root);
+        return {root, true};
+    }
+
+    SEXP parent = dup;
+    for (size_t i = 0; i + 1 < pos.path.size(); ++i)
+    {
+        int idx = pos.path[i];
+        if (idx < 0 || parent == R_NilValue || TYPEOF(parent) != LANGSXP)
+        {
+            UNPROTECT(n_protect);
+            return {R_NilValue, false};
+        }
+
+        SEXP iter = CDR(parent);
+        for (int j = 0; j < idx; ++j)
+        {
+            if (iter == R_NilValue)
+            {
+                UNPROTECT(n_protect);
+                return {R_NilValue, false};
+            }
+            iter = CDR(iter);
+        }
+        if (iter == R_NilValue)
+        {
+            UNPROTECT(n_protect);
+            return {R_NilValue, false};
+        }
+        parent = CAR(iter);
+    }
+
+    int target_idx = pos.path.back();
+    if (target_idx < 0 || parent == R_NilValue || TYPEOF(parent) != LANGSXP)
+    {
+        UNPROTECT(n_protect);
+        return {R_NilValue, false};
+    }
+
+    SEXP iter = CDR(parent);
+    for (int j = 0; j < target_idx; ++j)
+    {
+        if (iter == R_NilValue)
+        {
+            UNPROTECT(n_protect);
+            return {R_NilValue, false};
+        }
+        iter = CDR(iter);
+    }
+    if (iter == R_NilValue)
+    {
+        UNPROTECT(n_protect);
+        return {R_NilValue, false};
+    }
+
+    SETCAR(iter, replacement);
+
+    SEXP info = PROTECT(buildMutationInfo(pos, repl->infoReplacement())); // [2]
+    ++n_protect;
+    Rf_setAttrib(dup, Rf_install("mutation_info"), info);
+
+    UNPROTECT(n_protect - 1); // keep dup protected for the caller
     return {dup, true};
 }
