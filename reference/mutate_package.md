@@ -23,7 +23,9 @@ mutate_package(
   exclude_files = NULL,
   strategy = c("auto", "testthat", "installed"),
   coverage_guided = FALSE,
-  coverage_backend = c("record_tests", "per_file")
+  coverage_backend = c("record_tests", "per_file"),
+  target_margin = NULL,
+  confidence = 0.95
 )
 ```
 
@@ -178,9 +180,27 @@ mutate_package(
   file-level attribution (no helper fallback) at roughly the same cost;
   it depends on covr internals, so it is opt-in.
 
+- target_margin:
+
+  Optional desired half-width of the confidence interval on the mutation
+  score, as a proportion (e.g. `0.05` for +/-5 percentage points). When
+  set, the number of mutants to sample is derived from it using
+  worst-case (p = 0.5) sizing at `confidence`, finite-population
+  corrected and capped at the number of mutants generated (if the
+  requested precision needs more mutants than exist, all are tested).
+  Mutually exclusive with `max_mutants`. The required sample size
+  depends on the target precision, not on program size (Gopinath et al.,
+  ISSRE 2015).
+
+- confidence:
+
+  Confidence level for `target_margin` sizing and for the Wilson
+  confidence interval reported on a sampled mutation score. Default
+  0.95.
+
 ## Value
 
-An invisible list with three components:
+An invisible list with four components:
 
 - `package_mutants`:
 
@@ -196,6 +216,12 @@ An invisible list with three components:
 
   Named list of phase durations in seconds: `baseline`, `generation`,
   `test_execution`, and `equivalence_detection`.
+
+- `summary`:
+
+  Named list with `generated`, `tested`, `killed`, `hanged`, `survived`,
+  `mutation_score`, `mutation_score_ci` (a length-2 percentage vector,
+  or `NULL` when no sampling occurred), and `confidence`.
 
 ## Details
 
@@ -274,13 +300,13 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   Killed:           0
 #>   Hanged:           0
 #>   Survived:         1
-#>   Mutation Score:   0.00%
+#>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 3)
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        1.0
+#>   Test execution:        1.1
 #>   Equivalence detection: 0.0
 names(result)
-#> [1] "package_mutants" "test_results"    "timing"         
+#> [1] "package_mutants" "test_results"    "timing"          "summary"        
 # }
 ```

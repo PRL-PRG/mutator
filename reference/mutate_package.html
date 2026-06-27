@@ -58,7 +58,9 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <span>  exclude_files <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"installed"</span><span class="op">)</span>,</span>
 <span>  coverage_guided <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  coverage_backend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"record_tests"</span>, <span class="st">"per_file"</span><span class="op">)</span></span>
+<span>  coverage_backend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"record_tests"</span>, <span class="st">"per_file"</span><span class="op">)</span>,</span>
+<span>  target_margin <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  confidence <span class="op">=</span> <span class="fl">0.95</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -203,10 +205,26 @@ and runs the suite a single time through a reporter that snapshots coverage
 per test file, giving exact file-level attribution (no helper fallback) at
 roughly the same cost; it depends on covr internals, so it is opt-in.</p></dd>
 
+
+<dt id="arg-target-margin">target_margin<a class="anchor" aria-label="anchor" href="#arg-target-margin"></a></dt>
+<dd><p>Optional desired half-width of the confidence interval on
+the mutation score, as a proportion (e.g. <code>0.05</code> for +/-5 percentage points).
+When set, the number of mutants to sample is derived from it using worst-case
+(p = 0.5) sizing at <code>confidence</code>, finite-population corrected and capped at the
+number of mutants generated (if the requested precision needs more mutants than
+exist, all are tested). Mutually exclusive with <code>max_mutants</code>. The required
+sample size depends on the target precision, not on program size (Gopinath et
+al., ISSRE 2015).</p></dd>
+
+
+<dt id="arg-confidence">confidence<a class="anchor" aria-label="anchor" href="#arg-confidence"></a></dt>
+<dd><p>Confidence level for <code>target_margin</code> sizing and for the
+Wilson confidence interval reported on a sampled mutation score. Default 0.95.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>An invisible list with three components:</p><dl><dt><code>package_mutants</code></dt>
+    <p>An invisible list with four components:</p><dl><dt><code>package_mutants</code></dt>
 <dd><p>Named list with mutant path, mutation info, status,
 and optional equivalence flags.</p></dd>
 
@@ -217,6 +235,11 @@ and optional equivalence flags.</p></dd>
 <dt><code>timing</code></dt>
 <dd><p>Named list of phase durations in seconds: <code>baseline</code>,
 <code>generation</code>, <code>test_execution</code>, and <code>equivalence_detection</code>.</p></dd>
+
+<dt><code>summary</code></dt>
+<dd><p>Named list with <code>generated</code>, <code>tested</code>, <code>killed</code>, <code>hanged</code>,
+<code>survived</code>, <code>mutation_score</code>, <code>mutation_score_ci</code> (a length-2 percentage
+vector, or <code>NULL</code> when no sampling occurred), and <code>confidence</code>.</p></dd>
 
 
 </dl></div>
@@ -289,14 +312,14 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Killed:           0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Hanged:           0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Survived:         1</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutation Score:   0.00%</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 3)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Timing (seconds):</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          0.8</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutant generation:     0.0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.0</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.1</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Equivalence detection: 0.0</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "package_mutants" "test_results"    "timing"         </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "package_mutants" "test_results"    "timing"          "summary"        </span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

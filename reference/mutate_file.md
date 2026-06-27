@@ -60,7 +60,7 @@ A list of mutants. Each element contains:
 src <- tempfile(fileext = ".R")
 writeLines("add <- function(x, y) x + y", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"), max_mutants = 1)
-#> Generated 2 AST-based mutants for file19c4211e727b.R
+#> Generated 2 AST-based mutants for file19c4715f6964.R
 length(mutants)
 #> [1] 1
 ```
