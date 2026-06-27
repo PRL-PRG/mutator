@@ -147,6 +147,40 @@ normalize_max_mutants <- function(max_mutants, arg = "max_mutants") {
   as.integer(max_mutants)
 }
 
+# Wilson score interval for a binomial proportion, returned as a length-2 vector
+# of PERCENTAGES (lower, upper). `k` successes out of `n` trials. The Wilson
+# interval behaves well near p = 0 and p = 1 (unlike the Wald interval), which
+# matters because mutation scores are often high.
+wilson_ci <- function(k, n, confidence = 0.95) {
+  if (!is.finite(n) || n <= 0) {
+    return(c(NA_real_, NA_real_))
+  }
+  z <- stats::qnorm(1 - (1 - confidence) / 2)
+  p <- k / n
+  denom <- 1 + z^2 / n
+  centre <- (p + z^2 / (2 * n)) / denom
+  half <- (z * sqrt(p * (1 - p) / n + z^2 / (4 * n^2))) / denom
+  100 * c(max(0, centre - half), min(1, centre + half))
+}
+
+# Number of mutants to sample (uniformly, without replacement) to estimate the
+# mutation score to within +/- `margin` (a proportion, e.g. 0.05) at the given
+# `confidence`. Worst-case sizing (p = 0.5) so the interval holds for any true
+# score, with a finite-population correction against the `N` generated mutants,
+# capped at `N` (when the requested precision needs more mutants than exist, test
+# them all -- the score is then exact up to equivalent mutants). See Gopinath et
+# al., "How hard does mutation analysis have to be, anyway?" (ISSRE 2015): the
+# required sample size depends on the target precision, not on `N`.
+required_sample_size <- function(margin, confidence, N) {
+  if (!is.finite(N) || N <= 0) {
+    return(0L)
+  }
+  z <- stats::qnorm(1 - (1 - confidence) / 2)
+  n0 <- (z^2 * 0.25) / (margin^2)          # worst case: p = 0.5
+  n_fpc <- n0 / (1 + (n0 - 1) / N)          # finite-population correction
+  as.integer(min(N, ceiling(n_fpc)))
+}
+
 # Drop R source files whose base name matches any of `exclude_files`. Patterns
 # are shell-style globs (e.g. "import-standalone-*"); an exact name also works.
 # `exclude_files` of NULL or empty is a no-op. Matching is on the base name
@@ -964,8 +998,18 @@ list_test_tokens <- function(pkg_dir) {
 #'   and runs the suite a single time through a reporter that snapshots coverage
 #'   per test file, giving exact file-level attribution (no helper fallback) at
 #'   roughly the same cost; it depends on covr internals, so it is opt-in.
+#' @param target_margin Optional desired half-width of the confidence interval on
+#'   the mutation score, as a proportion (e.g. `0.05` for +/-5 percentage points).
+#'   When set, the number of mutants to sample is derived from it using worst-case
+#'   (p = 0.5) sizing at `confidence`, finite-population corrected and capped at the
+#'   number of mutants generated (if the requested precision needs more mutants than
+#'   exist, all are tested). Mutually exclusive with `max_mutants`. The required
+#'   sample size depends on the target precision, not on program size (Gopinath et
+#'   al., ISSRE 2015).
+#' @param confidence Confidence level for `target_margin` sizing and for the
+#'   Wilson confidence interval reported on a sampled mutation score. Default 0.95.
 #'
-#' @return An invisible list with three components:
+#' @return An invisible list with four components:
 #' \describe{
 #'   \item{`package_mutants`}{Named list with mutant path, mutation info, status,
 #'   and optional equivalence flags.}
@@ -973,6 +1017,9 @@ list_test_tokens <- function(pkg_dir) {
 #'   `"KILLED"`, `"SURVIVED"`, or `"HANG"`.}
 #'   \item{`timing`}{Named list of phase durations in seconds: `baseline`,
 #'   `generation`, `test_execution`, and `equivalence_detection`.}
+#'   \item{`summary`}{Named list with `generated`, `tested`, `killed`, `hanged`,
+#'   `survived`, `mutation_score`, `mutation_score_ci` (a length-2 percentage
+#'   vector, or `NULL` when no sampling occurred), and `confidence`.}
 #' }
 #'
 #' @examples
@@ -1010,12 +1057,29 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            exclude_files = NULL,
                            strategy = c("auto", "testthat", "installed"),
                            coverage_guided = FALSE,
-                           coverage_backend = c("record_tests", "per_file")) {
+                           coverage_backend = c("record_tests", "per_file"),
+                           target_margin = NULL, confidence = 0.95) {
   strategy <- match.arg(strategy)
   coverage_backend <- match.arg(coverage_backend)
   if (!is.logical(coverage_guided) || length(coverage_guided) != 1L ||
     is.na(coverage_guided)) {
     stop("`coverage_guided` must be a single TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.numeric(confidence) || length(confidence) != 1L || is.na(confidence) ||
+    confidence <= 0 || confidence >= 1) {
+    stop("`confidence` must be a single number strictly between 0 and 1 (e.g. 0.95).",
+      call. = FALSE)
+  }
+  if (!is.null(target_margin)) {
+    if (!is.numeric(target_margin) || length(target_margin) != 1L || is.na(target_margin) ||
+      target_margin <= 0 || target_margin >= 1) {
+      stop("`target_margin` must be a single number strictly between 0 and 1 -- the desired confidence-interval half-width on the mutation score, e.g. 0.05 for +/-5 percentage points.",
+        call. = FALSE)
+    }
+    if (!is.null(max_mutants)) {
+      stop("Provide either `max_mutants` or `target_margin`, not both: `target_margin` derives the number of mutants to sample.",
+        call. = FALSE)
+    }
   }
   timeout_multiplier <- 1.5
   timeout_floor_seconds <- 5
@@ -1653,11 +1717,31 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     }
   }
 
-  # Sample before materializing package copies. This is the same uniform sample
-  # as sampling afterwards, applied earlier, so the distribution is unchanged;
-  # it just avoids building copies for mutants that would be discarded.
-  if (!is.null(max_mutants) && length(mutant_specs) > max_mutants) {
-    selected_ids <- base::sample(names(mutant_specs), max_mutants)
+  # Total mutants generated, before any sampling. Used to report a confidence
+  # interval on the sampled mutation score (and to size a `target_margin` sample).
+  total_generated <- length(mutant_specs)
+
+  # `target_margin` derives the sample size from a desired CI half-width (worst
+  # case, finite-population corrected, capped at total_generated); `max_mutants`
+  # is an explicit cap. Sampling happens before materializing package copies, so
+  # the distribution is unchanged -- it just avoids building unused copies.
+  sample_cap <- max_mutants
+  if (!is.null(target_margin) && total_generated > 0) {
+    sample_cap <- required_sample_size(target_margin, confidence, total_generated)
+    if (sample_cap < total_generated) {
+      message(sprintf(
+        "Sampling %d of %d mutants for a +/-%.1f%% interval at %g%% confidence (worst-case sizing).",
+        sample_cap, total_generated, 100 * target_margin, 100 * confidence
+      ))
+    } else {
+      message(sprintf(
+        "Testing all %d mutants: the requested +/-%.1f%% interval needs the full population.",
+        total_generated, 100 * target_margin
+      ))
+    }
+  }
+  if (!is.null(sample_cap) && length(mutant_specs) > sample_cap) {
+    selected_ids <- base::sample(names(mutant_specs), sample_cap)
     mutant_specs <- mutant_specs[selected_ids]
   }
 
@@ -2058,15 +2142,32 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   message(sprintf("  Hanged:           %d", hanged))
   message(sprintf("  Survived:         %d", survived))
 
+  # When the tested set is a random sample of a larger generated population,
+  # report a Wilson confidence interval so the precision of the score is explicit.
+  mutation_score_ci <- if (total_mutants > 0 && total_generated > total_mutants) {
+    wilson_ci(killed, total_mutants, confidence)
+  } else {
+    NULL
+  }
+  score_line <- if (!is.null(mutation_score_ci)) {
+    sprintf(
+      "  Mutation Score:   %.2f%%  (%g%% CI %.1f-%.1f%%, sampled %d of %d)",
+      mutation_score, 100 * confidence, mutation_score_ci[1], mutation_score_ci[2],
+      total_mutants, total_generated
+    )
+  } else {
+    sprintf("  Mutation Score:   %.2f%%", mutation_score)
+  }
+
   # Only print equivalent mutants and adjusted score if detectEqMutants is TRUE
   if (detectEqMutants) {
     message(sprintf("  Equivalent:       %d", equivalent))
     message(sprintf("  Not Equivalent:   %d", not_equivalent))
     message(sprintf("  Uncertain:        %d", uncertain))
-    message(sprintf("  Mutation Score:   %.2f%%", mutation_score))
+    message(score_line)
     message(sprintf("  Adjusted Score:   %.2f%% (excluding equivalent mutants)", adjusted_mutation_score))
   } else {
-    message(sprintf("  Mutation Score:   %.2f%%", mutation_score))
+    message(score_line)
   }
 
   timing <- list(
@@ -2085,6 +2186,16 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   invisible(list(
     package_mutants = package_mutants,
     test_results = test_results,
-    timing = timing
+    timing = timing,
+    summary = list(
+      generated = total_generated,
+      tested = total_mutants,
+      killed = killed,
+      hanged = hanged,
+      survived = survived,
+      mutation_score = mutation_score,
+      mutation_score_ci = mutation_score_ci,
+      confidence = confidence
+    )
   ))
 }

@@ -20,7 +20,9 @@ mutate_package(
   exclude_files = NULL,
   strategy = c("auto", "testthat", "installed"),
   coverage_guided = FALSE,
-  coverage_backend = c("record_tests", "per_file")
+  coverage_backend = c("record_tests", "per_file"),
+  target_margin = NULL,
+  confidence = 0.95
 )
 }
 \arguments{
@@ -129,9 +131,21 @@ conservatively run the whole suite. \code{"per_file"} instruments the package on
 and runs the suite a single time through a reporter that snapshots coverage
 per test file, giving exact file-level attribution (no helper fallback) at
 roughly the same cost; it depends on covr internals, so it is opt-in.}
+
+\item{target_margin}{Optional desired half-width of the confidence interval on
+the mutation score, as a proportion (e.g. \code{0.05} for +/-5 percentage points).
+When set, the number of mutants to sample is derived from it using worst-case
+(p = 0.5) sizing at \code{confidence}, finite-population corrected and capped at the
+number of mutants generated (if the requested precision needs more mutants than
+exist, all are tested). Mutually exclusive with \code{max_mutants}. The required
+sample size depends on the target precision, not on program size (Gopinath et
+al., ISSRE 2015).}
+
+\item{confidence}{Confidence level for \code{target_margin} sizing and for the
+Wilson confidence interval reported on a sampled mutation score. Default 0.95.}
 }
 \value{
-An invisible list with three components:
+An invisible list with four components:
 \describe{
 \item{\code{package_mutants}}{Named list with mutant path, mutation info, status,
 and optional equivalence flags.}
@@ -139,6 +153,9 @@ and optional equivalence flags.}
 \code{"KILLED"}, \code{"SURVIVED"}, or \code{"HANG"}.}
 \item{\code{timing}}{Named list of phase durations in seconds: \code{baseline},
 \code{generation}, \code{test_execution}, and \code{equivalence_detection}.}
+\item{\code{summary}}{Named list with \code{generated}, \code{tested}, \code{killed}, \code{hanged},
+\code{survived}, \code{mutation_score}, \code{mutation_score_ci} (a length-2 percentage
+vector, or \code{NULL} when no sampling occurred), and \code{confidence}.}
 }
 }
 \description{
