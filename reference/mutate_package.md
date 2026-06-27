@@ -248,22 +248,27 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> 
 #> ══ Results ═════════════════════════════════════════════════════════════════════
 #> [ FAIL 0 | WARN 0 | SKIP 0 | PASS 1 ]
-#> Generated 1 AST-based mutants for add.R
+#> Generated 2 AST-based mutants for add.R
 #> ✔ | F W  S  OK | Context
 #> 
 #> ⠏ |          0 | add                                                            
 #> ⠋ | 1        0 | add                                                            
 #> ✖ | 1        0 | add
 #> ────────────────────────────────────────────────────────────────────────────────
-#> Failure ('test-add.R:1:1'): (code run outside of `test_that()`)
-#> Expected `add(1, 2)` to equal 3.
-#> Differences:
-#> 1/1 mismatches
-#> [1] -1 - 3 == -4
+#> Error ('test-add.R:1:1'): (code run outside of `test_that()`)
+#> Error in `add(1, 2)`: could not find function "add"
+#> Backtrace:
+#>     ▆
+#>  1. └─testthat::expect_equal(add(1, 2), 3) at test-add.R:1:1
+#>  2.   └─testthat::quasi_label(enquo(object), label)
+#>  3.     └─rlang::eval_bare(expr, quo_get_env(quo))
 #> ────────────────────────────────────────────────────────────────────────────────
 #> 
 #> Maximum number of failures exceeded; quitting.
 #> ℹ Increase this number with (e.g.) `testthat::set_max_fails(Inf)` 
+#> Warning message:
+#> Objects listed as exports, but not present in namespace:
+#> • add 
 #> Mutation Testing Summary:
 #>   Total mutants:    1
 #>   Killed:           0

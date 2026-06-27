@@ -271,242 +271,56 @@ base_url: https://api.openai.com/v1</code></pre>
 <div class="section level2">
 <h2 id="mutation-operators">Mutation Operators<a class="anchor" aria-label="anchor" href="#mutation-operators"></a>
 </h2>
-<p>mutator implements a wide range of mutation operators to thoroughly test your code:</p>
-<div class="section level3">
-<h3 id="arithmetic-and-logical-operator-replacements">Arithmetic and Logical Operator Replacements<a class="anchor" aria-label="anchor" href="#arithmetic-and-logical-operator-replacements"></a>
-</h3>
+<p>mutator currently generates these mutation families:</p>
 <table class="table">
 <colgroup>
-<col width="31%">
-<col width="37%">
-<col width="31%">
+<col width="40%">
+<col width="60%">
 </colgroup>
 <thead><tr>
-<th>Operator</th>
-<th>Description</th>
-<th>Example</th>
+<th>Family</th>
+<th>Mutations</th>
 </tr></thead>
 <tbody>
 <tr>
-<td>cxx_add_to_sub</td>
-<td>Replaces <code>+</code> with <code>-</code>
-</td>
+<td>Arithmetic operators</td>
 <td>
-<code>a + b</code> → <code>a - b</code>
+<code>+</code> ↔︎ <code>-</code>, <code>*</code> ↔︎ <code>/</code>
 </td>
 </tr>
 <tr>
-<td>cxx_sub_to_add</td>
-<td>Replaces <code>-</code> with <code>+</code>
-</td>
+<td>Comparison operators</td>
 <td>
-<code>a - b</code> → <code>a + b</code>
+<code>==</code> ↔︎ <code>!=</code>, <code>&lt;</code> ↔︎ <code>&gt;</code>, <code>&lt;=</code> ↔︎ <code>&gt;=</code>
 </td>
 </tr>
 <tr>
-<td>cxx_mul_to_div</td>
-<td>Replaces <code>*</code> with <code>/</code>
-</td>
+<td>Logical operators</td>
 <td>
-<code>a * b</code> → <code>a / b</code>
+<code>&amp;</code> ↔︎ <code>\|</code>, <code>&amp;&amp;</code> ↔︎ <code>\|\|</code>, removes <code>!</code>, and negates <code>if</code> / <code>while</code> conditions</td>
+</tr>
+<tr>
+<td>Assignment and call values</td>
+<td>Replaces assignment right-hand sides and ordinary function calls with <code>42</code>
 </td>
 </tr>
 <tr>
-<td>cxx_div_to_mul</td>
-<td>Replaces <code>/</code> with <code>*</code>
-</td>
-<td>
-<code>a / b</code> → <code>a * b</code>
+<td>Scalar constants</td>
+<td>Replaces numeric zero with <code>42</code>, numeric non-zero values with <code>0</code>, constants with a typed <code>NA</code>, and constants with <code>NULL</code>
 </td>
 </tr>
 <tr>
-<td>cxx_eq_to_ne</td>
-<td>Replaces <code>==</code> with <code>!=</code>
-</td>
-<td>
-<code>a == b</code> → <code>a != b</code>
+<td>Returns</td>
+<td>Replaces non-constant direct <code><a href="https://rdrr.io/r/base/function.html" class="external-link">return()</a></code> values with <code>NULL</code>, for example <code>return(x)</code> → <code>return(NULL)</code>
 </td>
 </tr>
 <tr>
-<td>cxx_ne_to_eq</td>
-<td>Replaces <code>!=</code> with <code>==</code>
-</td>
-<td>
-<code>a != b</code> → <code>a == b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_gt_to_ge</td>
-<td>Replaces <code>&gt;</code> with <code>&gt;=</code>
-</td>
-<td>
-<code>a &gt; b</code> → <code>a &gt;= b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_gt_to_le</td>
-<td>Replaces <code>&gt;</code> with <code>&lt;=</code>
-</td>
-<td>
-<code>a &gt; b</code> → <code>a &lt;= b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_lt_to_le</td>
-<td>Replaces <code>&lt;</code> with <code>&lt;=</code>
-</td>
-<td>
-<code>a &lt; b</code> → <code>a &lt;= b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_lt_to_ge</td>
-<td>Replaces <code>&lt;</code> with <code>&gt;=</code>
-</td>
-<td>
-<code>a &lt; b</code> → <code>a &gt;= b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_ge_to_gt</td>
-<td>Replaces <code>&gt;=</code> with <code>&gt;</code>
-</td>
-<td>
-<code>a &gt;= b</code> → <code>a &gt; b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_ge_to_lt</td>
-<td>Replaces <code>&gt;=</code> with <code>&lt;</code>
-</td>
-<td>
-<code>a &gt;= b</code> → <code>a &lt; b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_le_to_lt</td>
-<td>Replaces <code>&lt;=</code> with <code>&lt;</code>
-</td>
-<td>
-<code>a &lt;= b</code> → <code>a &lt; b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_le_to_gt</td>
-<td>Replaces <code>&lt;=</code> with <code>&gt;</code>
-</td>
-<td>
-<code>a &lt;= b</code> → <code>a &gt; b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_and_to_or</td>
-<td>Replaces <code>&amp;</code> with <code>\|</code>
-</td>
-<td>
-<code>a &amp; b</code> → <code>a \| b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_or_to_and</td>
-<td>Replaces <code>\|</code> with <code>&amp;</code>
-</td>
-<td>
-<code>a \| b</code> → <code>a &amp; b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_logical_and_to_or</td>
-<td>Replaces <code>&amp;&amp;</code> with <code>\|\|</code>
-</td>
-<td>
-<code>a &amp;&amp; b</code> → <code>a \|\| b</code>
-</td>
-</tr>
-<tr>
-<td>cxx_logical_or_to_and</td>
-<td>Replaces <code>\|\|</code> with <code>&amp;&amp;</code>
-</td>
-<td>
-<code>a \|\| b</code> → <code>a &amp;&amp; b</code>
-</td>
+<td>Deletions</td>
+<td>Deletes statements inside <code>{ ... }</code> blocks and, as a fallback, valid source lines</td>
 </tr>
 </tbody>
 </table>
-</div>
-<div class="section level3">
-<h3 id="unary-operator-mutations">Unary Operator Mutations<a class="anchor" aria-label="anchor" href="#unary-operator-mutations"></a>
-</h3>
-<table class="table">
-<thead><tr>
-<th>Operator</th>
-<th>Description</th>
-<th>Example</th>
-</tr></thead>
-<tbody>
-<tr>
-<td>cxx_minus_to_noop</td>
-<td>Removes unary minus</td>
-<td>
-<code>-x</code> → <code>x</code>
-</td>
-</tr>
-<tr>
-<td>cxx_remove_negation</td>
-<td>Removes logical negation</td>
-<td>
-<code>!x</code> → <code>x</code>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="section level3">
-<h3 id="assignment-and-value-mutations">Assignment and Value Mutations<a class="anchor" aria-label="anchor" href="#assignment-and-value-mutations"></a>
-</h3>
-<table class="table">
-<colgroup>
-<col width="27%">
-<col width="42%">
-<col width="30%">
-</colgroup>
-<thead><tr>
-<th>Operator</th>
-<th>Description</th>
-<th>Example</th>
-</tr></thead>
-<tbody>
-<tr>
-<td>cxx_assign_const</td>
-<td>Replaces assignment with constant</td>
-<td>
-<code>a = b</code> → <code>a = 42</code>
-</td>
-</tr>
-<tr>
-<td>cxx_replace_scalar_call</td>
-<td>Replaces function call with constant</td>
-<td>
-<code>f(x)</code> → <code>42</code>
-</td>
-</tr>
-<tr>
-<td>scalar_value_mutator</td>
-<td>Replaces constants</td>
-<td>
-<code>0</code> → <code>42</code>, non-zero → <code>0</code>
-</td>
-</tr>
-<tr>
-<td>negate_mutator</td>
-<td>Negates conditionals</td>
-<td>
-<code>x</code> → <code>!x</code>, <code>!x</code> → <code>x</code>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
+<p>Direct literal return values are not rewritten by the return-to-<code>NULL</code> mutation; for example, <code>return(1)</code> is left alone by that mutation.</p>
 </div>
 <div class="section level2">
 <h2 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>

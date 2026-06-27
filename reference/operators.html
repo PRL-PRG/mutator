@@ -41,31 +41,14 @@
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The following mutation operators can be applied to R code:</p>
-<ul><li><p><code>cxx_add_to_sub</code>: Replaces <code>+</code> with <code>-</code></p></li>
-<li><p><code>cxx_and_to_or</code>: Replaces <code>\&amp;</code> with <code>|</code></p></li>
-<li><p><code>cxx_assign_const</code>: Replaces <code>a = b</code> with <code>a = 42</code></p></li>
-<li><p><code>cxx_div_to_mul</code>: Replaces <code>/</code> with <code>*</code></p></li>
-<li><p><code>cxx_eq_to_ne</code>: Replaces <code>==</code> with <code>!=</code></p></li>
-<li><p><code>cxx_ge_to_gt</code>: Replaces <code>&gt;=</code> with <code>&gt;</code></p></li>
-<li><p><code>cxx_ge_to_lt</code>: Replaces <code>&gt;=</code> with <code>&lt;</code></p></li>
-<li><p><code>cxx_gt_to_ge</code>: Replaces <code>&gt;</code> with <code>&gt;=</code></p></li>
-<li><p><code>cxx_gt_to_le</code>: Replaces <code>&gt;</code> with <code>&lt;=</code></p></li>
-<li><p><code>cxx_le_to_gt</code>: Replaces <code>&lt;=</code> with <code>&gt;</code></p></li>
-<li><p><code>cxx_le_to_lt</code>: Replaces <code>&lt;=</code> with <code>&lt;</code></p></li>
-<li><p><code>cxx_logical_and_to_or</code>: Replaces <code>&amp;&amp;</code> with <code>||</code></p></li>
-<li><p><code>cxx_logical_or_to_and</code>: Replaces <code>||</code> with <code>&amp;&amp;</code></p></li>
-<li><p><code>cxx_lt_to_ge</code>: Replaces <code>&lt;</code> with <code>&gt;=</code></p></li>
-<li><p><code>cxx_lt_to_le</code>: Replaces <code>&lt;</code> with <code>&lt;=</code></p></li>
-<li><p><code>cxx_minus_to_noop</code>: Replaces <code>-x</code> with <code>x</code></p></li>
-<li><p><code>cxx_mul_to_div</code>: Replaces <code>*</code> with <code>/</code></p></li>
-<li><p><code>cxx_ne_to_eq</code>: Replaces <code>!=</code> with <code>==</code></p></li>
-<li><p><code>cxx_or_to_and</code>: Replaces <code>|</code> with <code>\&amp;</code></p></li>
-<li><p><code>cxx_remove_negation</code>: Replaces <code>!a</code> with <code>a</code></p></li>
-<li><p><code>cxx_replace_scalar_call</code>: Replaces a function call with <code>42</code></p></li>
-<li><p><code>cxx_sub_to_add</code>: Replaces <code>-</code> with <code>+</code></p></li>
-<li><p><code>negate_mutator</code>: Negates conditionals <code>!x</code> to <code>x</code> and <code>x</code> to <code>!x</code></p></li>
-<li><p><code>scalar_value_mutator</code>: Replaces zeros with <code>42</code>, and non-zeros with <code>0</code></p></li>
-</ul><p>These operators allow the <code>mutator</code> package to systematically alter source code in controlled ways, enabling thorough testing of R code and ensuring that tests are sensitive to subtle code changes.</p>
+<ul><li><p>Arithmetic operators: <code>+</code> &lt;-&gt; <code>-</code>, and <code>*</code> &lt;-&gt; <code>/</code></p></li>
+<li><p>Comparison operators: <code>==</code> &lt;-&gt; <code>!=</code>, <code>&lt;</code> &lt;-&gt; <code>&gt;</code>, and <code>&lt;=</code> &lt;-&gt; <code>&gt;=</code></p></li>
+<li><p>Logical operators: <code>\&amp;</code> &lt;-&gt; <code>|</code>, <code>&amp;&amp;</code> &lt;-&gt; <code>||</code>, removes <code>!</code>, and negates <code>if</code> / <code>while</code> conditions</p></li>
+<li><p>Assignment and call values: replaces assignment right-hand sides and ordinary function calls with <code>42</code></p></li>
+<li><p>Scalar constants: replaces numeric zero with <code>42</code>, numeric non-zero values with <code>0</code>, constants with a typed <code>NA</code>, and constants with <code>NULL</code></p></li>
+<li><p>Returns: replaces non-constant direct <code><a href="https://rdrr.io/r/base/function.html" class="external-link">return()</a></code> values with <code>NULL</code>, for example <code>return(x)</code> -&gt; <code>return(NULL)</code></p></li>
+<li><p>Deletions: removes statements inside <code>{ ... }</code> blocks and, as a fallback, valid source lines</p></li>
+</ul><p>Direct literal return values are not rewritten by the return-to-<code>NULL</code> mutation; for example, <code>return(1)</code> is left alone by that mutation.</p>
     </div>
     <div class="section level2">
     <h2 id="author">Author<a class="anchor" aria-label="anchor" href="#author"></a></h2>

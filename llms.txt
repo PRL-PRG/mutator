@@ -435,47 +435,20 @@ prompts and model responses are not printed by default; set
 
 ## Mutation Operators
 
-mutator implements a wide range of mutation operators to thoroughly test
-your code:
+mutator currently generates these mutation families:
 
-### Arithmetic and Logical Operator Replacements
+| Family | Mutations |
+|----|----|
+| Arithmetic operators | `+` ↔︎ `-`, `*` ↔︎ `/` |
+| Comparison operators | `==` ↔︎ `!=`, `<` ↔︎ `>`, `<=` ↔︎ `>=` |
+| Logical operators | `&` ↔︎ `\|`, `&&` ↔︎ `\|\|`, removes `!`, and negates `if` / `while` conditions |
+| Assignment and call values | Replaces assignment right-hand sides and ordinary function calls with `42` |
+| Scalar constants | Replaces numeric zero with `42`, numeric non-zero values with `0`, constants with a typed `NA`, and constants with `NULL` |
+| Returns | Replaces non-constant direct [`return()`](https://rdrr.io/r/base/function.html) values with `NULL`, for example `return(x)` → `return(NULL)` |
+| Deletions | Deletes statements inside `{ ... }` blocks and, as a fallback, valid source lines |
 
-| Operator              | Description               | Example               |
-|-----------------------|---------------------------|-----------------------|
-| cxx_add_to_sub        | Replaces `+` with `-`     | `a + b` → `a - b`     |
-| cxx_sub_to_add        | Replaces `-` with `+`     | `a - b` → `a + b`     |
-| cxx_mul_to_div        | Replaces `*` with `/`     | `a * b` → `a / b`     |
-| cxx_div_to_mul        | Replaces `/` with `*`     | `a / b` → `a * b`     |
-| cxx_eq_to_ne          | Replaces `==` with `!=`   | `a == b` → `a != b`   |
-| cxx_ne_to_eq          | Replaces `!=` with `==`   | `a != b` → `a == b`   |
-| cxx_gt_to_ge          | Replaces `>` with `>=`    | `a > b` → `a >= b`    |
-| cxx_gt_to_le          | Replaces `>` with `<=`    | `a > b` → `a <= b`    |
-| cxx_lt_to_le          | Replaces `<` with `<=`    | `a < b` → `a <= b`    |
-| cxx_lt_to_ge          | Replaces `<` with `>=`    | `a < b` → `a >= b`    |
-| cxx_ge_to_gt          | Replaces `>=` with `>`    | `a >= b` → `a > b`    |
-| cxx_ge_to_lt          | Replaces `>=` with `<`    | `a >= b` → `a < b`    |
-| cxx_le_to_lt          | Replaces `<=` with `<`    | `a <= b` → `a < b`    |
-| cxx_le_to_gt          | Replaces `<=` with `>`    | `a <= b` → `a > b`    |
-| cxx_and_to_or         | Replaces `&` with `\|`    | `a & b` → `a \| b`    |
-| cxx_or_to_and         | Replaces `\|` with `&`    | `a \| b` → `a & b`    |
-| cxx_logical_and_to_or | Replaces `&&` with `\|\|` | `a && b` → `a \|\| b` |
-| cxx_logical_or_to_and | Replaces `\|\|` with `&&` | `a \|\| b` → `a && b` |
-
-### Unary Operator Mutations
-
-| Operator            | Description              | Example    |
-|---------------------|--------------------------|------------|
-| cxx_minus_to_noop   | Removes unary minus      | `-x` → `x` |
-| cxx_remove_negation | Removes logical negation | `!x` → `x` |
-
-### Assignment and Value Mutations
-
-| Operator | Description | Example |
-|----|----|----|
-| cxx_assign_const | Replaces assignment with constant | `a = b` → `a = 42` |
-| cxx_replace_scalar_call | Replaces function call with constant | `f(x)` → `42` |
-| scalar_value_mutator | Replaces constants | `0` → `42`, non-zero → `0` |
-| negate_mutator | Negates conditionals | `x` → `!x`, `!x` → `x` |
+Direct literal return values are not rewritten by the return-to-`NULL`
+mutation; for example, `return(1)` is left alone by that mutation.
 
 ## Dependencies
 

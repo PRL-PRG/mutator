@@ -7,58 +7,30 @@ supports for mutation testing in R.
 
 The following mutation operators can be applied to R code:
 
-- `cxx_add_to_sub`: Replaces `+` with `-`
+- Arithmetic operators: `+` \<-\> `-`, and `*` \<-\> `/`
 
-- `cxx_and_to_or`: Replaces `\&` with `|`
+- Comparison operators: `==` \<-\> `!=`, `<` \<-\> `>`, and `<=` \<-\>
+  `>=`
 
-- `cxx_assign_const`: Replaces `a = b` with `a = 42`
+- Logical operators: `\&` \<-\> `|`, `&&` \<-\> `||`, removes `!`, and
+  negates `if` / `while` conditions
 
-- `cxx_div_to_mul`: Replaces `/` with `*`
+- Assignment and call values: replaces assignment right-hand sides and
+  ordinary function calls with `42`
 
-- `cxx_eq_to_ne`: Replaces `==` with `!=`
+- Scalar constants: replaces numeric zero with `42`, numeric non-zero
+  values with `0`, constants with a typed `NA`, and constants with
+  `NULL`
 
-- `cxx_ge_to_gt`: Replaces `>=` with `>`
+- Returns: replaces non-constant direct
+  [`return()`](https://rdrr.io/r/base/function.html) values with `NULL`,
+  for example `return(x)` -\> `return(NULL)`
 
-- `cxx_ge_to_lt`: Replaces `>=` with `<`
+- Deletions: removes statements inside `{ ... }` blocks and, as a
+  fallback, valid source lines
 
-- `cxx_gt_to_ge`: Replaces `>` with `>=`
-
-- `cxx_gt_to_le`: Replaces `>` with `<=`
-
-- `cxx_le_to_gt`: Replaces `<=` with `>`
-
-- `cxx_le_to_lt`: Replaces `<=` with `<`
-
-- `cxx_logical_and_to_or`: Replaces `&&` with `||`
-
-- `cxx_logical_or_to_and`: Replaces `||` with `&&`
-
-- `cxx_lt_to_ge`: Replaces `<` with `>=`
-
-- `cxx_lt_to_le`: Replaces `<` with `<=`
-
-- `cxx_minus_to_noop`: Replaces `-x` with `x`
-
-- `cxx_mul_to_div`: Replaces `*` with `/`
-
-- `cxx_ne_to_eq`: Replaces `!=` with `==`
-
-- `cxx_or_to_and`: Replaces `|` with `\&`
-
-- `cxx_remove_negation`: Replaces `!a` with `a`
-
-- `cxx_replace_scalar_call`: Replaces a function call with `42`
-
-- `cxx_sub_to_add`: Replaces `-` with `+`
-
-- `negate_mutator`: Negates conditionals `!x` to `x` and `x` to `!x`
-
-- `scalar_value_mutator`: Replaces zeros with `42`, and non-zeros with
-  `0`
-
-These operators allow the `mutator` package to systematically alter
-source code in controlled ways, enabling thorough testing of R code and
-ensuring that tests are sensitive to subtle code changes.
+Direct literal return values are not rewritten by the return-to-`NULL`
+mutation; for example, `return(1)` is left alone by that mutation.
 
 ## Author
 
