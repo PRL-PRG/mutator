@@ -267,29 +267,7 @@ writeLines(
   file.path(pkg, "tests", "testthat", "test-add.R")
 )
 result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
-#> ✔ | F W  S  OK | Context
-#> 
-#> ⠏ |          0 | add                                                            
-#> ✔ |          1 | add
-#> 
-#> ══ Results ═════════════════════════════════════════════════════════════════════
-#> [ FAIL 0 | WARN 0 | SKIP 0 | PASS 1 ]
 #> Generated 1 AST-based mutants for add.R
-#> ✔ | F W  S  OK | Context
-#> 
-#> ⠏ |          0 | add                                                            
-#> ⠋ | 1        0 | add                                                            
-#> ✖ | 1        0 | add
-#> ────────────────────────────────────────────────────────────────────────────────
-#> Failure ('test-add.R:1:1'): (code run outside of `test_that()`)
-#> Expected `add(1, 2)` to equal 3.
-#> Differences:
-#> 1/1 mismatches
-#> [1] -1 - 3 == -4
-#> ────────────────────────────────────────────────────────────────────────────────
-#> 
-#> Maximum number of failures exceeded; quitting.
-#> ℹ Increase this number with (e.g.) `testthat::set_max_fails(Inf)` 
 #> Mutation Testing Summary:
 #>   Total mutants:    1
 #>   Killed:           0
@@ -299,7 +277,7 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        1.0
+#>   Test execution:        1.1
 #>   Equivalence detection: 0.0
 names(result)
 #> [1] "package_mutants" "test_results"    "timing"          "summary"        
