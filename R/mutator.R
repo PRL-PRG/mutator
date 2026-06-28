@@ -1174,8 +1174,9 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     # cannot leak into the mutator session. We drive the process explicitly with
     # r_bg()/$wait()/$kill() rather than callr::r(timeout=), whose timeout
     # conversion is unreliable. Output is captured to a file and surfaced via
-    # message() afterwards (kept for debugging).
-    # TODO: switch to reporter = "silent" once stable.
+    # message() only when isFullLog = TRUE (the testthat ProgressReporter writes
+    # its per-failure detail to a throwaway file in the subprocess, so by default
+    # killing a mutant produces no console output).
     timeout_ms <- if (is.finite(run_timeout)) as.integer(ceiling(run_timeout * 1000)) else -1L
 
     out_file <- tempfile("mutator_testthat_out_")
@@ -1190,9 +1191,13 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           # Fail-fast: a mutant is KILLED by the first failing test, so stop the
           # run there instead of finishing the suite. TESTTHAT_MAX_FAILS = 1 makes
           # the reporter abort at the first failing context; test_dir() still sees
-          # the failure and throws, which the caller turns into KILLED. We force
-          # reporter = "progress" because only the ProgressReporter actually aborts
-          # on max-fails (the default reporter can be "Llm"/"Summary", which do not).
+          # the failure and throws, which the caller turns into KILLED. Only the
+          # ProgressReporter actually aborts on max-fails (Silent/Summary do not),
+          # so we keep it -- but point its output at a throwaway file so the
+          # per-failure detail never reaches this subprocess's captured stdout.
+          # That gives fail-fast without the noise. (The brief "Maximum number of
+          # failures" notice still goes to stdout; it is only shown when
+          # isFullLog = TRUE, see the surfacing branch below.)
           if (fail_fast) {
             Sys.setenv(TESTTHAT_MAX_FAILS = "1")
           }
@@ -1204,9 +1209,12 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           # extract_harness_test_args()), so we run exactly the tests the package
           # author / R CMD check would, but against the load_all()'d dev package
           # (load_package = "none") rather than an installed one.
+          reporter_file <- tempfile("mutator_reporter_")
+          reporter <- testthat::ProgressReporter$new(file = reporter_file)
+          on.exit(unlink(reporter_file), add = TRUE)
           tr <- do.call(
             testthat::test_dir,
-            c(list("tests/testthat", reporter = "progress"), harness_args)
+            c(list("tests/testthat", reporter = reporter), harness_args)
           )
           sum(tr$failed)
         },
@@ -1233,10 +1241,13 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       proc$kill()
     }
 
-    # Surface the subprocess output (testthat reporter) for debugging.
-    test_output <- tryCatch(readLines(out_file, warn = FALSE), error = function(e) character(0))
-    if (length(test_output) > 0) {
-      message(paste(test_output, collapse = "\n"))
+    # Surface the captured subprocess output only under full logging; by default
+    # it is discarded so killed mutants do not flood the console.
+    if (isFullLog) {
+      test_output <- tryCatch(readLines(out_file, warn = FALSE), error = function(e) character(0))
+      if (length(test_output) > 0) {
+        message(paste(test_output, collapse = "\n"))
+      }
     }
 
     if (timed_out) {
@@ -1246,9 +1257,14 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
     result <- tryCatch(proc$get_result(), error = function(e) e)
     if (inherits(result, "error")) {
-      # Package load failure or test execution error -> treat as killed.
+      # The subprocess threw: normally a failing test (the mutant is KILLED, the
+      # common case under fail-fast), or a load/execution error. Either way the
+      # mutant is killed; record the detail but only print it under full logging
+      # so killed mutants stay quiet by default.
       set_last_test_failure(paste0("testthat run failed: ", conditionMessage(result)))
-      message("Test error: ", conditionMessage(result))
+      if (isFullLog) {
+        message("Test error: ", conditionMessage(result))
+      }
       return(FALSE)
     }
 
