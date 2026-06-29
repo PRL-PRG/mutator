@@ -280,13 +280,8 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">mutate_package</span><span class="op">(</span><span class="va">pkg</span>, cores <span class="op">=</span> <span class="fl">1</span>, max_mutants <span class="op">=</span> <span class="fl">1</span>, timeout_seconds <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 1 AST-based mutants for add.R</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 2 mutants from 1 source files.</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Running the test suites of 1 mutant...</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Mutation Testing Summary:</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Total mutants:    1</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Killed:           0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Hanged:           0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Survived:         1</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 2)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Surviving mutants (1):</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   <span style="color: #00BBBB; font-weight: bold;">R/add.R:1</span>   '+' -&gt; '-'</span>
@@ -296,6 +291,13 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutant generation:     0.0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Equivalence detection: 0.0</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Mutation Testing Summary:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Total mutants:    1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Killed:           0</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Hanged:           0</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Survived:         1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 2)</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "package_mutants" "test_results"    "timing"          "summary"        </span>
 <span class="r-in"><span><span class="co"># }</span></span></span>

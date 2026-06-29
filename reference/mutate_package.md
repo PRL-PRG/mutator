@@ -268,13 +268,8 @@ writeLines(
 )
 result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> Generated 1 AST-based mutants for add.R
+#> Generated 2 mutants from 1 source files.
 #> Running the test suites of 1 mutant...
-#> Mutation Testing Summary:
-#>   Total mutants:    1
-#>   Killed:           0
-#>   Hanged:           0
-#>   Survived:         1
-#>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 2)
 #> 
 #> Surviving mutants (1):
 #>   R/add.R:1   '+' -> '-'
@@ -284,6 +279,13 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   Mutant generation:     0.0
 #>   Test execution:        1.0
 #>   Equivalence detection: 0.0
+#> 
+#> Mutation Testing Summary:
+#>   Total mutants:    1
+#>   Killed:           0
+#>   Hanged:           0
+#>   Survived:         1
+#>   Mutation Score:   0.00%  (95% CI 0.0-79.3%, sampled 1 of 2)
 names(result)
 #> [1] "package_mutants" "test_results"    "timing"          "summary"        
 # }

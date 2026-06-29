@@ -47,7 +47,8 @@ to the original code using OpenAI's language models.</p>
 <span>  <span class="va">survived_mutants</span>,</span>
 <span>  api_config <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  batch_size <span class="op">=</span> <span class="fl">25</span>,</span>
-<span>  workers <span class="op">=</span> <span class="fl">1</span></span>
+<span>  workers <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  report <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -76,6 +77,13 @@ silently drops verdicts) and let batches run concurrently. Defaults to 25.</p></
 <dt id="arg-workers">workers<a class="anchor" aria-label="anchor" href="#arg-workers"></a></dt>
 <dd><p>Number of API requests to run concurrently (requires a
 forking platform). Defaults to 1 (sequential).</p></dd>
+
+
+<dt id="arg-report">report<a class="anchor" aria-label="anchor" href="#arg-report"></a></dt>
+<dd><p>Whether to print per-file progress and an equivalence summary
+to the console. Defaults to <code>TRUE</code>. <code><a href="mutate_package.html">mutate_package()</a></code> sets this to <code>FALSE</code>
+when running many files in parallel, so it can print one aggregated summary
+(and a single progress bar) instead of one per batch.</p></dd>
 
 </dl></div>
     <div class="section level2">
