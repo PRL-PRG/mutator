@@ -25,7 +25,8 @@ mutate_package(
   coverage_guided = FALSE,
   coverage_backend = c("record_tests", "per_file"),
   target_margin = NULL,
-  confidence = 0.95
+  confidence = 0.95,
+  max_show = 50L
 )
 ```
 
@@ -197,6 +198,13 @@ mutate_package(
   Confidence level for `target_margin` sizing and for the Wilson
   confidence interval reported on a sampled mutation score. Default
   0.95.
+
+- max_show:
+
+  Maximum number of surviving mutants to print to the console; the
+  remainder are summarised as "... and N more" but always remain in the
+  returned `package_mutants`. Use `Inf` to print every survivor. Default
+  50.
 
 ## Value
 

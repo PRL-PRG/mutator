@@ -20,7 +20,9 @@ get_openai_config(dir = getwd())
 
 ## Value
 
-A list with elements `api_key`, `model` and `base_url`.
+A list with elements `api_key`, `model`, `base_url` and
+`max_parallel_requests` (an integer cap on concurrent API requests, or
+`NA` for no cap).
 
 ## Details
 
@@ -30,8 +32,8 @@ A list with elements `api_key`, `model` and `base_url`.
 2.  a `.openai_config` file in `dir` (a human-readable "field: value"
     file that is parsed, never executed);
 
-3.  the environment variables `OPENAI_API_KEY`, `OPENAI_MODEL` and
-    `OPENAI_BASE_URL`;
+3.  the environment variables `OPENAI_API_KEY`, `OPENAI_MODEL`,
+    `OPENAI_BASE_URL` and `OPENAI_MAX_PARALLEL_REQUESTS`;
 
 4.  built-in defaults (model `"gpt-4"`, the public OpenAI base URL).
 
@@ -40,5 +42,6 @@ A list with elements `api_key`, `model` and `base_url`.
 ``` r
 config <- get_openai_config()
 names(config)
-#> [1] "api_key"  "model"    "base_url"
+#> [1] "api_key"               "model"                 "base_url"             
+#> [4] "max_parallel_requests"
 ```

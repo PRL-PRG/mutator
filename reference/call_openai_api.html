@@ -56,7 +56,10 @@
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>API response as text, or NULL if request failed</p>
+    <p>On success, the parsed API response. On failure, an
+<code>openai_api_error</code> object: a list with a <code>message</code> describing the cause
+(HTTP status plus response body, or the network error), so callers can
+surface <em>why</em> a request failed rather than a bare <code>NULL</code>.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

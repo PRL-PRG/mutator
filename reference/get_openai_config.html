@@ -60,7 +60,9 @@ current working directory; pass <code>NULL</code> to ignore config files.</p></d
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with elements <code>api_key</code>, <code>model</code> and <code>base_url</code>.</p>
+    <p>A list with elements <code>api_key</code>, <code>model</code>, <code>base_url</code> and
+<code>max_parallel_requests</code> (an integer cap on concurrent API requests, or
+<code>NA</code> for no cap).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -68,8 +70,8 @@ current working directory; pass <code>NULL</code> to ignore config files.</p></d
 <ol><li><p>values set with <code><a href="set_openai_config.html">set_openai_config()</a></code>;</p></li>
 <li><p>a <code>.openai_config</code> file in <code>dir</code> (a human-readable "field: value" file
 that is parsed, never executed);</p></li>
-<li><p>the environment variables <code>OPENAI_API_KEY</code>, <code>OPENAI_MODEL</code> and
-<code>OPENAI_BASE_URL</code>;</p></li>
+<li><p>the environment variables <code>OPENAI_API_KEY</code>, <code>OPENAI_MODEL</code>,
+<code>OPENAI_BASE_URL</code> and <code>OPENAI_MAX_PARALLEL_REQUESTS</code>;</p></li>
 <li><p>built-in defaults (model <code>"gpt-4"</code>, the public OpenAI base URL).</p></li>
 </ol></div>
 
@@ -77,7 +79,8 @@ that is parsed, never executed);</p></li>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu">get_openai_config</span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">config</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "api_key"  "model"    "base_url"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "api_key"               "model"                 "base_url"             </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [4] "max_parallel_requests"</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

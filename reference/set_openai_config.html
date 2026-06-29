@@ -45,7 +45,12 @@ file and over environment variables. Arguments left <code>NULL</code> are unchan
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">set_openai_config</span><span class="op">(</span>api_key <span class="op">=</span> <span class="cn">NULL</span>, model <span class="op">=</span> <span class="cn">NULL</span>, base_url <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">set_openai_config</span><span class="op">(</span></span>
+<span>  api_key <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  model <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  base_url <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  max_parallel_requests <span class="op">=</span> <span class="cn">NULL</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -63,6 +68,13 @@ file and over environment variables. Arguments left <code>NULL</code> are unchan
 <dt id="arg-base-url">base_url<a class="anchor" aria-label="anchor" href="#arg-base-url"></a></dt>
 <dd><p>Base URL of an OpenAI-compatible Chat Completions API, such
 as <code>"https://api.openai.com/v1"</code> or <code>"http://localhost:11434/v1"</code>.</p></dd>
+
+
+<dt id="arg-max-parallel-requests">max_parallel_requests<a class="anchor" aria-label="anchor" href="#arg-max-parallel-requests"></a></dt>
+<dd><p>Maximum number of equivalence-detection API
+requests to run concurrently. Use this to stay under a provider's
+per-key parallel-request limit (exceeding it returns HTTP 429). <code>NA</code>
+(the default) imposes no cap beyond the run's own <code>cores</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

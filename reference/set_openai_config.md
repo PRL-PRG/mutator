@@ -8,7 +8,12 @@ left `NULL` are unchanged.
 ## Usage
 
 ``` r
-set_openai_config(api_key = NULL, model = NULL, base_url = NULL)
+set_openai_config(
+  api_key = NULL,
+  model = NULL,
+  base_url = NULL,
+  max_parallel_requests = NULL
+)
 ```
 
 ## Arguments
@@ -25,6 +30,13 @@ set_openai_config(api_key = NULL, model = NULL, base_url = NULL)
 
   Base URL of an OpenAI-compatible Chat Completions API, such as
   `"https://api.openai.com/v1"` or `"http://localhost:11434/v1"`.
+
+- max_parallel_requests:
+
+  Maximum number of equivalence-detection API requests to run
+  concurrently. Use this to stay under a provider's per-key
+  parallel-request limit (exceeding it returns HTTP 429). `NA` (the
+  default) imposes no cap beyond the run's own `cores`.
 
 ## Value
 
