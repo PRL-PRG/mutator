@@ -2,6 +2,7 @@
 .vscode
 ^\.github$
 packages
+^benchmarks$
 ^\.claude$
 ^\.agents$
 ^\.codex$

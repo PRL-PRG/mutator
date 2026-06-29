@@ -1,11 +1,24 @@
-# Parse `# mutator:ignore*` directives from a file's lines and return the
-# regions to exclude from mutation. Returns a list with:
+# Parse code-exclusion directives from a file's lines and return the regions to
+# exclude from mutation. Both mutator's own directives and covr's `# nocov`
+# coverage-exclusion annotations are honoured, so code already marked as
+# untested-by-design (defensive branches, unreachable stubs) is not mutated.
+# Returns a list with:
 #   $whole_file : TRUE if a `# mutator:ignore-file` directive is present anywhere
-#   $ranges     : list of integer c(start, end) line ranges to exclude, derived
-#                 from `# mutator:ignore-start` / `# mutator:ignore-end` pairs.
-# An unmatched `-start` runs to the end of the file. Multiple non-nested regions
-# are supported (a single open marker is tracked linearly). The directive lines
-# themselves are comments and so are never mutated regardless.
+#   $ranges     : list of integer c(start, end) line ranges to exclude, from
+#                 region markers (`# mutator:ignore-start`/`-end`, `# nocov
+#                 start`/`end`) and single-line `# nocov` comments.
+# An unmatched region start runs to the end of the file. Multiple non-nested
+# regions are supported (a single open marker is tracked linearly). Region
+# starts/ends from either convention are interchangeable in practice but are not
+# expected to be mixed. The directive lines themselves are comments, so they are
+# never mutated regardless.
+#
+# covr conventions (mirrored here): `# nocov start` / `# nocov end` delimit a
+# block; a bare `# nocov` excludes its own line and may be a trailing comment
+# (e.g. `stop("unreachable") # nocov`). mutator's own markers must be full-line
+# comments. Note that, as for mutator's region directives, an excluded single
+# line still drops a whole function's operator mutants when their location could
+# only be resolved to the enclosing function (see `is_excluded_range`).
 ignore_directive_ranges <- function(lines) {
   result <- list(whole_file = FALSE, ranges = list())
   if (length(lines) == 0) {
@@ -13,8 +26,12 @@ ignore_directive_ranges <- function(lines) {
   }
 
   file_re  <- "^\\s*#\\s*mutator:ignore-file\\b"
-  start_re <- "^\\s*#\\s*mutator:ignore-start\\b"
-  end_re   <- "^\\s*#\\s*mutator:ignore-end\\b"
+  # Region start/end: mutator's full-line markers, or covr's `# nocov start` /
+  # `# nocov end` (which may trail code, hence not anchored to line start).
+  start_re <- "^\\s*#\\s*mutator:ignore-start\\b|#\\s*nocov\\s*start"
+  end_re   <- "^\\s*#\\s*mutator:ignore-end\\b|#\\s*nocov\\s*end"
+  # A bare covr `# nocov` (not a start/end marker) excludes just its own line.
+  nocov_line_re <- "#\\s*nocov"
 
   if (any(grepl(file_re, lines, perl = TRUE))) {
     result$whole_file <- TRUE
@@ -31,9 +48,15 @@ ignore_directive_ranges <- function(lines) {
         result$ranges[[length(result$ranges) + 1L]] <- c(open, i)
         open <- NA_integer_
       }
+    } else if (grepl(nocov_line_re, line, perl = TRUE)) {
+      # Single-line `# nocov`: exclude this line only. Redundant (and so
+      # skipped) when already inside an open region.
+      if (is.na(open)) {
+        result$ranges[[length(result$ranges) + 1L]] <- c(i, i)
+      }
     }
   }
-  # Unmatched `-start`: exclude through the end of the file.
+  # Unmatched region start: exclude through the end of the file.
   if (!is.na(open)) {
     result$ranges[[length(result$ranges) + 1L]] <- c(open, length(lines))
   }
@@ -200,6 +223,43 @@ filter_excluded_files <- function(r_files, exclude_files) {
     accumulate = FALSE
   )
   r_files[!excluded]
+}
+
+# Drop R source files listed in the package's covr `.covrignore`, so files
+# already excluded from coverage are not mutation-tested either. Mirrors covr's
+# own parsing: each non-empty line is a glob expanded (relative to the package
+# root) with Sys.glob(), and a matched directory expands to the files under it.
+# No `.covrignore`, or one matching nothing, is a no-op.
+covrignore_excluded_files <- function(r_files, pkg_dir) {
+  if (length(r_files) == 0) {
+    return(r_files)
+  }
+  ignore_file <- file.path(pkg_dir, ".covrignore")
+  if (!file.exists(ignore_file)) {
+    return(r_files)
+  }
+  lines <- tryCatch(readLines(ignore_file, warn = FALSE), error = function(e) character(0))
+  lines <- trimws(lines)
+  lines <- lines[nzchar(lines)]
+  if (length(lines) == 0) {
+    return(r_files)
+  }
+  paths <- Sys.glob(file.path(pkg_dir, lines), dirmark = TRUE)
+  excluded <- unlist(
+    lapply(paths, function(x) {
+      if (dir.exists(x)) {
+        list.files(x, recursive = TRUE, all.files = TRUE, full.names = TRUE)
+      } else {
+        x
+      }
+    }),
+    use.names = FALSE
+  )
+  if (length(excluded) == 0) {
+    return(r_files)
+  }
+  norm <- function(p) normalizePath(p, winslash = "/", mustWork = FALSE)
+  r_files[!(norm(r_files) %in% norm(excluded))]
 }
 
 # Parse a mutant's `mutation_info` string ("File: <path>\nRange: sl:sc-el:ec\n
@@ -1871,6 +1931,15 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     full.names = TRUE
   )
   r_files <- filter_excluded_files(r_files, exclude_files)
+  # Also skip files covr's `.covrignore` excludes from coverage.
+  before_covrignore <- length(r_files)
+  r_files <- covrignore_excluded_files(r_files, pkg_dir)
+  if (length(r_files) < before_covrignore) {
+    message(sprintf(
+      "Skipping %d file(s) listed in .covrignore.",
+      before_covrignore - length(r_files)
+    ))
+  }
 
   link_or_copy <- function(from, to, recursive = FALSE) {
     from <- normalizePath(from, mustWork = TRUE)

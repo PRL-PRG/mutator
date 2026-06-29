@@ -151,14 +151,11 @@ original package (only the mutated `R/` file is materialised), so all parallel
 workers point at the same physical `src/`, `tests/`, etc. This is fast, and two
 design choices keep it correct:
 
-- **Compiled code is built once, not per mutant.** Earlier, the `installed`
-  strategy recompiled into `src/` on every `R CMD INSTALL`; with several installs
-  running at once against the same (symlinked) `src/` they clobbered each other's
-  `.o`/`.so` (`shared object not found`), so genuine survivors were misreported as
-  `KILLED`/`HANG`. The strategy now compiles once into a template library and
-  installs each mutant with `--no-libs`, which never writes into `src/`, so the
-  race is gone. (The `testthat` strategy was always immune: `pkgload::load_all()`
-  reuses the baseline's compiled `src/` since C code is never mutated.)
+- **Compiled code is built once, not per mutant.** For the `testthat` strategy,
+   `pkgload::load_all()` reuses the baseline's compiled `src/` since C code is 
+   never mutated.  The `installed`strategy compiles once into a template library and
+  installs each mutant with `--no-libs`, which never writes into `src/`. This prevents 
+  parallel workers from fighting over the same compiled objects.
 - **Snapshot references are not shared.** For `testthat` packages with `_snaps`
   directories, mutator gives each mutant its own snapshot copy while symlinking
   the rest of `tests/`, so filtered or parallel runs cannot rewrite shared
@@ -196,7 +193,7 @@ install.packages("pbmcapply")
 Not all code should be mutation-tested. Vendored/standalone files, generated
 code, or deprecated paths a suite is not meant to cover will mostly produce
 `SURVIVED` mutants and depress the score without telling you anything useful.
-There are two ways to exclude code.
+There are a few ways to exclude code.
 
 **1. By file, at the call site, with `exclude_files`.** A character vector of
 shell-style glob patterns matched against the base names of the `.R` files in
@@ -223,6 +220,26 @@ mutate_package("path/to/scales", exclude_files = c("import-standalone-*"))
   ```
 
   An unmatched `-start` excludes through the end of the file.
+
+**3. With covr's `# nocov` annotations.** mutator also honours
+[covr](https://covr.r-lib.org/)'s coverage-exclusion comments, so code you have
+already marked as untested-by-design needs no separate mutator directive:
+
+- `# nocov start` / `# nocov end` exclude the **line region** between them.
+- A bare `# nocov` excludes its **own line**, and may trail code:
+
+  ```r
+  if (impossible_state) {
+    stop("unreachable") # nocov
+  }
+  ```
+
+**4. With a covr `.covrignore` file.** If the package root has a `.covrignore`
+(covr's file-level coverage-exclusion list), mutator reads it too: each line is a
+glob expanded relative to the package root (a matched directory expands to the
+files under it), and matching `R/` files are skipped before generation — the
+same mechanism covr uses. So files you already exclude from coverage need no
+extra mutator configuration.
 
 **Granularity caveat.** Excluding whole _files_ and whole _functions_ is
 reliable. Finer than that is not, for operator mutations: R does not attach
