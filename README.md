@@ -182,6 +182,15 @@ The default (`isolate = FALSE`) is fast and correct for hermetic test suites;
 reach for `isolate = TRUE` (or `cores = 1`) only when a package's tests are not
 hermetic and you see parallel-only `KILLED`/`HANG` results.
 
+#### Progress bar
+
+When the optional [`pbmcapply`](https://cran.r-project.org/package=pbmcapply)
+package is installed, the multi-core test run shows a live progress bar. 
+
+```r
+install.packages("pbmcapply")
+```
+
 ### Excluding code from mutation
 
 Not all code should be mutation-tested. Vendored/standalone files, generated

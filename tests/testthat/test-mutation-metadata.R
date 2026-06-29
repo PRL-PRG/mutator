@@ -115,6 +115,36 @@ test_that("format_surviving_mutants lists file:line, mutation, and source contex
   expect_length(mutator:::format_surviving_mutants(list()), 0L)
 })
 
+test_that("format_surviving_mutants reports a range for multi-line spans", {
+  src <- tempfile(fileext = ".R")
+  writeLines(c(
+    "pretty_signif <- function(x) {",  # 1
+    "  mask_na <- is.na(x)",            # 2
+    "  ret <- rep(NA, length(x))",      # 3
+    "  ret[mask_na] <- 'NA'",           # 4
+    "  ret"                             # 5
+  ), src)
+  # An operator/constant mutant the engine could only pin to the whole function.
+  surv <- list(list(status = "SURVIVED", src = src,
+    mutation_info = sprintf("File: %s\nRange: 1:1-5:6\nDetails: 'NA' -> 'NA_integer_'", src)))
+  rep <- mutator:::format_surviving_mutants(surv, color = FALSE, context = 1L)
+  joined <- paste(rep, collapse = "\n")
+  expect_match(joined, paste0(basename(src), ":1-5"), fixed = TRUE)  # range, not ":1"
+  expect_false(grepl(paste0(basename(src), ":1 "), joined, fixed = TRUE))
+  expect_match(joined, "> 1 |", fixed = TRUE)   # span start marked
+  expect_match(joined, "> 5 |", fixed = TRUE)   # span end marked
+  expect_match(joined, "...", fixed = TRUE)     # long middle elided
+
+  # A single-line span keeps the plain `file:line` form (no range, no elision).
+  surv1 <- list(list(status = "SURVIVED", src = src,
+    mutation_info = sprintf("File: %s\nRange: 3:10-3:11\nDetails: 'NA' -> 'NA_integer_'", src)))
+  rep1 <- mutator:::format_surviving_mutants(surv1, color = FALSE, context = 1L)
+  joined1 <- paste(rep1, collapse = "\n")
+  expect_match(joined1, paste0(basename(src), ":3"), fixed = TRUE)
+  expect_false(grepl(":3-3", joined1, fixed = TRUE))
+  expect_false(grepl("...", joined1, fixed = TRUE))
+})
+
 test_that("format_surviving_mutants caps the listing with max_show", {
   src <- tempfile(fileext = ".R"); writeLines(c("a", "b", "c"), src)
   surv <- replicate(5, list(status = "SURVIVED", src = src,

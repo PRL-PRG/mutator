@@ -236,10 +236,12 @@ parse_mutation_info <- function(mutation_info, src = NULL) {
 }
 
 # Build a console report (a character vector of lines) listing surviving mutants
-# with `file:line`, the mutation, and a bit of source context. `color = NULL`
-# auto-detects ANSI support (via cli, if installed); `context` is the number of
-# source lines shown either side of the mutated line; at most `max_show` mutants
-# are detailed.
+# with `file:line` (or `file:start-end` when the engine could only locate the
+# mutant to an enclosing block), the mutation, and a bit of source context.
+# `color = NULL` auto-detects ANSI support (via cli, if installed); `context` is
+# the number of source lines shown either side of the mutated line (for a span,
+# the head and tail of the span, elided in the middle); at most `max_show`
+# mutants are detailed.
 format_surviving_mutants <- function(survivors, pkg_dir = NULL, color = NULL, context = 1L, max_show = 50L) {
   if (length(survivors) == 0L) {
     return(character(0))
@@ -284,8 +286,22 @@ format_surviving_mutants <- function(survivors, pkg_dir = NULL, color = NULL, co
     info <- parse_mutation_info(m$mutation_info, m$src)
     file <- disp_path(info$file)
     line <- info$start_line
+    # When the engine could only locate the mutant to an enclosing expression
+    # (operator/constant mutants have no srcref of their own, so the reported
+    # span is the whole containing block), end_line > start_line. Report that as
+    # a `start-end` range rather than a single line, which would imply a
+    # precision we do not have.
+    end_line <- if (!is.na(info$end_line)) max(info$end_line, line) else line
+    multi_line <- !is.na(line) && end_line > line
     det <- if (is.na(info$details)) "" else info$details
-    loc <- sprintf("%s:%s", file, if (is.na(line)) "?" else line)
+    line_label <- if (is.na(line)) {
+      "?"
+    } else if (multi_line) {
+      sprintf("%d-%d", line, end_line)
+    } else {
+      as.character(line)
+    }
+    loc <- sprintf("%s:%s", file, line_label)
     out <- c(out, sprintf(
       "  %s   %s",
       if (styled) cli::style_bold(cli::col_cyan(loc)) else loc, det
@@ -294,15 +310,30 @@ format_surviving_mutants <- function(survivors, pkg_dir = NULL, color = NULL, co
     if (context > 0L && !is.na(line) && !is.null(m$src) && file.exists(m$src)) {
       srclines <- tryCatch(readLines(m$src, warn = FALSE), error = function(e) character(0))
       if (length(srclines) >= line) {
-        lo <- max(1L, line - context)
-        hi <- min(length(srclines), line + context)
-        width <- nchar(as.character(hi))
-        for (i in lo:hi) {
+        end_line <- min(end_line, length(srclines))
+        # Single-line mutants: a tight window with the mutated columns marked.
+        # Multi-line (imprecise) mutants: show the whole span so the
+        # `start-end` header is not contradicted by a lone caret; elide the
+        # middle of long spans to keep the listing compact.
+        gap_after <- NA_integer_
+        if (!multi_line) {
+          idx <- max(1L, line - context):min(length(srclines), line + context)
+        } else {
+          head_hi <- min(line + context, end_line)
+          tail_lo <- max(end_line - context, head_hi + 1L)
+          if (tail_lo > head_hi + 1L) {
+            idx <- c(line:head_hi, tail_lo:end_line)
+            gap_after <- head_hi
+          } else {
+            idx <- line:end_line
+          }
+        }
+        width <- nchar(as.character(max(idx)))
+        for (i in idx) {
           txt <- srclines[i]
-          if (i == line && styled) {
-            single_line <- !is.na(info$end_line) && info$end_line == info$start_line &&
-              !is.na(info$start_col) && !is.na(info$end_col)
-            if (single_line) {
+          in_range <- i >= line && i <= end_line
+          if (in_range && styled && !multi_line) {
+            if (!is.na(info$start_col) && !is.na(info$end_col)) {
               sc <- max(1L, info$start_col)
               ec <- min(info$end_col, nchar(txt))
               if (ec >= sc) {
@@ -316,10 +347,15 @@ format_surviving_mutants <- function(survivors, pkg_dir = NULL, color = NULL, co
               txt <- cli::style_bold(txt)
             }
           }
-          gutter <- if (i == line) ">" else " "
+          gutter <- if (in_range) ">" else " "
           num <- formatC(i, width = width)
           if (styled) num <- cli::col_grey(num)
           out <- c(out, sprintf("    %s %s | %s", gutter, num, txt))
+          if (!is.na(gap_after) && i == gap_after) {
+            ell_num <- formatC("", width = width)
+            if (styled) ell_num <- cli::col_grey(ell_num)
+            out <- c(out, sprintf("    %s %s | ...", " ", ell_num))
+          }
         }
       }
     }
@@ -522,12 +558,42 @@ nearest_brace_srcref <- function(orig_node, imp_node, path) {
   best
 }
 
+# Fallback location oracle that needs no imputesrcref: walk the original
+# (keep.source) tree down `path` and return the srcref of the nearest enclosing
+# `{`-block statement. A function body parsed with keep.source carries a
+# per-statement srcref list on its `{` block, where entry `[[i]]` is the srcref
+# of the block's i-th element (position 1 being `{` itself). So descending into
+# child `idx` of a block yields that statement's line-precise span. This turns an
+# operator/constant mutant's coarse whole-function bounds into the enclosing
+# statement's line even when imputesrcref is absent. NULL when the path crosses
+# no block (e.g. a statement-level operator the engine already located).
+nearest_statement_srcref <- function(node, path) {
+  best <- NULL
+  cur <- node
+  for (idx in path) {
+    if (!is.call(cur) || length(cur) < idx) {
+      return(best)
+    }
+    if (is.symbol(cur[[1]]) && identical(as.character(cur[[1]]), "{")) {
+      srl <- attr(cur, "srcref", exact = TRUE)
+      if (is.list(srl) && idx <= length(srl) && !is.null(srl[[idx]])) {
+        best <- srl[[idx]]
+      }
+    }
+    cur <- cur[[idx]]
+  }
+  best
+}
+
 # Given an AST mutant `m` (a full-file expression list with exactly one top-level
-# expression changed), refine the coarse `info` location to the precise span of
-# the mutated sub-expression when an enclosing imputed brace is available.
-# Returns `info` unchanged when no refinement applies.
+# expression changed), refine the coarse `info` location. Two oracles, tried in
+# order of precision: (1) the nearest enclosing imputed transparent brace
+# (sub-statement precise, only when imputesrcref supplied a non-NULL
+# `imputed_exprs`); (2) the nearest enclosing `{`-block statement from the
+# original keep.source tree (line precise, always available). Returns `info`
+# unchanged when neither yields a usable span.
 refine_mutation_info <- function(info, parsed, imputed_exprs, m) {
-  if (!is.list(info) || is.null(imputed_exprs) || length(m) != length(parsed)) {
+  if (!is.list(info) || length(m) != length(parsed)) {
     return(info)
   }
   changed <- NULL
@@ -544,10 +610,20 @@ refine_mutation_info <- function(info, parsed, imputed_exprs, m) {
   if (is.null(path)) {
     return(info)
   }
-  sr <- tryCatch(
-    nearest_brace_srcref(parsed[[changed]], imputed_exprs[[changed]], path),
-    error = function(e) NULL
-  )
+  sr <- if (!is.null(imputed_exprs)) {
+    tryCatch(
+      nearest_brace_srcref(parsed[[changed]], imputed_exprs[[changed]], path),
+      error = function(e) NULL
+    )
+  } else {
+    NULL
+  }
+  if (is.null(sr) || length(sr) < 4 || anyNA(sr[1:4])) {
+    sr <- tryCatch(
+      nearest_statement_srcref(parsed[[changed]], path),
+      error = function(e) NULL
+    )
+  }
   if (is.null(sr) || length(sr) < 4 || anyNA(sr[1:4])) {
     return(info)
   }
@@ -659,11 +735,12 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
       next
     }
 
-    # Sharpen the reported location to the precise sub-expression span when the
-    # optional imputesrcref oracle is available. Done after the exclusion check
-    # so `# mutator:ignore-*` keeps its documented function-granular semantics
-    # regardless of whether the optional package is installed.
-    if (is.list(info) && !is.null(imputed_exprs)) {
+    # Sharpen the reported location: to the precise sub-expression span when the
+    # optional imputesrcref oracle is available, otherwise at least to the
+    # enclosing statement line via the original keep.source tree. Done after the
+    # exclusion check so `# mutator:ignore-*` keeps its documented
+    # function-granular semantics regardless of which oracle applies.
+    if (is.list(info)) {
       info <- refine_mutation_info(info, parsed, imputed_exprs, m)
     }
 
@@ -2081,8 +2158,23 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       )
     }
 
+    message(sprintf(
+      "Running the test suites of %d mutant%s...",
+      length(mutant_ids), if (length(mutant_ids) == 1) "" else "s"
+    ))
     if (workers_to_use > 1 && future::supportsMulticore()) {
-      parallel_results <- parallel::mclapply(
+      # Forked workers (copy-on-write, no global serialization) with dynamic
+      # scheduling. When the optional 'pbmcapply' package (mainstream CRAN, in
+      # Suggests) is installed, use its drop-in pbmclapply for a progress bar:
+      # it is mclapply underneath plus a lightweight monitor, so it keeps the
+      # forking speed and mc.preschedule semantics. Fall back to mclapply (no
+      # bar) when it is absent.
+      mc_lapply <- if (requireNamespace("pbmcapply", quietly = TRUE)) {
+        pbmcapply::pbmclapply
+      } else {
+        parallel::mclapply
+      }
+      parallel_results <- mc_lapply(
         mutant_ids,
         run_one_mutant,
         mc.cores = workers_to_use,

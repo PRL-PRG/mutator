@@ -30,7 +30,8 @@ Imports:
 Suggests:
     xml2,
     pkgbuild,
-    cli
+    cli,
+    pbmcapply
 Enhances:
     imputesrcref
 LinkingTo:

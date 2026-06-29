@@ -1231,3 +1231,55 @@ test_that("location refinement sharpens operator mutants when imputesrcref is pr
         expect_false(grepl("\\{\\s*\\n\\s*a [+-] b\\s*\\n\\s*\\}", txt))
     }
 })
+
+test_that("statement-srcref fallback sharpens locations without imputesrcref", {
+    refine <- mutator:::refine_mutation_info
+
+    src <- tempfile(fileext = ".R")
+    on.exit(unlink(src), add = TRUE)
+    writeLines(c(
+        "f <- function(x) {",        # 1
+        "  mask <- is.na(x)",        # 2
+        "  ret <- rep(NA, length(x))",  # 3
+        "  ret",                     # 4
+        "}"                          # 5
+    ), src)
+    parsed <- parse(src, keep.source = TRUE)
+
+    # Mutate the `NA` constant inside `rep(NA, length(x))` on line 3.
+    m <- parsed
+    m[[1]][[3]][[3]][[3]][[3]][[2]] <- quote(NA_integer_)
+
+    # Coarse bounds span the whole function (1-4) as the engine would report.
+    coarse <- list(file_path = src, start_line = 1L, start_col = 1L,
+                   end_line = 4L, end_col = 1L)
+
+    # With no imputed tree the statement fallback still pins it to line 3.
+    refined <- refine(coarse, parsed, NULL, m)
+    expect_equal(refined$start_line, 3L)
+    expect_equal(refined$end_line, 3L)
+})
+
+test_that("nearest_statement_srcref returns the enclosing block statement srcref", {
+    nss <- mutator:::nearest_statement_srcref
+
+    src <- tempfile(fileext = ".R")
+    on.exit(unlink(src), add = TRUE)
+    writeLines(c(
+        "g <- function(x) {",  # 1
+        "  a <- x + 1",        # 2
+        "  a",                 # 3
+        "}"                    # 4
+    ), src)
+    parsed <- parse(src, keep.source = TRUE)
+
+    # Path to the `+` inside `a <- x + 1`: [[3]] fn-def, [[3]] body block,
+    # [[2]] first statement, [[3]] RHS `x + 1`, [[1]] the `+`.
+    sr <- nss(parsed[[1]], c(3L, 3L, 2L, 3L, 1L))
+    expect_false(is.null(sr))
+    expect_equal(as.integer(sr)[1], 2L)   # statement is on line 2
+    expect_equal(as.integer(sr)[3], 2L)
+
+    # A path crossing no block yields NULL (nothing to sharpen).
+    expect_null(nss(quote(a + b), c(1L)))
+})
