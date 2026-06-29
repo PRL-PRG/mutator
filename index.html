@@ -167,7 +167,7 @@
 <p>By default each mutant package copy <em>symlinks</em> the unchanged directories of the original package (only the mutated <code>R/</code> file is materialised), so all parallel workers point at the same physical <code>src/</code>, <code>tests/</code>, etc. This is fast, and two design choices keep it correct:</p>
 <ul>
 <li>
-<strong>Compiled code is built once, not per mutant.</strong> Earlier, the <code>installed</code> strategy recompiled into <code>src/</code> on every <code>R CMD INSTALL</code>; with several installs running at once against the same (symlinked) <code>src/</code> they clobbered each other’s <code>.o</code>/<code>.so</code> (<code>shared object not found</code>), so genuine survivors were misreported as <code>KILLED</code>/<code>HANG</code>. The strategy now compiles once into a template library and installs each mutant with <code>--no-libs</code>, which never writes into <code>src/</code>, so the race is gone. (The <code>testthat</code> strategy was always immune: <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> reuses the baseline’s compiled <code>src/</code> since C code is never mutated.)</li>
+<strong>Compiled code is built once, not per mutant.</strong> For the <code>testthat</code> strategy, <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> reuses the baseline’s compiled <code>src/</code> since C code is never mutated. The <code>installed</code>strategy compiles once into a template library and installs each mutant with <code>--no-libs</code>, which never writes into <code>src/</code>. This prevents parallel workers from fighting over the same compiled objects.</li>
 <li>
 <strong>Snapshot references are not shared.</strong> For <code>testthat</code> packages with <code>_snaps</code> directories, mutator gives each mutant its own snapshot copy while symlinking the rest of <code>tests/</code>, so filtered or parallel runs cannot rewrite shared snapshot references.</li>
 </ul>
@@ -192,7 +192,7 @@
 <div class="section level3">
 <h3 id="excluding-code-from-mutation">Excluding code from mutation<a class="anchor" aria-label="anchor" href="#excluding-code-from-mutation"></a>
 </h3>
-<p>Not all code should be mutation-tested. Vendored/standalone files, generated code, or deprecated paths a suite is not meant to cover will mostly produce <code>SURVIVED</code> mutants and depress the score without telling you anything useful. There are two ways to exclude code.</p>
+<p>Not all code should be mutation-tested. Vendored/standalone files, generated code, or deprecated paths a suite is not meant to cover will mostly produce <code>SURVIVED</code> mutants and depress the score without telling you anything useful. There are a few ways to exclude code.</p>
 <p><strong>1. By file, at the call site, with <code>exclude_files</code>.</strong> A character vector of shell-style glob patterns matched against the base names of the <code>.R</code> files in <code>R/</code>. Matching files are skipped entirely before any mutants are generated:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/scales"</span>, exclude_files <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"import-standalone-*"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
@@ -211,13 +211,25 @@
 <p>An unmatched <code>-start</code> excludes through the end of the file.</p>
 </li>
 </ul>
+<p><strong>3. With covr’s <code># nocov</code> annotations.</strong> mutator also honours <a href="https://covr.r-lib.org/" class="external-link">covr</a>’s coverage-exclusion comments, so code you have already marked as untested-by-design needs no separate mutator directive:</p>
+<ul>
+<li><p><code># nocov start</code> / <code># nocov end</code> exclude the <strong>line region</strong> between them.</p></li>
+<li>
+<p>A bare <code># nocov</code> excludes its <strong>own line</strong>, and may trail code:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="va">impossible_state</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"unreachable"</span><span class="op">)</span> <span class="co"># nocov</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+</li>
+</ul>
+<p><strong>4. With a covr <code>.covrignore</code> file.</strong> If the package root has a <code>.covrignore</code> (covr’s file-level coverage-exclusion list), mutator reads it too: each line is a glob expanded relative to the package root (a matched directory expands to the files under it), and matching <code>R/</code> files are skipped before generation — the same mechanism covr uses. So files you already exclude from coverage need no extra mutator configuration.</p>
 <p><strong>Granularity caveat.</strong> Excluding whole <em>files</em> and whole <em>functions</em> is reliable. Finer than that is not, for operator mutations: R does not attach source references to nested expressions, so the engine resolves an operator mutant’s position only to its enclosing top-level definition. A region directive inside a function therefore excludes that function’s operator mutants as a group: you cannot single out one operator mid-function. Line-deletion mutants <em>are</em> excluded line-precisely. In practice, wrap whole functions, not fragments.</p>
 </div>
 <div class="section level3">
 <h3 id="coverage-guided-test-selection-coverage_guided">Coverage-guided test selection (<code>coverage_guided</code>)<a class="anchor" aria-label="anchor" href="#coverage-guided-test-selection-coverage_guided"></a>
 </h3>
 <p>Most mutants are settled by a small subset of the suite, and a mutant on a line that <strong>no test exercises</strong> can never be killed. With <code>coverage_guided = TRUE</code> (<code>testthat</code> strategy only) mutator measures coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr</a> and then, for each mutant, runs only the test files that cover its mutated line, and skips running tests altogether for mutants on uncovered lines (reported <code>SURVIVED</code> immediately).</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>The single coverage run also serves as the baseline check (it runs the package’s own <code>tests/testthat.R</code> harness, which fails if any test fails), so the suite is not run twice. Selection is at the <strong>test-file</strong> level, as testthat filters tests by file, and assumes the suite deterministically exercises the code, so it changes <em>which</em> tests run without changing a mutant’s verdict.</p>
 <p>Requires the <code>covr</code> package. Coverage attribution (and therefore speed-up) depends on the backend (<code>coverage_backend</code>):</p>
@@ -225,7 +237,7 @@
 <li><p><strong><code>"record_tests"</code></strong> (default) uses covr’s <code>record_tests</code> in a single run and relies only on covr’s public output. Its limitation: covr credits a covered line to the <em>deepest test-directory frame</em> on the call stack, so when a test reaches package code through a function defined in a <code>helper-*.R</code> / <code>setup-*.R</code> file (a common pattern), covr attributes it to the helper, not the originating <code>test-*.R</code>. The true triggering test is then unknown, so mutator conservatively runs the <strong>full suite</strong> for that mutant. Packages that wrap their API in shared test helpers therefore see less speed-up.</p></li>
 <li>
 <p><strong><code>"per_file"</code></strong> instruments the package once and runs the suite a single time through a reporter that snapshots coverage per test file, giving <strong>exact file-level attribution</strong> with no helper fallback, at roughly the same cost as the single <code>record_tests</code> run (often faster overall, since more mutants get a narrowed test set). It reaches into covr internals, so it is opt-in:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>, coverage_backend <span class="op">=</span> <span class="st">"per_file"</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ul>
@@ -236,11 +248,11 @@
 </h3>
 <p>Each reported mutant carries a source <code>Range:</code> (<code>start:col-end:col</code>). For statement- and line-deletion mutants this is precise, but <strong>operator mutants</strong> (<code>+</code>, <code>&lt;</code>, <code>&amp;&amp;</code>, …) are different: R attaches no <code>srcref</code> to nested call objects, so the engine can only report the bounds of the <em>enclosing top-level expression</em>, effectively a loop body or even the whole function. A surviving <code>==</code>-to-<code>!=</code> mutant in a 40-line function therefore points at all 40 lines.</p>
 <p>If the optional <a href="https://github.com/PRL-PRG/imputesrcref" class="external-link"><code>imputesrcref</code></a> package is installed, <code>mutator</code> uses it to recover precise spans for many operator mutants, typically narrowing a whole-function range down to the exact sub-expression on a single line. It is a GitHub-only optional package listed in <code>Enhances</code>; install it yourself to opt in:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/imputesrcref"</span><span class="op">)</span></span></code></pre></div>
 <p>When it is <strong>not</strong> installed, <code>mutator</code> behaves exactly as before (coarser operator ranges); nothing else changes. The refinement is used only as a read-only source-location oracle: mutant files are deparsed from the original code and are <strong>byte-for-byte identical</strong> whether or not <code>imputesrcref</code> is present, and <code># mutator:ignore-*</code> directives keep their function-granular semantics regardless. For best results, install the package under test from source with parse data retained, since <code>imputesrcref</code> reads it:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"&lt;pkg&gt;"</span>, INSTALL_opts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"--with-keep.source"</span>, <span class="st">"--with-keep.parse.data"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -250,7 +262,7 @@
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>
@@ -268,7 +280,7 @@ base_url: https://api.openai.com/v1</code></pre>
 </ol>
 <p>If nothing is configured, the model defaults to <code>gpt-4</code> and the base URL to the public OpenAI API. Set <code>base_url</code> to target a self-hosted or alternative OpenAI-compatible service (for example <code>http://localhost:11434/v1</code>).</p>
 <p>Enable the analysis when running package mutation tests:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, detectEqMutants <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>Survived mutants are analyzed in <strong>bounded batches</strong> (default 25 per request), and each mutant is shown to the model as a small <strong>unified diff</strong> of its edit (plus a short change label) rather than its full mutated source. This is compact, unambiguous, and in a format LLMs read natively. When <code><a href="reference/mutate_package.html">mutate_package()</a></code> runs with <code>cores &gt; 1</code> the batches are sent <strong>concurrently</strong>, which (with the bounded size) keeps the equivalence pass fast and avoids the truncated responses that otherwise drop verdicts.</p>
 <p>For mutants the model flags as <strong>EQUIVALENT</strong> (they are excluded from the adjusted mutation score), it also returns a one-sentence <strong>reason</strong>, stored as <code>equivalence_reason</code> on the mutant so the call can be audited. No reason is requested for <code>NOT_EQUIVALENT</code>/<code>DONT_KNOW</code>, keeping responses small.</p>
@@ -375,7 +387,7 @@ base_url: https://api.openai.com/v1</code></pre>
 </li>
 </ul>
 <p>Run the full test suite with:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
