@@ -183,6 +183,34 @@ Installs (no root required):
 
 ## Running
 
+### One-shot (recommended)
+
+`run_all.sh` chains the whole pipeline (optional `setup` → run → baselines →
+summarize) and **blocks system suspend** for the duration (auto-released on exit):
+
+```bash
+# defaults: 5 testthat packages, all tool-modes, N=500
+nohup bash benchmarks/run_all.sh > benchmarks/results/run_all.log 2>&1 &
+tail -f benchmarks/results/run_all.log
+
+bash benchmarks/run_all.sh --setup                       # also install the tools
+bash benchmarks/run_all.sh --packages prettyunits --budget 100   # quick subset
+bash benchmarks/run_all.sh --help                        # all options
+```
+
+To reproduce **exactly** the configuration behind `results/SUMMARY.md` (the 7
+packages (5 testthat + lumberjack + R.methodsS3), all tool-modes, N=500, with
+`--setup`):
+
+```bash
+nohup bash benchmarks/reproduce.sh > benchmarks/results/reproduce.log 2>&1 &
+```
+
+It's a long run (several hours; universalmutator dominates). Both scripts pass
+extra flags through (`--no-inhibit`, `--budget`, etc.).
+
+### Manual / per-step
+
 ```bash
 # Full run: 5 packages × 4 tool-modes at N=500
 # (mutator, muttest full, muttest matched, universalmutator regex)
