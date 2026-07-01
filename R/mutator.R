@@ -307,11 +307,15 @@ mutant_display_path <- function(path, pkg_dir = NULL) {
     return("<unknown>")
   }
   if (!is.null(pkg_dir)) {
-    p <- tryCatch(normalizePath(path, mustWork = FALSE), error = function(e) path)
-    b <- tryCatch(normalizePath(pkg_dir, mustWork = FALSE), error = function(e) pkg_dir)
-    sep <- .Platform$file.sep
-    if (startsWith(p, paste0(b, sep))) {
-      return(substring(p, nchar(b) + 2L))
+    normalize_display_path <- function(x) {
+      x <- tryCatch(normalizePath(x, winslash = "/", mustWork = FALSE), error = function(e) x)
+      gsub("\\\\", "/", x)
+    }
+    p <- normalize_display_path(path)
+    b <- sub("/+$", "", normalize_display_path(pkg_dir))
+    prefix <- paste0(b, "/")
+    if (startsWith(p, prefix)) {
+      return(substring(p, nchar(prefix) + 1L))
     }
   }
   basename(path)

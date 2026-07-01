@@ -169,6 +169,12 @@ test_that("format_surviving_mutants shows the path relative to pkg_dir", {
     mutation_info = sprintf("File: %s\nRange: 2:1-2:22\nDetails: '>' -> '<'", src)))
   rep <- mutator:::format_surviving_mutants(surv, pkg_dir = pkg, color = FALSE, context = 0L)
   expect_match(paste(rep, collapse = "\n"), "R/calc.R:2", fixed = TRUE)   # relative to pkg_dir
+  win_src <- gsub("/", "\\\\", normalizePath(src, winslash = "/", mustWork = FALSE))
+  win_pkg <- gsub("/", "\\\\", normalizePath(pkg, winslash = "/", mustWork = FALSE))
+  win_surv <- list(list(status = "SURVIVED", src = win_src,
+    mutation_info = sprintf("File: %s\nRange: 2:1-2:22\nDetails: '>' -> '<'", win_src)))
+  win_rep <- mutator:::format_surviving_mutants(win_surv, pkg_dir = win_pkg, color = FALSE, context = 0L)
+  expect_match(paste(win_rep, collapse = "\n"), "R/calc.R:2", fixed = TRUE)
   # Without pkg_dir, falls back to the basename.
   rep2 <- mutator:::format_surviving_mutants(surv, color = FALSE, context = 0L)
   expect_match(paste(rep2, collapse = "\n"), "calc.R:2", fixed = TRUE)
