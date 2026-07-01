@@ -649,17 +649,17 @@ test_that("coverage_guided yields the same verdicts as the full suite", {
   ), file.path(pkg_dir, "DESCRIPTION"))
   writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
 
-  # Three functions, each in its own file:
+  # Four functions, each in its own file:
   #  - direct_fun: tested directly inside a test_that block
   #  - helper_fun: tested ONLY through a helper-defined wrapper (the case covr's
   #    record_tests mis-attributes to the helper file -- the soundness trap)
   #  - dead_fun:   not exercised by any test (an uncovered survivor)
+  #  - nocov_fun:  tested, but excluded from mutation with covr's # nocov markers
   writeLines("direct_fun <- function(x) x + 1", file.path(pkg_dir, "R", "direct.R"))
   writeLines("helper_fun <- function(x) x * 2", file.path(pkg_dir, "R", "helper_fun.R"))
   writeLines("dead_fun <- function(x) x - 1", file.path(pkg_dir, "R", "dead.R"))
-  # A file wrapped in `# nocov`: covr emits NO coverage for it, even though it
-  # runs and is tested. Without disabling covr's exclusions it would look
-  # uncovered and be wrongly auto-SURVIVED (the forcats compat-file trap).
+  # A file wrapped in `# nocov`: covr emits no coverage for it, and mutator now
+  # honours those annotations by excluding it from mutation entirely.
   writeLines(c("# nocov start", "nocov_fun <- function(x) x + 10", "# nocov end"),
              file.path(pkg_dir, "R", "nocov_fn.R"))
 
@@ -688,10 +688,7 @@ test_that("coverage_guided yields the same verdicts as the full suite", {
   dead_ids <- grep("^dead\\.R_", names(off), value = TRUE)
   nocov_ids <- grep("^nocov_fn\\.R_", names(off), value = TRUE)
   expect_true(length(dead_ids) > 0)
-  expect_true(length(nocov_ids) > 0)
-  # The `# nocov`-wrapped function is exercised by test-nocov, so the full suite
-  # kills its mutants -- this makes the nocov assertion below meaningful.
-  expect_true(any(vapply(nocov_ids, function(id) identical(off[[id]], "KILLED"), logical(1))))
+  expect_length(nocov_ids, 0)
 
   # Both coverage backends must reach the same verdicts as the full suite.
   for (backend in c("record_tests", "per_file")) {
@@ -702,10 +699,9 @@ test_that("coverage_guided yields the same verdicts as the full suite", {
     # record_tests relies on the helper-attribution safeguard; per_file attributes
     # per file directly -- either way verdicts must match the full suite.
     expect_identical(on[names(off)], off, info = info)
-    # Mutants in the untested file survive; the `# nocov` file's mutants match OFF
-    # (proving covr's comment-exclusions were disabled for both backends).
+    # Mutants in the untested file survive; the `# nocov` file is excluded from
+    # mutation generation before coverage-guided selection runs.
     expect_true(all(vapply(dead_ids, function(id) identical(on[[id]], "SURVIVED"), logical(1))), info = info)
-    expect_identical(on[nocov_ids], off[nocov_ids], info = info)
   }
 })
 

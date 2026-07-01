@@ -95,6 +95,10 @@ delete_line_mutants <- function(src_file,
                                 start_idx = 1,
                                 exclude_lines = integer()) {
   if (is.null(file_base)) file_base <- basename(src_file)
+  if (length(max_del) == 1L && !is.na(max_del) && max_del <= 0) {
+    return(list())
+  }
+
   lines <- readLines(src_file)
 
   # Filter out empty lines and comment lines
