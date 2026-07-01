@@ -8,9 +8,14 @@
 # once and without coverage instrumentation). Takes the MIN of 2 runs to drop
 # first-run compilation noise. Writes results/baselines.csv (package, baseline_s).
 
-Sys.setenv(BENCH_ROOT = "/home/pierre/Documents/RLanguage/MutatoR/benchmarks")
-suppressWarnings(suppressMessages(pkgload::load_all("/home/pierre/Documents/RLanguage/MutatoR", quiet = TRUE)))
-source(file.path(Sys.getenv("BENCH_ROOT"), "lib", "common.R"))
+# Derive paths from this script's location (portable across machines).
+.args <- commandArgs(FALSE)
+.f <- sub("^--file=", "", .args[grep("^--file=", .args)])
+BENCH_DIR <- if (length(.f)) dirname(normalizePath(.f)) else file.path(getwd(), "benchmarks")
+REPO_DIR  <- normalizePath(file.path(BENCH_DIR, ".."), mustWork = FALSE)
+Sys.setenv(BENCH_ROOT = BENCH_DIR)
+suppressWarnings(suppressMessages(pkgload::load_all(REPO_DIR, quiet = TRUE)))
+source(file.path(BENCH_DIR, "lib", "common.R"))
 
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args)) {

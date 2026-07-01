@@ -19,6 +19,26 @@ csv  <- csvs[1]                                   # SUMMARY.md written next to t
 d <- do.call(rbind, lapply(csvs, read.csv, stringsAsFactors = FALSE))
 d <- d[!duplicated(d[c("tool", "mode", "package")]), ]
 
+# Run provenance: prefer run_meta.txt written at benchmark time; else fall back to
+# the current checkout (git) and today's date.
+meta_file <- file.path(dirname(csv), "run_meta.txt")
+if (file.exists(meta_file)) {
+  ml <- readLines(meta_file, warn = FALSE)
+  run_date <- sub("^run_date=", "", grep("^run_date=", ml, value = TRUE))[1]
+  commit   <- sub("^mutator_commit=", "", grep("^mutator_commit=", ml, value = TRUE))[1]
+} else {
+  repo   <- normalizePath(file.path(here, ".."), mustWork = FALSE)
+  commit <- tryCatch(trimws(system2("git", c("-C", repo, "rev-parse", "--short", "HEAD"),
+                     stdout = TRUE, stderr = FALSE)), error = function(e) NA_character_)
+  dirty  <- tryCatch(length(system2("git", c("-C", repo, "status", "--porcelain"),
+                     stdout = TRUE, stderr = FALSE)) > 0, error = function(e) FALSE)
+  if (length(commit) && !is.na(commit) && nzchar(commit) && isTRUE(dirty))
+    commit <- paste0(commit, "-dirty")
+  run_date <- paste0(format(Sys.Date()), " (summary generated; run_meta.txt absent)")
+}
+if (!length(commit) || is.na(commit) || !nzchar(commit)) commit <- "unknown"
+meta_md <- sprintf("_Run: %s · mutator commit `%s`._\n\n", run_date, commit)
+
 fmt_score <- function(r) {
   s <- sprintf("%.1f", r$mutation_score)
   if (!is.na(r$score_ci_low))
@@ -138,6 +158,7 @@ base_note <- if (is.null(baselines))
 
 out <- paste0(
   "# Mutation-testing benchmark — summary\n\n",
+  meta_md,
   "Scores are the **comparable** basis (muttest = errors-as-kills, matched operators ",
   "where available); times are wall-clock at N=500. muttest is testthat-only (n/a on ",
   "non-testthat packages). See the detailed table for muttest's native scores and CIs.\n\n",

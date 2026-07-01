@@ -41,6 +41,20 @@ skip_deps <- "--skip-deps" %in% argv   # by default, auto-install each target's 
 # --- load mutator (dev mode) ------------------------------------------------
 suppressWarnings(suppressMessages(pkgload::load_all(REPO_ROOT, quiet = TRUE)))
 
+# Record run metadata (date + mutator commit) next to the results, so SUMMARY.md
+# can report exactly which commit produced the numbers.
+.git <- function(a) tryCatch(trimws(paste(
+  system2("git", c("-C", REPO_ROOT, a), stdout = TRUE, stderr = FALSE), collapse = "")),
+  error = function(e) NA_character_)
+.commit <- .git(c("rev-parse", "--short", "HEAD"))
+.dirty  <- tryCatch(length(system2("git", c("-C", REPO_ROOT, "status", "--porcelain"),
+                     stdout = TRUE, stderr = FALSE)) > 0, error = function(e) FALSE)
+dir.create(dirname(out_base), recursive = TRUE, showWarnings = FALSE)
+writeLines(c(
+  sprintf("run_date=%s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+  sprintf("mutator_commit=%s%s", .commit %||% "unknown", if (isTRUE(.dirty)) "-dirty" else "")),
+  file.path(dirname(out_base), "run_meta.txt"))
+
 runners <- list(
   mutator          = bench_mutator,
   muttest          = function(pkg_dir, budget) bench_muttest(pkg_dir, budget, mode = "full"),

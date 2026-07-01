@@ -9,9 +9,13 @@
 # survivors are genuine. If FALSE-score is materially higher, coverage_guided was
 # manufacturing false survivors.
 
-Sys.setenv(BENCH_ROOT = "/home/pierre/Documents/RLanguage/MutatoR/benchmarks")
-suppressWarnings(suppressMessages(pkgload::load_all("/home/pierre/Documents/RLanguage/MutatoR", quiet = TRUE)))
-source("/home/pierre/Documents/RLanguage/MutatoR/benchmarks/lib/common.R")
+.args <- commandArgs(FALSE)
+.f <- sub("^--file=", "", .args[grep("^--file=", .args)])
+BENCH_DIR <- if (length(.f)) dirname(normalizePath(.f)) else file.path(getwd(), "benchmarks")
+REPO_DIR  <- normalizePath(file.path(BENCH_DIR, ".."), mustWork = FALSE)
+Sys.setenv(BENCH_ROOT = BENCH_DIR)
+suppressWarnings(suppressMessages(pkgload::load_all(REPO_DIR, quiet = TRUE)))
+source(file.path(BENCH_DIR, "lib", "common.R"))
 
 # coverage-guided scores from the benchmark, for reference
 ref <- c(forcats = 70.4, scales = 65.0)
