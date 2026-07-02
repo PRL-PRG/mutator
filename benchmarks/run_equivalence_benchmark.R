@@ -38,6 +38,7 @@ out_base <- get_opt("--out", file.path(RESULTS_DIR, "equivalence_benchmark"))
 skip_deps <- has_flag("--skip-deps")
 mock_api <- has_flag("--mock-api")
 randomize <- !has_flag("--no-randomize")
+reuse_datasets <- has_flag("--reuse-datasets")
 
 for (nm in c("mutants_per_pkg", "repeats", "candidate_budget", "batch_size", "eq_workers", "seed")) {
   if (is.na(get(nm)) || get(nm) < 1L) stop(sprintf("Invalid positive integer for %s", nm), call. = FALSE)
@@ -72,6 +73,7 @@ writeLines(c(
   sprintf("eq_workers=%d", eq_workers),
   sprintf("seed=%d", seed),
   sprintf("randomize=%s", randomize),
+  sprintf("reuse_datasets=%s", reuse_datasets),
   sprintf("mock_api=%s", mock_api)
 ), paste0(out_base, "_meta.txt"))
 
@@ -85,15 +87,30 @@ rel_path <- function(path, root) {
 
 stable_hash <- function(x) {
   txt <- paste(as.character(x), collapse = "\n")
-  tmp <- tempfile("mutator-eq-hash-")
-  on.exit(unlink(tmp), add = TRUE)
-  writeLines(txt, tmp, useBytes = TRUE)
-  unname(tools::md5sum(tmp))
+  digest::digest(txt, algo = "xxhash32", serialize = FALSE)
 }
 
 write_table_pair <- function(x, prefix) {
   utils::write.csv(x, paste0(prefix, ".csv"), row.names = FALSE)
   jsonlite::write_json(x, paste0(prefix, ".json"), pretty = TRUE, auto_unbox = TRUE, na = "null")
+}
+
+randomize_jobs <- function(jobs, seed) {
+  set.seed(seed)
+  remaining <- sample(seq_len(nrow(jobs)))
+  ordered <- integer(0)
+  last_key <- NA_character_
+  while (length(remaining)) {
+    keys <- paste(jobs$package[remaining], jobs$model[remaining], sep = "\r")
+    ok <- which(keys != last_key)
+    pick_pool <- if (length(ok)) ok else seq_along(remaining)
+    pick <- sample(pick_pool, 1L)
+    chosen <- remaining[[pick]]
+    ordered <- c(ordered, chosen)
+    last_key <- paste(jobs$package[[chosen]], jobs$model[[chosen]], sep = "\r")
+    remaining <- remaining[-pick]
+  }
+  jobs[ordered, , drop = FALSE]
 }
 
 empty_results <- data.frame(
@@ -207,6 +224,30 @@ build_prompt_dataset <- function(pkg, pkg_dir) {
     )
   }))
   write_table_pair(manifest, file.path(pkg_art, "mutants"))
+  list(pkg = pkg, work = work, mutants = mutants, manifest = manifest)
+}
+
+load_prompt_dataset <- function(pkg) {
+  pkg_art <- file.path(artifact_root, "datasets", pkg)
+  manifest_path <- file.path(pkg_art, "mutants.csv")
+  work <- file.path(pkg_art, "package")
+  if (!file.exists(manifest_path) || !dir.exists(work)) return(NULL)
+  manifest <- utils::read.csv(manifest_path, stringsAsFactors = FALSE)
+  if (!nrow(manifest)) {
+    return(list(pkg = pkg, work = work, mutants = list(), manifest = manifest))
+  }
+  mutants <- lapply(seq_len(nrow(manifest)), function(i) {
+    row <- manifest[i, , drop = FALSE]
+    list(
+      id = row$mutant_id,
+      src_file = normalizePath(file.path(work, row$src_file), winslash = "/", mustWork = FALSE),
+      src_rel = row$src_file,
+      mutant_file = normalizePath(file.path(pkg_art, row$mutant_file), winslash = "/", mustWork = FALSE),
+      mutation_info = row$mutation_info,
+      diff = row$diff
+    )
+  })
+  names(mutants) <- manifest$mutant_id
   list(pkg = pkg, work = work, mutants = mutants, manifest = manifest)
 }
 
@@ -328,6 +369,15 @@ cat(sprintf(
 datasets <- list()
 for (pkg in packages) {
   cat(sprintf("== preparing %s ==\n", pkg))
+  if (reuse_datasets) {
+    ds <- load_prompt_dataset(pkg)
+    if (!is.null(ds)) {
+      cat(sprintf("   reused selected survived mutants: %d\n", length(ds$mutants)))
+      if (length(ds$mutants)) datasets[[pkg]] <- ds
+      next
+    }
+    cat("   no reusable dataset found; rebuilding\n")
+  }
   pkg_dir <- ensure_package_source(pkg)
   if (is.null(pkg_dir)) {
     cat(sprintf("   [skip] %s: source not available\n", pkg))
@@ -350,8 +400,7 @@ if (is.null(jobs) || !nrow(jobs)) {
   stop("No jobs to run: no selected survived mutants.", call. = FALSE)
 }
 if (randomize) {
-  set.seed(seed)
-  jobs <- jobs[sample(seq_len(nrow(jobs))), , drop = FALSE]
+  jobs <- randomize_jobs(jobs, seed)
 }
 jobs$job_order <- seq_len(nrow(jobs))
 

@@ -19,7 +19,9 @@ numbers are comparable:
 - **generation**: `generated_total`, the size of each tool's full mutant pool
   before capping (the basis for the discrepancy analysis).
 
-A separate experiment (not here) will measure mutator's equivalence detection.
+The LLM equivalence-detection benchmark is separate from the performance/tool
+comparison. It reuses mutator to build fixed survived-mutant samples, then runs
+the same mutants through each CERIT/LiteLLM model and repeat.
 
 ## Targets
 
@@ -237,6 +239,44 @@ usually the runtime bottleneck. The command-line flag takes precedence over the
 driver keeps the same sampled mutant set per repeat, reports `wall_clock_s` as the
 bootstrap mean of the repeated wall-clock samples, and stores the bootstrap 95%
 interval in `time_ci_low/high`.
+
+### LLM equivalence detection
+
+The equivalence benchmark uses the same OpenAI-compatible configuration as
+`identify_equivalent_mutants()` (`.openai_config` / `OPENAI_API_KEY`,
+`OPENAI_BASE_URL`, `OPENAI_MODEL`). The current CERIT endpoint can be inspected
+without printing the API key:
+
+```bash
+Rscript benchmarks/list_cerit_models.R
+Rscript benchmarks/list_cerit_models.R --json
+```
+
+Run the benchmark on a fixed sample of survived mutants. Defaults are
+`prettyunits,stringr,scales`, 25 survived mutants per package, 3 repeats, and the
+curated CERIT chat-model list from `lib/common.R`. Jobs are randomized by default
+across package/model/repeat combinations to reduce bias from network load changes;
+use `--no-randomize` for a deterministic grouped order.
+
+```bash
+Rscript benchmarks/run_equivalence_benchmark.R \
+  --packages prettyunits,stringr,scales \
+  --models qwen3.5,deepseek-v4-pro,glm-5.2 \
+  --mutants 25 \
+  --repeats 3 \
+  --candidate-budget 500 \
+  --batch-size 25 \
+  --out benchmarks/results/equivalence_benchmark
+
+Rscript benchmarks/summarize_equivalence.R \
+  benchmarks/results/equivalence_benchmark.csv
+```
+
+Raw job timings are written incrementally to `equivalence_benchmark.csv/.json`;
+per-mutant classified verdicts, prompts, responses, and selected-mutant manifests
+are written next to them under `*_verdicts.*` and `*_artifacts/`. The summary
+reports bootstrap timing intervals, average verdict counts, and whether repeated
+runs gave the same classified verdicts for the same mutant set.
 
 **Self-contained per package.** For each `--packages` target the driver, as a first
 step:

@@ -20,6 +20,15 @@ SEED <- 20260629L
 # Packages benchmarked on (each has a real tests/testthat/ suite).
 TARGET_PKGS <- c("prettyunits", "stringr", "forcats", "scales", "jsonlite")
 
+# Curated chat/reasoning aliases exposed by the CERIT LiteLLM endpoint at the
+# time the equivalence benchmark was added. The model-listing script refreshes
+# availability from the endpoint; this list is only the default benchmark set.
+EQ_DEFAULT_MODELS <- c(
+  "qwen3.5", "qwen3.5-122b",
+  "deepseek-v4-pro", "deepseek-v4-pro-thinking",
+  "glm-5.2", "gpt-oss-120b", "kimi-k2.7", "mistral-medium-3.5"
+)
+
 # Parallel workers used by tools that support it.
 N_WORKERS <- max(1L, parallel::detectCores() - 2L)
 

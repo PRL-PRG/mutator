@@ -1,0 +1,316 @@
+---
+title: "Equivalence Detection Model Selection"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 9,
+  fig.height = 5.5
+)
+
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  stop("This notebook requires ggplot2.")
+}
+```
+
+This notebook summarizes the equivalence-detection benchmark as a model-selection
+problem for a single-call deployment: in a real run, each mutant is normally sent
+to the model once. It assumes that false `EQUIVALENT` calls are the highest-risk
+error, because they can hide real surviving mutants.
+
+```{r load-data}
+candidate_dirs <- c(
+  "benchmarks/results",
+  "results",
+  "."
+)
+required <- c(
+  "equivalence_benchmark_summary.csv",
+  "equivalence_ground_truth_model_comparison.csv"
+)
+results_dir <- candidate_dirs[vapply(candidate_dirs, function(d) {
+  all(file.exists(file.path(d, required)))
+}, logical(1))][1]
+if (is.na(results_dir)) {
+  stop("Could not find benchmark result CSV files.")
+}
+
+summary_path <- file.path(results_dir, "equivalence_benchmark_summary.csv")
+comparison_path <- file.path(results_dir, "equivalence_ground_truth_model_comparison.csv")
+
+summary <- read.csv(summary_path, stringsAsFactors = FALSE)
+comparison <- read.csv(comparison_path, stringsAsFactors = FALSE)
+```
+
+```{r compute-metrics}
+aggregate_time <- aggregate(
+  cbind(time_mean_s, changed_mutants, avg_dont_know) ~ model,
+  summary,
+  sum
+)
+aggregate_time_sd <- aggregate(time_sd_s ~ model, summary, function(x) {
+  sqrt(sum(x^2, na.rm = TRUE))
+})
+names(aggregate_time_sd)[names(aggregate_time_sd) == "time_sd_s"] <- "total_time_sd_s"
+aggregate_time <- merge(aggregate_time, aggregate_time_sd, by = "model")
+
+call_rows <- do.call(rbind, lapply(seq_len(nrow(comparison)), function(i) {
+  row <- comparison[i, ]
+  verdicts <- strsplit(row$model_runs, ";", fixed = TRUE)[[1]]
+  data.frame(
+    package = row$package,
+    mutant_id = row$mutant_id,
+    model = row$model,
+    run = seq_along(verdicts),
+    model_verdict = verdicts,
+    ground_truth_verdict = row$ground_truth_verdict,
+    stringsAsFactors = FALSE
+  )
+}))
+call_rows$matches_ground_truth <- call_rows$model_verdict == call_rows$ground_truth_verdict
+
+model_rows <- lapply(sort(unique(call_rows$model)), function(model) {
+  x <- call_rows[call_rows$model == model, ]
+  gt_equivalent <- x$ground_truth_verdict == "EQUIVALENT"
+  predicted_equivalent <- x$model_verdict == "EQUIVALENT"
+
+  data.frame(
+    model = model,
+    gt_agreement_pct = round(mean(x$matches_ground_truth) * 100, 1),
+    equivalent_precision_pct = if (sum(predicted_equivalent)) {
+      round(sum(predicted_equivalent & gt_equivalent) / sum(predicted_equivalent) * 100, 1)
+    } else {
+      NA_real_
+    },
+    equivalent_recall_pct = round(sum(predicted_equivalent & gt_equivalent) / sum(gt_equivalent) * 100, 1),
+    false_equivalent = sum(predicted_equivalent & !gt_equivalent),
+    missed_equivalent = sum(!predicted_equivalent & gt_equivalent),
+    predicted_equivalent = sum(predicted_equivalent),
+    predicted_dont_know = sum(x$model_verdict == "DONT KNOW"),
+    total_calls = nrow(x),
+    stringsAsFactors = FALSE
+  )
+})
+model_metrics <- do.call(rbind, model_rows)
+model_metrics <- merge(model_metrics, aggregate_time, by = "model")
+names(model_metrics)[names(model_metrics) == "time_mean_s"] <- "total_mean_time_s"
+names(model_metrics)[names(model_metrics) == "changed_mutants"] <- "repeat_disagreements"
+model_metrics$dont_know_total <- round(model_metrics$avg_dont_know * 3)
+model_metrics$total_time_cv_pct <- round(
+  model_metrics$total_time_sd_s / model_metrics$total_mean_time_s * 100,
+  1
+)
+
+is_dominated <- function(i, x) {
+  objectives <- c(
+    "total_mean_time_s",
+    "false_equivalent",
+    "dont_know_total",
+    "repeat_disagreements",
+    "missed_equivalent"
+  )
+  for (j in seq_len(nrow(x))) {
+    if (i == j) next
+    no_worse <- all(x[j, objectives] <= x[i, objectives])
+    strictly_better <- any(x[j, objectives] < x[i, objectives])
+    if (no_worse && strictly_better) return(TRUE)
+  }
+  FALSE
+}
+
+model_metrics$pareto_front <- !vapply(seq_len(nrow(model_metrics)), is_dominated, logical(1), x = model_metrics)
+model_metrics <- model_metrics[order(
+  model_metrics$false_equivalent,
+  -model_metrics$gt_agreement_pct,
+  model_metrics$total_mean_time_s
+), ]
+
+write.csv(
+  model_metrics,
+  file.path(results_dir, "equivalence_model_selection_metrics.csv"),
+  row.names = FALSE
+)
+```
+
+## Model Selection Table
+
+Counts are aggregated across the three benchmark packages and use each repeated
+model call as one deployment-like observation. There are 225 single-call verdicts
+per model: 75 selected mutants times 3 repeats.
+
+```{r model-table}
+display_table <- model_metrics[, c(
+  "model",
+  "total_mean_time_s",
+  "total_time_sd_s",
+  "total_time_cv_pct",
+  "gt_agreement_pct",
+  "equivalent_precision_pct",
+  "equivalent_recall_pct",
+  "false_equivalent",
+  "predicted_equivalent",
+  "dont_know_total",
+  "repeat_disagreements",
+  "pareto_front"
+)]
+names(display_table) <- c(
+  "Model",
+  "Total mean time (s)",
+  "Total SD (s)",
+  "CV (%)",
+  "GT agreement (%)",
+  "E precision (%)",
+  "E recall (%)",
+  "False E",
+  "E calls",
+  "DONT KNOW",
+  "Repeat disagreements",
+  "Pareto front"
+)
+knitr::kable(display_table, row.names = FALSE, digits = 1)
+```
+
+## Pareto-Style Utility Plot
+
+This plot emphasizes the main tradeoff for a single-call workflow: runtime versus
+ability to find ground-truth equivalent mutants. Color encodes the high-risk
+single-call error count (`false_equivalent`), and point size encodes repeat
+instability.
+
+```{r pareto-plot}
+library(ggplot2)
+
+model_metrics$label_side <- ifelse(
+  model_metrics$total_mean_time_s < stats::median(model_metrics$total_mean_time_s),
+  -0.08,
+  1.08
+)
+model_metrics$label_hjust <- ifelse(model_metrics$label_side < 0, 1, 0)
+
+ggplot(
+  model_metrics,
+  aes(
+    x = total_mean_time_s,
+    y = equivalent_recall_pct,
+    colour = false_equivalent,
+    size = repeat_disagreements,
+    shape = pareto_front,
+    label = model
+  )
+) +
+  geom_point(alpha = 0.9, stroke = 1.1) +
+  geom_text(
+    aes(y = equivalent_recall_pct + label_side, hjust = label_hjust),
+    size = 3,
+    check_overlap = TRUE,
+    colour = "grey15"
+  ) +
+  scale_x_log10(
+    breaks = c(30, 50, 100, 200, 500, 1000, 2000),
+    minor_breaks = NULL
+  ) +
+  scale_y_continuous(
+    limits = c(0, 105),
+    expand = ggplot2::expansion(mult = c(0.03, 0.08))
+  ) +
+  scale_colour_gradient(
+    low = "#2c7bb6",
+    high = "#d7191c",
+    breaks = sort(unique(model_metrics$false_equivalent))
+  ) +
+  scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 17)) +
+  labs(
+    x = "Total mean time across packages (seconds, log scale)",
+    y = "Equivalent-mutant recall vs provisional ground truth (%)",
+    colour = "False E",
+    size = "Repeat\ndisagreements",
+    shape = "Pareto front",
+    title = "Single-call tradeoff: speed, equivalent recall, and false-equivalent risk"
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "right",
+    plot.margin = margin(10, 42, 10, 62)
+  )
+```
+
+## Safety Plot
+
+This second view puts false `EQUIVALENT` calls directly on the y-axis. The best
+single-call models are near the lower-left; larger points find more of the
+ground-truth equivalent mutants.
+
+```{r safety-plot}
+ggplot(
+  model_metrics,
+  aes(
+    x = total_mean_time_s,
+    y = false_equivalent,
+    colour = gt_agreement_pct,
+    size = equivalent_recall_pct,
+    shape = pareto_front,
+    label = model
+  )
+) +
+  geom_point(alpha = 0.9, stroke = 1.1) +
+  geom_text(
+    aes(y = false_equivalent + label_side / 2, hjust = label_hjust),
+    size = 3,
+    check_overlap = TRUE,
+    colour = "grey15"
+  ) +
+  scale_x_log10(
+    breaks = c(30, 50, 100, 200, 500, 1000, 2000),
+    minor_breaks = NULL
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, max(model_metrics$false_equivalent), by = 1),
+    limits = c(-0.25, max(model_metrics$false_equivalent) + 0.5),
+    expand = ggplot2::expansion(mult = c(0.02, 0.08))
+  ) +
+  scale_colour_gradient(low = "#d9ef8b", high = "#1a9850") +
+  scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 17)) +
+  labs(
+    x = "Total mean time across packages (seconds, log scale)",
+    y = "False EQUIVALENT calls",
+    colour = "GT agreement (%)",
+    size = "E recall (%)",
+    shape = "Pareto front",
+    title = "Single-call safety view: avoid false equivalent classifications"
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "right",
+    plot.margin = margin(10, 42, 10, 62)
+  )
+```
+
+## Practical Reading
+
+For a single-call workflow, no model in this benchmark is clean enough to make
+fully automatic removal decisions if false `EQUIVALENT` calls are unacceptable:
+every model made at least one false `EQUIVALENT` call across the repeated
+single-call observations.
+
+`deepseek-v4-pro` is the strongest default for assisted triage: it has high
+agreement with the provisional ground truth, comparatively high precision for
+`EQUIVALENT` calls, low uncertainty, and reasonable runtime. `qwen3.5-122b` is
+the fast triage point, but it misses most equivalent mutants and has more
+uncertainty. Higher-recall models such as `gpt-oss-120b` find more equivalent
+mutants but make more false `EQUIVALENT` calls, so their positive verdicts should
+be manually checked or confirmed by a second model.
+
+The repeat-disagreement column is not a voting metric here. It is a stability
+diagnostic: it estimates how likely the model is to give a different answer if
+the same mutant is submitted again.
