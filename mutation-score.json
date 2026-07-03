@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "label": "mutation score",
+  "message": "failing tests",
+  "color": "red"
+}
