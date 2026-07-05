@@ -1209,8 +1209,11 @@ list_test_tokens <- function(pkg_dir) {
 #' @param pkg_dir Path to the package directory.
 #' @param cores Number of parallel workers used for mutant test execution.
 #' @param isFullLog Logical; if `TRUE`, prints per-mutant logs and timeout info.
-#' @param detectEqMutants Logical; if `TRUE`, survived mutants are analyzed for
-#'   equivalence using the OpenAI-based workflow.
+#' @param detectEqMutants Logical; if `TRUE`, every generated mutant is analyzed
+#'   for equivalence using the OpenAI-based workflow *before* the test suites are
+#'   run. Mutants judged equivalent are recorded as survived without running
+#'   their tests (no test can kill an equivalent mutant), which avoids that
+#'   wasted work; the remaining mutants are tested as usual.
 #' @param mutation_dir Optional directory to store generated mutant files.
 #'   If `NULL`, a temporary directory is used.
 #' @param max_mutants Optional cap on the number of mutants tested.
@@ -2150,6 +2153,175 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     }
   }
 
+  # --- Equivalence detection (before running the test suites) --------------
+  # An equivalent mutant is behaviorally identical to the original, so no test
+  # can kill it: running its (often expensive) test suite is wasted work. We
+  # therefore detect equivalence up front, on every generated mutant, and skip
+  # the test run for those judged EQUIVALENT -- they are recorded as SURVIVED
+  # directly (see below, where their test plan is forced to "survived"). Mutants
+  # judged NOT EQUIVALENT or Uncertain still run their tests as usual.
+  #
+  # equivalence_info maps mutant id -> list(equivalent, equivalence_status,
+  # equivalence_reason); it stays empty when detection is off, and is merged
+  # into package_mutants once the test results are in.
+  equivalence_info <- list()
+  equivalence_started <- Sys.time()
+  if (detectEqMutants && length(mutants) > 0) {
+    # Equivalence detection is purely static (it diffs each mutant against the
+    # original source), so it needs only the mutation metadata, not any test
+    # outcome. Build the per-mutant records identify_equivalent_mutants() expects
+    # from the generated set (its `mutation_info` field is our `info`).
+    eq_input <- lapply(mutants, function(m) {
+      list(mutation_info = m$info, mutant_file = m$mutant_file, src = m$src)
+    })
+    names(eq_input) <- names(mutants)
+
+    # Group mutants by their originating source file. The source path is carried
+    # on each mutant record, so we never have to recover it from the mutant ID
+    # (filenames frequently contain '_' and '.').
+    src_files <- unique(vapply(eq_input, function(m) m$src, character(1)))
+
+    # Resolve the OpenAI configuration once, looking for a `.openai_config`
+    # file in `config_dir` rather than depending on the working directory.
+    api_config <- get_openai_config(dir = config_dir)
+
+    # Build a flat list of work units across ALL files, each a single batch
+    # (one API request) of up to `eq_batch_size` mutants from one file. This
+    # way the parallel pool is shape-agnostic: many files with few mutants
+    # each, or few files with many mutants each, all parallelize across the
+    # available workers equally. (Kept in sync with identify_equivalent_mutants'
+    # default batch size so each chunk is exactly one request.)
+    eq_batch_size <- 25L
+    chunks <- list()
+    for (src_file in src_files) {
+      file_ids <- names(eq_input)[vapply(
+        eq_input,
+        function(m) identical(m$src, src_file),
+        logical(1)
+      )]
+      for (g in unname(split(file_ids, ceiling(seq_along(file_ids) / eq_batch_size)))) {
+        chunks[[length(chunks) + 1L]] <- list(src = src_file, ids = g)
+      }
+    }
+
+    analyze_chunk <- function(chunk) {
+      # report = FALSE: each chunk stays silent so its per-file messages and
+      # summary do not interleave across parallel workers (and corrupt the
+      # progress bar). The parent prints one aggregated summary below.
+      identify_equivalent_mutants(
+        chunk$src, eq_input[chunk$ids],
+        api_config = api_config, workers = 1, batch_size = eq_batch_size,
+        report = FALSE
+      )
+    }
+
+    message(sprintf(
+      "Detecting equivalent mutants across %d batch%s...",
+      length(chunks), if (length(chunks) == 1) "" else "es"
+    ))
+    eq_workers <- max(1, min(workers_to_use, length(chunks)))
+    # Respect a cap on concurrent API requests (a provider's per-key
+    # max_parallel_requests; exceeding it returns HTTP 429). An explicit config
+    # value wins; otherwise best-effort auto-detect it from the endpoint (no-op
+    # against providers that do not expose it). Only worth probing when we would
+    # otherwise run more than one request at a time.
+    mpr <- api_config$max_parallel_requests
+    if ((is.null(mpr) || is.na(mpr)) && eq_workers > 1L) {
+      detected <- query_api_parallel_limit(api_config)
+      if (!is.na(detected)) {
+        mpr <- detected
+        message(sprintf(
+          "  Detected API parallel-request limit (%d); capping equivalence workers.",
+          detected
+        ))
+      }
+    }
+    if (!is.null(mpr) && !is.na(mpr) && mpr >= 1L) {
+      eq_workers <- min(eq_workers, as.integer(mpr))
+    }
+    per_chunk <- if (eq_workers > 1 && future::supportsMulticore()) {
+      # Same optional-pbmcapply progress bar as the mutant test runs.
+      mc_lapply <- if (requireNamespace("pbmcapply", quietly = TRUE)) {
+        pbmcapply::pbmclapply
+      } else {
+        parallel::mclapply
+      }
+      mc_lapply(chunks, analyze_chunk, mc.cores = eq_workers)
+    } else {
+      lapply(chunks, analyze_chunk)
+    }
+
+    # Collect equivalence information into equivalence_info, and tally failed
+    # batches. A chunk that crashed outright (NULL / try-error) counts as one
+    # wholly-failed batch; an intact chunk reports its own count via the
+    # eq_failed_batches attribute (API calls that returned nothing usable,
+    # leaving those mutants Uncertain).
+    eq_batches_total <- 0L
+    eq_batches_failed <- 0L
+    eq_error_msgs <- character(0)
+    for (chunk_mutants in per_chunk) {
+      if (is.null(chunk_mutants) || inherits(chunk_mutants, "try-error")) {
+        eq_batches_total <- eq_batches_total + 1L
+        eq_batches_failed <- eq_batches_failed + 1L
+        if (inherits(chunk_mutants, "try-error")) {
+          eq_error_msgs <- c(eq_error_msgs, trimws(conditionMessage(attr(chunk_mutants, "condition"))))
+        }
+        next
+      }
+      nb <- attr(chunk_mutants, "eq_n_batches")
+      fb <- attr(chunk_mutants, "eq_failed_batches")
+      eq_batches_total <- eq_batches_total + (if (is.null(nb)) 1L else as.integer(nb))
+      eq_batches_failed <- eq_batches_failed + (if (is.null(fb)) 0L else as.integer(fb))
+      eq_error_msgs <- c(eq_error_msgs, attr(chunk_mutants, "eq_errors"))
+      for (id in names(chunk_mutants)) {
+        equivalence_info[[id]] <- list(
+          equivalent = chunk_mutants[[id]]$equivalent,
+          equivalence_status = chunk_mutants[[id]]$equivalence_status,
+          equivalence_reason = chunk_mutants[[id]]$equivalence_reason
+        )
+      }
+    }
+
+    # One parent-side notice when batches failed: the per-call warnings are
+    # raised inside forked workers and may never reach the console. Include a
+    # few distinct causes so the reason is not hidden (e.g. an invalid model
+    # name returns the same HTTP 400 for every batch).
+    if (eq_batches_failed > 0L) {
+      message(sprintf(
+        "  Note: %d of %d equivalence batch(es) produced no verdicts (API error/timeout or unparseable response); their mutants are counted as Uncertain.",
+        eq_batches_failed, eq_batches_total
+      ))
+      distinct_errs <- unique(eq_error_msgs[nzchar(eq_error_msgs)])
+      if (length(distinct_errs) > 0) {
+        shown_errs <- utils::head(distinct_errs, 3L)
+        for (e in shown_errs) {
+          message(sprintf("    - %s", e))
+        }
+        if (length(distinct_errs) > length(shown_errs)) {
+          message(sprintf("    - ... and %d more distinct error(s)", length(distinct_errs) - length(shown_errs)))
+        }
+      }
+    }
+
+    # Skip the test run for mutants judged EQUIVALENT: no test can kill them, so
+    # they survive by definition. Reuse the coverage plan's "survived" short
+    # circuit -- run_one_mutant() returns SURVIVED without executing any tests.
+    n_equivalent_skipped <- 0L
+    for (id in names(equivalence_info)) {
+      if (isTRUE(equivalence_info[[id]]$equivalent)) {
+        mutant_test_plan[[id]] <- list(action = "survived")
+        n_equivalent_skipped <- n_equivalent_skipped + 1L
+      }
+    }
+    if (n_equivalent_skipped > 0L) {
+      message(sprintf(
+        "  Skipping the test suite for %d equivalent mutant%s.",
+        n_equivalent_skipped, if (n_equivalent_skipped == 1L) "" else "s"
+      ))
+    }
+  }
+  equivalence_seconds <- as.numeric(Sys.time() - equivalence_started, units = "secs")
+
   # --- Calibrate the timeout against *contended* conditions ----------------
   # The baseline above ran alone, but mutants run `workers_to_use`-wide. For
   # packages with heavy per-run startup cost -- loading many dependencies, or
@@ -2387,152 +2559,30 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       src = mutants[[mutant_id]]$src,
       mutant_file = mutants[[mutant_id]]$mutant_file
     )
+
+    # Attach the equivalence verdict computed earlier (empty when detection is
+    # off). Equivalent mutants had their test suite skipped and are recorded as
+    # SURVIVED above, matching their by-definition outcome.
+    eq <- equivalence_info[[mutant_id]]
+    if (!is.null(eq)) {
+      package_mutants[[mutant_id]]$equivalent <- eq$equivalent
+      if (!is.null(eq$equivalence_status)) {
+        package_mutants[[mutant_id]]$equivalence_status <- eq$equivalence_status
+      }
+      if (!is.null(eq$equivalence_reason)) {
+        package_mutants[[mutant_id]]$equivalence_reason <- eq$equivalence_reason
+      }
+    }
+
     test_results[[mutant_id]] <- status
   }
 
-  # Filter survived mutants
-  survived_mutants <- package_mutants[vapply(package_mutants, function(m) {
-    identical(m$status, "SURVIVED")
-  }, logical(1))]
-
-  # Initialize counters
+  # Initialize counters. Equivalence detection already ran (before the test
+  # suites); its verdicts are merged into package_mutants above, and the tallies
+  # are computed from that list below.
   equivalent <- 0
   not_equivalent <- 0
   uncertain <- 0
-
-  # Identify equivalent mutants among survived mutants only if detectEqMutants is TRUE
-  equivalence_started <- Sys.time()
-  if (detectEqMutants && length(survived_mutants) > 0) {
-    # Group survived mutants by their originating source file. The source path
-    # is carried on each mutant record, so we never have to recover it from the
-    # mutant ID (filenames frequently contain '_' and '.').
-    src_files <- unique(vapply(survived_mutants, function(m) m$src, character(1)))
-
-    # Resolve the OpenAI configuration once, looking for a `.openai_config`
-    # file in `config_dir` rather than depending on the working directory.
-    api_config <- get_openai_config(dir = config_dir)
-
-    # Build a flat list of work units across ALL files, each a single batch
-    # (one API request) of up to `eq_batch_size` survivors from one file. This
-    # way the parallel pool is shape-agnostic: many files with few survivors
-    # each, or few files with many survivors each, all parallelize across the
-    # available workers equally. (Kept in sync with identify_equivalent_mutants'
-    # default batch size so each chunk is exactly one request.)
-    eq_batch_size <- 25L
-    chunks <- list()
-    for (src_file in src_files) {
-      file_ids <- names(survived_mutants)[vapply(
-        survived_mutants,
-        function(m) identical(m$src, src_file),
-        logical(1)
-      )]
-      for (g in unname(split(file_ids, ceiling(seq_along(file_ids) / eq_batch_size)))) {
-        chunks[[length(chunks) + 1L]] <- list(src = src_file, ids = g)
-      }
-    }
-
-    analyze_chunk <- function(chunk) {
-      # report = FALSE: each chunk stays silent so its per-file messages and
-      # summary do not interleave across parallel workers (and corrupt the
-      # progress bar). The parent prints one aggregated summary below.
-      identify_equivalent_mutants(
-        chunk$src, survived_mutants[chunk$ids],
-        api_config = api_config, workers = 1, batch_size = eq_batch_size,
-        report = FALSE
-      )
-    }
-
-    message(sprintf(
-      "Detecting equivalent mutants across %d batch%s...",
-      length(chunks), if (length(chunks) == 1) "" else "es"
-    ))
-    eq_workers <- max(1, min(workers_to_use, length(chunks)))
-    # Respect a cap on concurrent API requests (a provider's per-key
-    # max_parallel_requests; exceeding it returns HTTP 429). An explicit config
-    # value wins; otherwise best-effort auto-detect it from the endpoint (no-op
-    # against providers that do not expose it). Only worth probing when we would
-    # otherwise run more than one request at a time.
-    mpr <- api_config$max_parallel_requests
-    if ((is.null(mpr) || is.na(mpr)) && eq_workers > 1L) {
-      detected <- query_api_parallel_limit(api_config)
-      if (!is.na(detected)) {
-        mpr <- detected
-        message(sprintf(
-          "  Detected API parallel-request limit (%d); capping equivalence workers.",
-          detected
-        ))
-      }
-    }
-    if (!is.null(mpr) && !is.na(mpr) && mpr >= 1L) {
-      eq_workers <- min(eq_workers, as.integer(mpr))
-    }
-    per_chunk <- if (eq_workers > 1 && future::supportsMulticore()) {
-      # Same optional-pbmcapply progress bar as the mutant test runs.
-      mc_lapply <- if (requireNamespace("pbmcapply", quietly = TRUE)) {
-        pbmcapply::pbmclapply
-      } else {
-        parallel::mclapply
-      }
-      mc_lapply(chunks, analyze_chunk, mc.cores = eq_workers)
-    } else {
-      lapply(chunks, analyze_chunk)
-    }
-
-    # Merge equivalence information back into the main package_mutants list, and
-    # tally failed batches. A chunk that crashed outright (NULL / try-error)
-    # counts as one wholly-failed batch; an intact chunk reports its own count
-    # via the eq_failed_batches attribute (API calls that returned nothing
-    # usable, leaving those mutants Uncertain).
-    eq_batches_total <- 0L
-    eq_batches_failed <- 0L
-    eq_error_msgs <- character(0)
-    for (chunk_mutants in per_chunk) {
-      if (is.null(chunk_mutants) || inherits(chunk_mutants, "try-error")) {
-        eq_batches_total <- eq_batches_total + 1L
-        eq_batches_failed <- eq_batches_failed + 1L
-        if (inherits(chunk_mutants, "try-error")) {
-          eq_error_msgs <- c(eq_error_msgs, trimws(conditionMessage(attr(chunk_mutants, "condition"))))
-        }
-        next
-      }
-      nb <- attr(chunk_mutants, "eq_n_batches")
-      fb <- attr(chunk_mutants, "eq_failed_batches")
-      eq_batches_total <- eq_batches_total + (if (is.null(nb)) 1L else as.integer(nb))
-      eq_batches_failed <- eq_batches_failed + (if (is.null(fb)) 0L else as.integer(fb))
-      eq_error_msgs <- c(eq_error_msgs, attr(chunk_mutants, "eq_errors"))
-      for (id in names(chunk_mutants)) {
-        package_mutants[[id]]$equivalent <- chunk_mutants[[id]]$equivalent
-        if (!is.null(chunk_mutants[[id]]$equivalence_status)) {
-          package_mutants[[id]]$equivalence_status <- chunk_mutants[[id]]$equivalence_status
-        }
-        if (!is.null(chunk_mutants[[id]]$equivalence_reason)) {
-          package_mutants[[id]]$equivalence_reason <- chunk_mutants[[id]]$equivalence_reason
-        }
-      }
-    }
-
-    # One parent-side notice when batches failed: the per-call warnings are
-    # raised inside forked workers and may never reach the console. Include a
-    # few distinct causes so the reason is not hidden (e.g. an invalid model
-    # name returns the same HTTP 400 for every batch).
-    if (eq_batches_failed > 0L) {
-      message(sprintf(
-        "  Note: %d of %d equivalence batch(es) produced no verdicts (API error/timeout or unparseable response); their mutants are counted as Uncertain.",
-        eq_batches_failed, eq_batches_total
-      ))
-      distinct_errs <- unique(eq_error_msgs[nzchar(eq_error_msgs)])
-      if (length(distinct_errs) > 0) {
-        shown_errs <- utils::head(distinct_errs, 3L)
-        for (e in shown_errs) {
-          message(sprintf("    - %s", e))
-        }
-        if (length(distinct_errs) > length(shown_errs)) {
-          message(sprintf("    - ... and %d more distinct error(s)", length(distinct_errs) - length(shown_errs)))
-        }
-      }
-    }
-  }
-  equivalence_seconds <- as.numeric(Sys.time() - equivalence_started, units = "secs")
 
   # Summarize test results
   total_mutants <- length(test_results)
@@ -2542,9 +2592,15 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
   # Calculate equivalent mutants only if detectEqMutants is TRUE
   if (detectEqMutants) {
-    equivalent <- sum(sapply(package_mutants, function(m) isTRUE(m$equivalent)), na.rm = TRUE)
-    not_equivalent <- sum(sapply(package_mutants, function(m) isFALSE(m$equivalent)), na.rm = TRUE)
-    uncertain <- sum(sapply(package_mutants, function(m) is.na(m$equivalent) && !is.null(m$equivalent)), na.rm = TRUE)
+    # Tally verdicts among SURVIVED mutants only. Detection now runs on every
+    # mutant (before the test suites), but the equivalent/not-equivalent/uncertain
+    # distinction is only meaningful for survivors: a killed mutant was, by
+    # definition, distinguished from the original, so its verdict is noise. This
+    # keeps the summary consistent with when detection ran on survivors alone.
+    is_survived <- function(m) identical(m$status, "SURVIVED")
+    equivalent <- sum(sapply(package_mutants, function(m) is_survived(m) && isTRUE(m$equivalent)), na.rm = TRUE)
+    not_equivalent <- sum(sapply(package_mutants, function(m) is_survived(m) && isFALSE(m$equivalent)), na.rm = TRUE)
+    uncertain <- sum(sapply(package_mutants, function(m) is_survived(m) && is.na(m$equivalent) && !is.null(m$equivalent)), na.rm = TRUE)
   }
 
   adjusted_survived <- survived - equivalent

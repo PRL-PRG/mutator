@@ -33,8 +33,11 @@ mutate_package(
 
 \item{isFullLog}{Logical; if \code{TRUE}, prints per-mutant logs and timeout info.}
 
-\item{detectEqMutants}{Logical; if \code{TRUE}, survived mutants are analyzed for
-equivalence using the OpenAI-based workflow.}
+\item{detectEqMutants}{Logical; if \code{TRUE}, every generated mutant is analyzed
+for equivalence using the OpenAI-based workflow \emph{before} the test suites are
+run. Mutants judged equivalent are recorded as survived without running
+their tests (no test can kill an equivalent mutant), which avoids that
+wasted work; the remaining mutants are tested as usual.}
 
 \item{mutation_dir}{Optional directory to store generated mutant files.
 If \code{NULL}, a temporary directory is used.}
