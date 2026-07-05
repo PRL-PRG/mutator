@@ -82,7 +82,14 @@ log "summarizing"
 Rscript benchmarks/summarize.R "$OUT.csv" >/dev/null \
   || { echo "summarize failed" >&2; exit 1; }
 
+log "rendering summary notebook + plots"
+RESULTS_DIR=$(dirname "$OUT.csv")
+BENCH_RESULTS_DIR="$RESULTS_DIR" \
+  Rscript -e 'rmarkdown::render("benchmarks/benchmark_summary.Rmd", quiet=TRUE)' \
+  || echo "WARN: notebook render failed (tables/plots not regenerated)" >&2
+
 ELAPSED=$(( $(date +%s) - START ))
 log "DONE in $((ELAPSED/60))m $((ELAPSED%60))s"
 echo "  results : $OUT.csv / .json"
 echo "  summary : benchmarks/results/SUMMARY.md  +  summary_headline.csv"
+echo "  notebook: benchmarks/benchmark_summary.nb.html  (plots in $RESULTS_DIR)"

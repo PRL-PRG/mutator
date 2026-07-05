@@ -1,0 +1,403 @@
+---
+title: "Mutation-testing benchmark — summary"
+output:
+  html_document:
+    toc: true
+    toc_depth: '2'
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 10,
+  fig.height = 5.6
+)
+
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  stop("This notebook requires ggplot2.")
+}
+```
+
+This notebook reproduces the benchmark **summary tables** (the same content as
+`SUMMARY.md`) and the **two headline plots**, all derived from the raw result
+CSVs. The plots are also written to disk (PNG + PDF) so they can be dropped into
+a presentation.
+
+Scores are the **comparable** basis (muttest = errors-as-kills, matched
+operators where available); times are wall-clock at N=500. muttest is
+testthat-only (n/a on non-testthat packages). The detailed table below shows
+muttest's native scores and CIs.
+
+```{r config}
+# Which result directory to summarize. run_all.sh passes it via BENCH_RESULTS_DIR;
+# interactively, the candidate list below finds the common locations.
+results_dir <- local({
+  env_dir <- Sys.getenv("BENCH_RESULTS_DIR", unset = "")
+  candidates <- c(
+    if (nzchar(env_dir)) env_dir,
+    "benchmarks/results-02-07-2026",
+    "results-02-07-2026",
+    "benchmarks/results",
+    "results",
+    "."
+  )
+  needed <- c("benchmark_results.csv", "baselines.csv")
+  hit <- candidates[vapply(candidates, function(d) {
+    all(file.exists(file.path(d, needed)))
+  }, logical(1))]
+  if (!length(hit)) {
+    stop("Could not find benchmark_results.csv + baselines.csv in any known location.")
+  }
+  hit[1]
+})
+
+# Where to write the presentation figures (PNG + PDF). Defaults to the results dir.
+fig_dir <- results_dir
+
+message("Summarizing results in: ", normalizePath(results_dir))
+```
+
+```{r load-data}
+detailed <- read.csv(file.path(results_dir, "benchmark_results.csv"),
+                     stringsAsFactors = FALSE)
+
+bfile <- file.path(results_dir, "baselines.csv")
+baselines <- if (file.exists(bfile)) {
+  b <- read.csv(bfile, stringsAsFactors = FALSE)
+  setNames(b$baseline_s, b$package)
+} else {
+  NULL
+}
+
+# Run provenance (date + mutator commit), if recorded alongside the results.
+meta_file <- file.path(results_dir, "run_meta.txt")
+run_meta <- if (file.exists(meta_file)) {
+  ml <- readLines(meta_file, warn = FALSE)
+  list(
+    run_date = sub("^run_date=", "", grep("^run_date=", ml, value = TRUE))[1],
+    commit   = sub("^mutator_commit=", "", grep("^mutator_commit=", ml, value = TRUE))[1]
+  )
+} else {
+  list(run_date = NA_character_, commit = NA_character_)
+}
+```
+
+```{r meta, results="asis", echo=FALSE}
+if (!is.na(run_meta$run_date) || !is.na(run_meta$commit)) {
+  cat(sprintf("_Run: %s · mutator commit `%s`._\n",
+              run_meta$run_date %||% "unknown", run_meta$commit %||% "unknown"))
+}
+```
+
+```{r prep}
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0 || is.na(a)) b else a
+
+# The +err muttest rows carry the score but not the timing (kill-oracle only
+# differs); their timing is that of the corresponding base mode. Propagate it so
+# the detailed table's Time column matches, exactly as summarize.R does.
+propagate_muttest_err_timing <- function(d) {
+  err_rows <- which(d$tool == "muttest" & grepl("\\+err$", d$mode))
+  timing_cols <- c("wall_clock_s", "mutants_per_s", "time_runs",
+                   "time_ci_low", "time_ci_high", "time_samples")
+  for (i in err_rows) {
+    src_mode <- sub("\\+err$", "", d$mode[[i]])
+    src <- which(d$tool == "muttest" & d$package == d$package[[i]] &
+                   d$mode == src_mode)
+    if (!length(src)) next
+    for (col in timing_cols) d[[col]][[i]] <- d[[col]][[src[[1L]]]]
+  }
+  d
+}
+
+detailed <- detailed[!duplicated(detailed[c("tool", "mode", "package")]), ]
+detailed <- propagate_muttest_err_timing(detailed)
+
+package_levels <- unique(detailed$package)
+
+# One comparable row per package (mutator default; muttest errors-as-kills with
+# matched operators preferred; universalmutator regex), plus timing multiples
+# against the plain (uninstrumented) test-suite baseline.
+summary_records <- function(d, baselines) {
+  pick <- function(pk, tool, modes) {
+    for (m in modes) {
+      r <- d[d$package == pk & d$tool == tool & d$mode == m, ]
+      if (nrow(r)) return(r[1, ])
+    }
+    NULL
+  }
+  sc <- function(r) if (is.null(r)) NA_real_ else r$mutation_score
+  tm <- function(r) if (is.null(r)) NA_real_ else r$wall_clock_s
+  tl <- function(r) if (is.null(r)) NA_real_ else r$time_ci_low
+  th <- function(r) if (is.null(r)) NA_real_ else r$time_ci_high
+  do.call(rbind, lapply(unique(d$package), function(pk) {
+    mu   <- pick(pk, "mutator", "default")
+    mt_s <- pick(pk, "muttest", c("matched+err", "full+err"))  # comparable score
+    mt_t <- pick(pk, "muttest", c("matched", "full"))          # its run-time
+    um   <- pick(pk, "universalmutator", c("regex", "comby"))
+    base <- if (!is.null(baselines) && pk %in% names(baselines)) baselines[[pk]] else NA_real_
+    xb   <- function(r) {
+      t <- tm(r)
+      if (is.na(t) || is.na(base) || base <= 0) NA_real_ else round(t / base)
+    }
+    data.frame(package = pk,
+      harness = if (!is.null(mt_s)) "testthat" else "non-testthat",
+      baseline_s = base,
+      mutator_score = sc(mu), mutator_s = tm(mu),
+      mutator_time_ci_low = tl(mu), mutator_time_ci_high = th(mu),
+      mutator_x_base = xb(mu),
+      muttest_score = sc(mt_s), muttest_s = tm(mt_t),
+      muttest_time_ci_low = tl(mt_t), muttest_time_ci_high = th(mt_t),
+      muttest_x_base = xb(mt_t),
+      um_score = sc(um), um_s = tm(um),
+      um_time_ci_low = tl(um), um_time_ci_high = th(um),
+      um_x_base = xb(um),
+      stringsAsFactors = FALSE)
+  }))
+}
+
+recs <- summary_records(detailed, baselines)
+recs$package <- factor(recs$package, levels = package_levels)
+```
+
+## Headline — mutation score
+
+```{r headline-score-table}
+.p <- function(x) ifelse(is.na(x), "n/a", sprintf("%.1f", x))
+
+score_tbl <- data.frame(
+  Package = as.character(recs$package),
+  harness = recs$harness,
+  `mutator %` = .p(recs$mutator_score),
+  `muttest %` = .p(recs$muttest_score),
+  `universalmutator %` = .p(recs$um_score),
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+knitr::kable(score_tbl, align = c("l", "l", "r", "r", "r"))
+```
+
+## Headline — cost vs. plain test-suite baseline
+
+Cost columns show wall-clock and, in parentheses, the multiple of one **plain**
+(uninstrumented, no-covr) suite run.
+
+```{r headline-cost-table}
+fmt_headline_time <- function(sec, low, high, mult) {
+  if (is.na(sec)) return("n/a")
+  s <- sprintf("%.1fs", sec)
+  if (!is.na(low) && !is.na(high)) s <- sprintf("%s [%0.1f-%0.1f]", s, low, high)
+  if (!is.na(mult)) s <- sprintf("%s (%sx)", s, round(mult))
+  s
+}
+
+# fmt_headline_time formats one row; mapply applies it across all packages.
+cost_tbl <- data.frame(
+  Package = as.character(recs$package),
+  `plain baseline` = ifelse(is.na(recs$baseline_s), "n/a",
+                            sprintf("%.1fs", recs$baseline_s)),
+  mutator = mapply(fmt_headline_time, recs$mutator_s, recs$mutator_time_ci_low,
+                   recs$mutator_time_ci_high, recs$mutator_x_base),
+  muttest = mapply(fmt_headline_time, recs$muttest_s, recs$muttest_time_ci_low,
+                   recs$muttest_time_ci_high, recs$muttest_x_base),
+  universalmutator = mapply(fmt_headline_time, recs$um_s, recs$um_time_ci_low,
+                            recs$um_time_ci_high, recs$um_x_base),
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+knitr::kable(cost_tbl, align = c("l", "r", "r", "r", "r"), row.names = FALSE)
+```
+
+## Results (N per `tested_n`; CI shown when sampled)
+
+```{r detailed-table}
+tool_lab <- function(tool, mode) {
+  m <- ifelse(is.na(mode) | mode == "default", "full", mode)
+  ifelse(tool == "universalmutator", paste0("universalmutator (", m, ")"),
+  ifelse(tool == "muttest",          paste0("muttest (", m, ")"), tool))
+}
+fmt_score <- function(score, lo, hi) {
+  s <- sprintf("%.1f", score)
+  ifelse(is.na(lo), s, sprintf("%s (%.1f-%.1f)", s, lo, hi))
+}
+fmt_time <- function(sec, lo, hi) {
+  ifelse(is.na(sec), "-",
+    ifelse(is.na(lo), sprintf("%.1f", sec),
+           sprintf("%.1f (%.1f-%.1f)", sec, lo, hi)))
+}
+
+# Preserve the package grouping order from the CSV.
+detailed_ord <- detailed[order(match(detailed$package, package_levels)), ]
+
+results_tbl <- data.frame(
+  Package = detailed_ord$package,
+  Tool = tool_lab(detailed_ord$tool, detailed_ord$mode),
+  Generated = format(detailed_ord$generated_total, big.mark = ","),
+  Tested = detailed_ord$tested_n,
+  Killed = detailed_ord$killed,
+  Survived = detailed_ord$survived,
+  `Score % (95% CI)` = fmt_score(detailed_ord$mutation_score,
+                                 detailed_ord$score_ci_low,
+                                 detailed_ord$score_ci_high),
+  `Time s (95% boot CI)` = fmt_time(detailed_ord$wall_clock_s,
+                                    detailed_ord$time_ci_low,
+                                    detailed_ord$time_ci_high),
+  `Mut/s` = ifelse(is.na(detailed_ord$mutants_per_s), "-",
+                   as.character(detailed_ord$mutants_per_s)),
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+knitr::kable(results_tbl,
+             align = c("l", "l", "r", "r", "r", "r", "r", "r", "r"))
+```
+
+## Mutants generated (full pool, before capping)
+
+```{r generated-table}
+detailed$lab <- tool_lab(detailed$tool, detailed$mode)
+tool_cols <- unique(detailed$lab)
+gen_tbl <- data.frame(Package = package_levels, check.names = FALSE,
+                      stringsAsFactors = FALSE)
+for (tl in tool_cols) {
+  gen_tbl[[tl]] <- vapply(package_levels, function(pk) {
+    v <- detailed$generated_total[detailed$package == pk & detailed$lab == tl]
+    if (length(v) && !is.na(v[1])) format(v[1], big.mark = ",") else "-"
+  }, character(1))
+}
+knitr::kable(gen_tbl, align = c("l", rep("r", length(tool_cols))))
+```
+
+## Plots
+
+The two headline plots below are also written to `r normalizePath(fig_dir)` as
+PNG (for slides) and PDF (vector, for print/scaling).
+
+```{r plot-prep}
+library(ggplot2)
+
+tool_levels <- c("mutator", "muttest", "universalmutator")
+palette <- c(
+  mutator = "#0072B2",
+  muttest = "#D55E00",
+  universalmutator = "#009E73"
+)
+
+# Long-format score data with the per-tool CI used in the detailed table.
+score_intervals <- detailed[
+  (detailed$tool == "mutator" & detailed$mode == "default") |
+    (detailed$tool == "muttest" & detailed$mode == "matched+err") |
+    (detailed$tool == "universalmutator" & detailed$mode == "regex"),
+  c("package", "tool", "score_ci_low", "score_ci_high")
+]
+names(score_intervals) <- c("package", "tool", "score_low", "score_high")
+
+scores <- do.call(rbind, list(
+  data.frame(package = recs$package, tool = "mutator",
+             score = recs$mutator_score, stringsAsFactors = FALSE),
+  data.frame(package = recs$package, tool = "muttest",
+             score = recs$muttest_score, stringsAsFactors = FALSE),
+  data.frame(package = recs$package, tool = "universalmutator",
+             score = recs$um_score, stringsAsFactors = FALSE)
+))
+scores <- scores[is.finite(scores$score), , drop = FALSE]
+scores$package <- as.character(scores$package)
+scores <- merge(scores, score_intervals, by = c("package", "tool"),
+                all.x = TRUE, sort = FALSE)
+
+# Long-format cost data: runtime as a multiple of the plain baseline.
+costs <- do.call(rbind, list(
+  data.frame(package = recs$package, tool = "mutator", seconds = recs$mutator_s,
+             time_low = recs$mutator_time_ci_low, time_high = recs$mutator_time_ci_high,
+             x_base = recs$mutator_x_base, baseline_s = recs$baseline_s,
+             stringsAsFactors = FALSE),
+  data.frame(package = recs$package, tool = "muttest", seconds = recs$muttest_s,
+             time_low = recs$muttest_time_ci_low, time_high = recs$muttest_time_ci_high,
+             x_base = recs$muttest_x_base, baseline_s = recs$baseline_s,
+             stringsAsFactors = FALSE),
+  data.frame(package = recs$package, tool = "universalmutator", seconds = recs$um_s,
+             time_low = recs$um_time_ci_low, time_high = recs$um_time_ci_high,
+             x_base = recs$um_x_base, baseline_s = recs$baseline_s,
+             stringsAsFactors = FALSE)
+))
+costs$x_low <- costs$time_low / costs$baseline_s
+costs$x_high <- costs$time_high / costs$baseline_s
+costs <- costs[is.finite(costs$seconds) & is.finite(costs$x_base), , drop = FALSE]
+
+scores$package <- factor(scores$package, levels = package_levels)
+costs$package <- factor(costs$package, levels = package_levels)
+scores$tool <- factor(scores$tool, levels = tool_levels)
+costs$tool <- factor(costs$tool, levels = tool_levels)
+costs$log_x_base <- log10(costs$x_base)
+costs$log_x_low <- log10(costs$x_low)
+costs$log_x_high <- log10(costs$x_high)
+```
+
+### Mutation score by package and tool
+
+```{r score-plot}
+score_plot <- ggplot(scores, aes(x = package, y = score, fill = tool)) +
+  geom_col(position = position_dodge(width = 0.76), width = 0.68) +
+  geom_errorbar(aes(ymin = score_low, ymax = score_high),
+                position = position_dodge(width = 0.76), width = 0.22,
+                na.rm = TRUE) +
+  geom_text(aes(label = sprintf("%.1f", score)),
+            position = position_dodge(width = 0.76), vjust = -2.35, size = 3) +
+  scale_fill_manual(values = palette) +
+  scale_y_continuous(limits = c(0, 105), expand = expansion(mult = c(0, 0.03))) +
+  labs(x = NULL, y = "Mutation score (%)", fill = "Tool",
+       title = "Mutation score by package and tool") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "top")
+score_plot
+```
+
+### Benchmark cost relative to one plain test-suite run
+
+```{r cost-plot}
+ratio_breaks <- c(1, 3, 10, 30, 100, 300, 1000)
+
+cost_plot <- ggplot(costs, aes(x = package, y = log_x_base, fill = tool)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey45") +
+  geom_col(position = position_dodge(width = 0.76), width = 0.68) +
+  geom_errorbar(aes(ymin = log_x_low, ymax = log_x_high),
+                position = position_dodge(width = 0.76), width = 0.18,
+                na.rm = TRUE) +
+  geom_text(aes(label = paste0(round(x_base), "x")),
+            position = position_dodge(width = 0.76), vjust = -0.8, size = 3,
+            show.legend = FALSE) +
+  scale_fill_manual(values = palette) +
+  scale_y_continuous(breaks = log10(ratio_breaks), labels = ratio_breaks,
+                     expand = expansion(mult = c(0, 0.16))) +
+  labs(x = NULL, y = "Slowdown (log scale)", fill = "Tool",
+       title = "Benchmark cost relative to one plain test-suite run") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.major.x = element_blank(),
+        axis.text.y = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 35, hjust = 1),
+        legend.position = "top")
+cost_plot
+```
+
+### Save figures for the presentation
+
+```{r save-figures}
+saved <- character()
+for (spec in list(
+  list(plot = score_plot, base = "summary_mutation_score"),
+  list(plot = cost_plot,  base = "summary_cost_vs_baseline")
+)) {
+  png_path <- file.path(fig_dir, paste0(spec$base, ".png"))
+  pdf_path <- file.path(fig_dir, paste0(spec$base, ".pdf"))
+  ggsave(png_path, spec$plot, width = 10, height = 5.6, dpi = 200)
+  ggsave(pdf_path, spec$plot, width = 10, height = 5.6)
+  saved <- c(saved, png_path, pdf_path)
+}
+cat("Wrote:\n", paste0(" - ", normalizePath(saved), collapse = "\n"), "\n", sep = "")
+```
