@@ -341,11 +341,21 @@ Enable the analysis when running package mutation tests:
 mutate_package("path/to/pkg", detectEqMutants = TRUE)
 ```
 
-Survived mutants are analyzed in **bounded batches** (default 25 per
-request), and each mutant is shown to the model as a small **unified
-diff** of its edit (plus a short change label) rather than its full
-mutated source. This is compact, unambiguous, and in a format LLMs read
-natively. When
+Equivalence detection runs **before** the test suites. Because an
+equivalent mutant is behaviorally identical to the original, no test can
+kill it, so running its test suite is wasted work.
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+therefore analyzes every generated mutant up front and **skips the test
+run** for those judged equivalent — they are recorded as survived
+directly. Mutants judged `NOT_EQUIVALENT` or `DONT_KNOW` are tested as
+usual. (The trade-off is that the equivalence pass now covers all
+mutants, not only survivors, so it makes more API calls; in exchange it
+avoids the far more expensive test runs on equivalent mutants.)
+
+Mutants are analyzed in **bounded batches** (default 25 per request),
+and each mutant is shown to the model as a small **unified diff** of its
+edit (plus a short change label) rather than its full mutated source.
+This is compact, unambiguous, and in a format LLMs read natively. When
 [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
 runs with `cores > 1` the batches are sent **concurrently**, which (with
 the bounded size) keeps the equivalence pass fast and avoids the

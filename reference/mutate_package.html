@@ -86,8 +86,11 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 
 
 <dt id="arg-detecteqmutants">detectEqMutants<a class="anchor" aria-label="anchor" href="#arg-detecteqmutants"></a></dt>
-<dd><p>Logical; if <code>TRUE</code>, survived mutants are analyzed for
-equivalence using the OpenAI-based workflow.</p></dd>
+<dd><p>Logical; if <code>TRUE</code>, every generated mutant is analyzed
+for equivalence using the OpenAI-based workflow <em>before</em> the test suites are
+run. Mutants judged equivalent are recorded as survived without running
+their tests (no test can kill an equivalent mutant), which avoids that
+wasted work; the remaining mutants are tested as usual.</p></dd>
 
 
 <dt id="arg-mutation-dir">mutation_dir<a class="anchor" aria-label="anchor" href="#arg-mutation-dir"></a></dt>

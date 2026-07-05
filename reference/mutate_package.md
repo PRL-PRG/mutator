@@ -46,8 +46,11 @@ mutate_package(
 
 - detectEqMutants:
 
-  Logical; if `TRUE`, survived mutants are analyzed for equivalence
-  using the OpenAI-based workflow.
+  Logical; if `TRUE`, every generated mutant is analyzed for equivalence
+  using the OpenAI-based workflow *before* the test suites are run.
+  Mutants judged equivalent are recorded as survived without running
+  their tests (no test can kill an equivalent mutant), which avoids that
+  wasted work; the remaining mutants are tested as usual.
 
 - mutation_dir:
 

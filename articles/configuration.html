@@ -391,15 +391,25 @@ example <code>http://localhost:11434/v1</code>).</p>
 <p>Enable the analysis when running package mutation tests:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, detectEqMutants <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<p>Survived mutants are analyzed in <strong>bounded batches</strong>
-(default 25 per request), and each mutant is shown to the model as a
-small <strong>unified diff</strong> of its edit (plus a short change
-label) rather than its full mutated source. This is compact,
-unambiguous, and in a format LLMs read natively. When
-<code><a href="../reference/mutate_package.html">mutate_package()</a></code> runs with <code>cores &gt; 1</code> the
-batches are sent <strong>concurrently</strong>, which (with the bounded
-size) keeps the equivalence pass fast and avoids the truncated responses
-that otherwise drop verdicts.</p>
+<p>Equivalence detection runs <strong>before</strong> the test suites.
+Because an equivalent mutant is behaviorally identical to the original,
+no test can kill it, so running its test suite is wasted work.
+<code><a href="../reference/mutate_package.html">mutate_package()</a></code> therefore analyzes every generated mutant
+up front and <strong>skips the test run</strong> for those judged
+equivalent — they are recorded as survived directly. Mutants judged
+<code>NOT_EQUIVALENT</code> or <code>DONT_KNOW</code> are tested as
+usual. (The trade-off is that the equivalence pass now covers all
+mutants, not only survivors, so it makes more API calls; in exchange it
+avoids the far more expensive test runs on equivalent mutants.)</p>
+<p>Mutants are analyzed in <strong>bounded batches</strong> (default 25
+per request), and each mutant is shown to the model as a small
+<strong>unified diff</strong> of its edit (plus a short change label)
+rather than its full mutated source. This is compact, unambiguous, and
+in a format LLMs read natively. When <code><a href="../reference/mutate_package.html">mutate_package()</a></code> runs
+with <code>cores &gt; 1</code> the batches are sent
+<strong>concurrently</strong>, which (with the bounded size) keeps the
+equivalence pass fast and avoids the truncated responses that otherwise
+drop verdicts.</p>
 <p>For mutants the model flags as <strong>EQUIVALENT</strong> (they are
 excluded from the adjusted mutation score), it also returns a
 one-sentence <strong>reason</strong>, stored as
