@@ -62,6 +62,27 @@
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
 <p>mutator is an automated mutation testing tool for the R language. It applies mutation testing principles to help developers improve test suite quality by introducing small, systematic changes (mutations) to source code and verifying if tests can detect these changes.</p>
+<p>For instance, imagine you have the following function <code>f</code> in your package:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">f</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="va">x</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">x</span> <span class="op">+</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">x</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p><code>mutator</code> will generate several mutants, including:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">f</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="va">x</span> <span class="op">&lt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span> <span class="co"># Mutated comparison operator</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">x</span> <span class="op">+</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">x</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p>In this mutant, <code>&gt;</code> has been replaced with <code>&lt;</code>.</p>
+<p>If your test suite does not catch this change, it indicates that your tests may not be comprehensive enough.</p>
+<p><code>mutator</code> will compute how many mutants <em>survives</em>, i.e. the test suite does not fail for the mutant, and how many mutants are <em>killed</em>, i.e. the test suite fails for the mutant. The ratio of killed mutants to total mutants is called the <strong>mutation score</strong> and is a measure of test suite effectiveness.</p>
 </div>
 <div class="section level2">
 <h2 id="features">Features<a class="anchor" aria-label="anchor" href="#features"></a>
@@ -76,7 +97,13 @@
 <li>
 <strong>Coverage-guided Test Selection</strong>: Runs only the tests that cover mutated lines, also for improved performance</li>
 <li>
-<strong>Equivalent Mutant Detection</strong>: Uses AI to identify mutants that are functionally equivalent to the original code</li>
+<strong>Configurable Test Harness</strong>: Supports both <code>testthat</code> and non-<code>testthat</code> test layouts</li>
+<li>
+<strong>Timeout Management</strong>: Automatically calibrates timeouts for mutant test runs to prevent hangs</li>
+<li>
+<strong>Annotations and Exclusions</strong>: Allows developers to exclude specific files or code sections from mutation testing</li>
+<li>
+<strong>Equivalent Mutant Detection</strong>: Identify mutants that are functionally equivalent to the original code (currently, using LLMs)</li>
 <li>
 <strong>Detailed Reporting</strong>: Provides mutation scores and analysis of test suite effectiveness</li>
 </ul>
@@ -84,7 +111,7 @@
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Install from GitHub; package dependencies are installed automatically</span></span>
 <span><span class="co"># install.packages("remotes")</span></span>
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/mutator"</span><span class="op">)</span></span>
@@ -97,7 +124,7 @@
 <div class="section level2">
 <h2 id="quick-start-guide">Quick Start Guide<a class="anchor" aria-label="anchor" href="#quick-start-guide"></a>
 </h2>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/PRL-PRG/mutator" class="external-link">mutator</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Mutate a single file</span></span>
@@ -117,6 +144,15 @@
 <span></span>
 <span><span class="co"># Optional: control where mutant files are written</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/your/package"</span>, mutation_dir <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>Mutant outcomes are reported as:</p>
+<ul>
+<li>
+<code>SURVIVED</code>: tests passed for the mutant</li>
+<li>
+<code>KILLED</code>: tests failed (or execution error)</li>
+<li>
+<code>HANG</code>: mutant exceeded timeout</li>
+</ul>
 <p>See the <a href="https://prl-prg.github.io/mutator/reference/">pkgdown reference</a> for the full argument and return-value documentation.</p>
 </div>
 <div class="section level2">
@@ -127,17 +163,7 @@
 <li>If <code>tests/testthat/</code> exists, mutator loads the mutant in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and mirrors the package’s own <code>tests/testthat.R</code> harness by forwarding extractable arguments (notably any <code>filter</code>) from <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> to <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>, without paying for an install per mutant.</li>
 <li>Otherwise, if <code>tests/</code> exists, mutator falls back to <code>tools::testInstalledPackage(..., types = "tests")</code> after installing each mutant with <code>--install-tests</code>.</li>
 </ul>
-<p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts). To avoid recompiling C/C++ on every mutant, mutator installs the unmutated package, compiling its shared objects, <strong>once</strong> into a template library, then installs each mutant with <code>--no-libs</code> (R code only) and restores the template’s prebuilt shared objects before running its tests. This is safe because mutator does not mutate compiled code, so the shared object is identical for every mutant; it also means concurrent mutant installs no longer write into a shared <code>src/</code> (see <a href="https://prl-prg.github.io/mutator/articles/configuration.html#parallel-execution-and-isolation-isolate">Parallel execution and isolation</a> in the Configuration article).</p>
-<p>Each mutant test run uses a timeout. By default, mutator calibrates it from the baseline suite runtime under the current parallelism, with a small floor. You can override this by setting <code>timeout_seconds</code> explicitly.</p>
-<p>Mutant outcomes are reported as:</p>
-<ul>
-<li>
-<code>SURVIVED</code>: tests passed for the mutant</li>
-<li>
-<code>KILLED</code>: tests failed (or execution error)</li>
-<li>
-<code>HANG</code>: mutant exceeded timeout</li>
-</ul>
+<p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts).</p>
 </div>
 <div class="section level2">
 <h2 id="configuration">Configuration<a class="anchor" aria-label="anchor" href="#configuration"></a>
@@ -214,7 +240,6 @@
 </tr>
 </tbody>
 </table>
-<p>Direct literal return values are not rewritten by the return-to-<code>NULL</code> mutation; for example, <code>return(1)</code> is left alone by that mutation.</p>
 </div>
 <div class="section level2">
 <h2 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>
@@ -262,7 +287,7 @@
 </li>
 </ul>
 <p>Run the full test suite with:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
