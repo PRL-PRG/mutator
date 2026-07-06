@@ -73,7 +73,7 @@ precise-location, and equivalent-mutant-detection features behave. See
 the <a href="../reference/index.html">reference</a> for the full
 argument and return-value documentation.</p>
 <div class="section level2">
-<h2 id="timeouts-and-the-contended-baseline">Timeouts and the contended baseline<a class="anchor" aria-label="anchor" href="#timeouts-and-the-contended-baseline"></a>
+<h2 id="timeouts-and-contention-in-parallel-mode">Timeouts and contention in parallel mode<a class="anchor" aria-label="anchor" href="#timeouts-and-contention-in-parallel-mode"></a>
 </h2>
 <p>Each mutant is run with a wall-clock timeout; exceeding it is
 reported as <code>HANG</code>. The timeout is derived from how long the
@@ -82,10 +82,9 @@ package’s own test suite takes, unless you pass
 <p>Because mutants run in parallel (<code>cores</code> at a time), the
 timeout must account for <strong>contention</strong>: with many workers,
 each test run is slower than it would be alone for packages that load
-many dependencies, or do heavy per-mutant install work, dramatically so.
-A timeout based on a single, <em>uncontended</em> baseline run would
-then fire on nearly every mutant (a wave of false
-<code>HANG</code>s).</p>
+many dependencies, or do heavy per-mutant install work. A timeout based
+on a single, <em>uncontended</em> baseline run would then fire on nearly
+every mutant (leading to numerous false <code>HANG</code>s).</p>
 <p>To avoid this, <code><a href="../reference/mutate_package.html">mutate_package()</a></code> first runs the baseline
 suite once on its own (to confirm it passes and fail fast otherwise),
 then runs it <code>cores</code> times <strong>concurrently</strong> and
@@ -93,9 +92,9 @@ takes the slowest of those as the <em>contended baseline</em>. The
 timeout is <code>max(contended_baseline * 1.5, 5s)</code>. This
 self-calibrates to the machine, the chosen parallelism, and the
 package’s real load/compile cost, avoiding manual tuning. Pass
-<code>timeout_seconds</code> to override it entirely. (When
-<code>cores = 1</code>, or when forking is unavailable, the solo
-baseline is used.)</p>
+<code>timeout_seconds</code> to override it entirely.</p>
+<p>When <code>cores = 1</code>, or when forking is unavailable, the
+timing for the baseline suite is used.</p>
 </div>
 <div class="section level2">
 <h2 id="cran-mode-test-selection">CRAN mode (test selection)<a class="anchor" aria-label="anchor" href="#cran-mode-test-selection"></a>
@@ -110,8 +109,8 @@ skips the slow, flaky, or network-dependent tests that packages mark as
 CRAN-skippable, which keeps mutation runs fast and avoids spurious
 timeouts/kills from, e.g., tests that hit the network.</p>
 <p>Set <code>cran = FALSE</code> to run the <strong>full</strong> suite
-instead (<code>NOT_CRAN = "true"</code>, the behaviour of
-<code>devtools::test()</code>):</p>
+instead (<code>NOT_CRAN = "true"</code>, which is what happens by
+default when running <code>devtools::test()</code>):</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, cran <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>This applies to both test strategies (the <code>testthat</code>
@@ -124,22 +123,20 @@ mode.</p>
 <div class="section level2">
 <h2 id="fail-fast-stop-at-the-first-failing-test">Fail-fast (stop at the first failing test)<a class="anchor" aria-label="anchor" href="#fail-fast-stop-at-the-first-failing-test"></a>
 </h2>
-<p>A mutant is <code>KILLED</code> the instant any one test detects it,
-so running the rest of its suite is wasted work. By default
-(<code>fail_fast = TRUE</code>) each mutant’s test run <strong>stops at
+<p>A mutant is <code>KILLED</code> the instant any of the tests detects
+it, so running the rest of its suite is wasted work. By default
+(<code>fail_fast = TRUE</code>), each mutant’s test run <strong>stops at
 the first failing test</strong> instead of finishing the suite, which
 speeds up the test-running phase (often substantially for packages with
-large suites) without changing any mutant’s verdict (the early-aborted
-run still reports the failure, so the mutant is still
-<code>KILLED</code>).</p>
+large suites) without changing any mutant’s verdict.</p>
 <p>Set <code>fail_fast = FALSE</code> to run the full suite for every
 mutant:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, fail_fast <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
-<p>This applies to the <code>testthat</code> strategy (it sets
+<p>This applies to the <code>testthat</code> strategy: it sets
 <code>TESTTHAT_MAX_FAILS = 1</code> in the test subprocess and uses the
 progress reporter, which aborts the run at the first failing
-<code>test_that()</code> block). <code>SURVIVED</code> mutants are
+<code>test_that()</code> block. <code>SURVIVED</code> mutants are
 unaffected, as they have no failure to short-circuit on, so baseline
 timing and timeout calibration are unchanged. The installed-tests
 fallback already stops at the first failing test <em>file</em>
@@ -148,20 +145,21 @@ regardless of this flag.</p>
 <div class="section level2">
 <h2 id="parallel-execution-and-isolation-isolate">Parallel execution and isolation (<code>isolate</code>)<a class="anchor" aria-label="anchor" href="#parallel-execution-and-isolation-isolate"></a>
 </h2>
-<p>By default each mutant package copy <em>symlinks</em> the unchanged
-directories of the original package (only the mutated <code>R/</code>
-file is materialised), so all parallel workers point at the same
-physical <code>src/</code>, <code>tests/</code>, etc. This is fast, and
-two design choices keep it correct:</p>
+<p>By default, each mutant package copy <em>symlinks</em> the unchanged
+directories of the original package and only the mutated <code>R/</code>
+file is materialised, so all parallel workers point at the same physical
+<code>src/</code>, <code>tests/</code>, etc. This is fast, and two
+design choices keep it correct:</p>
 <ul>
 <li>
 <strong>Compiled code is built once, not per mutant.</strong> For
 the <code>testthat</code> strategy, <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code>
 reuses the baseline’s compiled <code>src/</code> since C code is never
 mutated. The <code>installed</code>strategy compiles once into a
-template library and installs each mutant with <code>--no-libs</code>,
-which never writes into <code>src/</code>. This prevents parallel
-workers from fighting over the same compiled objects.</li>
+<em>template</em> library and installs each mutant with
+<code>--no-libs</code>, which never writes into <code>src/</code>. This
+prevents parallel workers from fighting over the same compiled
+objects.</li>
 <li>
 <strong>Snapshot references are not shared.</strong> For
 <code>testthat</code> packages with <code>_snaps</code> directories,
@@ -259,15 +257,18 @@ expanded relative to the package root (a matched directory expands to
 the files under it), and matching <code>R/</code> files are skipped
 before generation — the same mechanism covr uses. So files you already
 exclude from coverage need no extra mutator configuration.</p>
-<p><strong>Granularity caveat.</strong> Excluding whole <em>files</em>
-and whole <em>functions</em> is reliable. Finer than that is not, for
-operator mutations: R does not attach source references to nested
-expressions, so the engine resolves an operator mutant’s position only
-to its enclosing top-level definition. A region directive inside a
+<p><strong>Granularity.</strong> Excluding whole <em>files</em> and
+whole <em>functions</em> is reliable. More fine-grained than that is
+not, for operator mutations: R mostly only attaches source references to
+blocks <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code>, so the engine resolves an operator mutant’s
+position only to its enclosing block. A region directive inside a
 function therefore excludes that function’s operator mutants as a group:
 you cannot single out one operator mid-function. Line-deletion mutants
 <em>are</em> excluded line-precisely. In practice, wrap whole functions,
-not fragments.</p>
+not fragments. This only affects the surviving mutant output, which
+shows a larger context than necessary, and prevents the coverage-guided
+test selection from being as precise as it could be. The granularity can
+be improved with the optional <a href="#imputesrcref"><code>imputesrcref</code></a> package.</p>
 </div>
 <div class="section level2">
 <h2 id="coverage-guided-test-selection-coverage_guided">Coverage-guided test selection (<code>coverage_guided</code>)<a class="anchor" aria-label="anchor" href="#coverage-guided-test-selection-coverage_guided"></a>
@@ -318,15 +319,15 @@ so it is opt-in:</p>
 are uncovered, and tests exercise the code directly.</p>
 </div>
 <div class="section level2">
-<h2 id="precise-mutant-locations-optional-imputesrcref">Precise mutant locations (optional <code>imputesrcref</code>)<a class="anchor" aria-label="anchor" href="#precise-mutant-locations-optional-imputesrcref"></a>
+<h2 id="imputesrcref">Precise mutant locations (optional <code>imputesrcref</code>)<a class="anchor" aria-label="anchor" href="#imputesrcref"></a>
 </h2>
 <p>Each reported mutant carries a source <code>Range:</code>
 (<code>start:col-end:col</code>). For statement- and line-deletion
 mutants this is precise, but <strong>operator mutants</strong>
 (<code>+</code>, <code>&lt;</code>, <code>&amp;&amp;</code>, …) are
 different: R attaches no <code>srcref</code> to nested call objects, so
-the engine can only report the bounds of the <em>enclosing top-level
-expression</em>, effectively a loop body or even the whole function. A
+the engine can only report the bounds of the <em>enclosing block</em>
+(<code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code>), effectively a loop body or even the whole function. A
 surviving <code>==</code>-to-<code>!=</code> mutant in a 40-line
 function therefore points at all 40 lines.</p>
 <p>If the optional <a href="https://github.com/PRL-PRG/imputesrcref" class="external-link"><code>imputesrcref</code></a>
@@ -363,7 +364,7 @@ mixed):</p>
 <p><strong>Programmatically</strong>, in your R session:</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
-<span>  api_key  <span class="op">=</span> <span class="st">"sk-..."</span>,</span>
+<span>  api_key  <span class="op">=</span> <span class="st">"api-key..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>
 <span>  base_url <span class="op">=</span> <span class="st">"https://api.openai.com/v1"</span> <span class="co"># any OpenAI-compatible endpoint</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -374,7 +375,7 @@ working directory (or in a directory you pass via
 <code>get_openai_config(dir = ...)</code>). It is a plain,
 human-readable file of <code>field: value</code> lines and is
 <em>parsed, never executed</em>:</p>
-<pre><code>api_key: sk-...
+<pre><code>api_key: api-key...
 model: gpt-4
 base_url: https://api.openai.com/v1</code></pre>
 <p>Only the given directory is consulted. Parent directories are not
@@ -396,11 +397,11 @@ Because an equivalent mutant is behaviorally identical to the original,
 no test can kill it, so running its test suite is wasted work.
 <code><a href="../reference/mutate_package.html">mutate_package()</a></code> therefore analyzes every generated mutant
 up front and <strong>skips the test run</strong> for those judged
-equivalent — they are recorded as survived directly. Mutants judged
+equivalent: they are recorded as survived directly. Mutants judged
 <code>NOT_EQUIVALENT</code> or <code>DONT_KNOW</code> are tested as
-usual. (The trade-off is that the equivalence pass now covers all
+usual. The trade-off is that the equivalence pass now covers all
 mutants, not only survivors, so it makes more API calls; in exchange it
-avoids the far more expensive test runs on equivalent mutants.)</p>
+avoids the far more expensive test runs on equivalent mutants.</p>
 <p>Mutants are analyzed in <strong>bounded batches</strong> (default 25
 per request), and each mutant is shown to the model as a small
 <strong>unified diff</strong> of its edit (plus a short change label)

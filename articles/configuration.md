@@ -9,7 +9,7 @@ equivalent-mutant-detection features behave. See the
 [reference](https://prl-prg.github.io/mutator/reference/index.md) for
 the full argument and return-value documentation.
 
-## Timeouts and the contended baseline
+## Timeouts and contention in parallel mode
 
 Each mutant is run with a wall-clock timeout; exceeding it is reported
 as `HANG`. The timeout is derived from how long the package’s own test
@@ -18,9 +18,9 @@ suite takes, unless you pass `timeout_seconds` explicitly.
 Because mutants run in parallel (`cores` at a time), the timeout must
 account for **contention**: with many workers, each test run is slower
 than it would be alone for packages that load many dependencies, or do
-heavy per-mutant install work, dramatically so. A timeout based on a
-single, *uncontended* baseline run would then fire on nearly every
-mutant (a wave of false `HANG`s).
+heavy per-mutant install work. A timeout based on a single,
+*uncontended* baseline run would then fire on nearly every mutant
+(leading to numerous false `HANG`s).
 
 To avoid this,
 [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
@@ -30,8 +30,10 @@ takes the slowest of those as the *contended baseline*. The timeout is
 `max(contended_baseline * 1.5, 5s)`. This self-calibrates to the
 machine, the chosen parallelism, and the package’s real load/compile
 cost, avoiding manual tuning. Pass `timeout_seconds` to override it
-entirely. (When `cores = 1`, or when forking is unavailable, the solo
-baseline is used.)
+entirely.
+
+When `cores = 1`, or when forking is unavailable, the timing for the
+baseline suite is used.
 
 ## CRAN mode (test selection)
 
@@ -47,7 +49,8 @@ that packages mark as CRAN-skippable, which keeps mutation runs fast and
 avoids spurious timeouts/kills from, e.g., tests that hit the network.
 
 Set `cran = FALSE` to run the **full** suite instead
-(`NOT_CRAN = "true"`, the behaviour of `devtools::test()`):
+(`NOT_CRAN = "true"`, which is what happens by default when running
+`devtools::test()`):
 
 ``` r
 
@@ -62,13 +65,12 @@ either mode.
 
 ## Fail-fast (stop at the first failing test)
 
-A mutant is `KILLED` the instant any one test detects it, so running the
-rest of its suite is wasted work. By default (`fail_fast = TRUE`) each
-mutant’s test run **stops at the first failing test** instead of
+A mutant is `KILLED` the instant any of the tests detects it, so running
+the rest of its suite is wasted work. By default (`fail_fast = TRUE`),
+each mutant’s test run **stops at the first failing test** instead of
 finishing the suite, which speeds up the test-running phase (often
 substantially for packages with large suites) without changing any
-mutant’s verdict (the early-aborted run still reports the failure, so
-the mutant is still `KILLED`).
+mutant’s verdict.
 
 Set `fail_fast = FALSE` to run the full suite for every mutant:
 
@@ -77,26 +79,26 @@ Set `fail_fast = FALSE` to run the full suite for every mutant:
 mutate_package("path/to/pkg", fail_fast = FALSE)
 ```
 
-This applies to the `testthat` strategy (it sets
+This applies to the `testthat` strategy: it sets
 `TESTTHAT_MAX_FAILS = 1` in the test subprocess and uses the progress
-reporter, which aborts the run at the first failing `test_that()`
-block). `SURVIVED` mutants are unaffected, as they have no failure to
+reporter, which aborts the run at the first failing `test_that()` block.
+`SURVIVED` mutants are unaffected, as they have no failure to
 short-circuit on, so baseline timing and timeout calibration are
 unchanged. The installed-tests fallback already stops at the first
 failing test *file* regardless of this flag.
 
 ## Parallel execution and isolation (`isolate`)
 
-By default each mutant package copy *symlinks* the unchanged directories
-of the original package (only the mutated `R/` file is materialised), so
-all parallel workers point at the same physical `src/`, `tests/`, etc.
-This is fast, and two design choices keep it correct:
+By default, each mutant package copy *symlinks* the unchanged
+directories of the original package and only the mutated `R/` file is
+materialised, so all parallel workers point at the same physical `src/`,
+`tests/`, etc. This is fast, and two design choices keep it correct:
 
 - **Compiled code is built once, not per mutant.** For the `testthat`
   strategy,
   [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
   reuses the baseline’s compiled `src/` since C code is never mutated.
-  The `installed`strategy compiles once into a template library and
+  The `installed`strategy compiles once into a *template* library and
   installs each mutant with `--no-libs`, which never writes into `src/`.
   This prevents parallel workers from fighting over the same compiled
   objects.
@@ -201,14 +203,19 @@ files are skipped before generation — the same mechanism covr uses. So
 files you already exclude from coverage need no extra mutator
 configuration.
 
-**Granularity caveat.** Excluding whole *files* and whole *functions* is
-reliable. Finer than that is not, for operator mutations: R does not
-attach source references to nested expressions, so the engine resolves
-an operator mutant’s position only to its enclosing top-level
-definition. A region directive inside a function therefore excludes that
-function’s operator mutants as a group: you cannot single out one
-operator mid-function. Line-deletion mutants *are* excluded
-line-precisely. In practice, wrap whole functions, not fragments.
+**Granularity.** Excluding whole *files* and whole *functions* is
+reliable. More fine-grained than that is not, for operator mutations: R
+mostly only attaches source references to blocks
+[`{}`](https://rdrr.io/r/base/Paren.html), so the engine resolves an
+operator mutant’s position only to its enclosing block. A region
+directive inside a function therefore excludes that function’s operator
+mutants as a group: you cannot single out one operator mid-function.
+Line-deletion mutants *are* excluded line-precisely. In practice, wrap
+whole functions, not fragments. This only affects the surviving mutant
+output, which shows a larger context than necessary, and prevents the
+coverage-guided test selection from being as precise as it could be. The
+granularity can be improved with the optional
+[`imputesrcref`](#imputesrcref) package.
 
 ## Coverage-guided test selection (`coverage_guided`)
 
@@ -266,9 +273,10 @@ Each reported mutant carries a source `Range:` (`start:col-end:col`).
 For statement- and line-deletion mutants this is precise, but **operator
 mutants** (`+`, `<`, `&&`, …) are different: R attaches no `srcref` to
 nested call objects, so the engine can only report the bounds of the
-*enclosing top-level expression*, effectively a loop body or even the
-whole function. A surviving `==`-to-`!=` mutant in a 40-line function
-therefore points at all 40 lines.
+*enclosing block* ([`{}`](https://rdrr.io/r/base/Paren.html)),
+effectively a loop body or even the whole function. A surviving
+`==`-to-`!=` mutant in a 40-line function therefore points at all 40
+lines.
 
 If the optional
 [`imputesrcref`](https://github.com/PRL-PRG/imputesrcref) package is
@@ -308,7 +316,7 @@ each setting is resolved independently, so they can be mixed):
     ``` r
 
     set_openai_config(
-      api_key  = "sk-...",
+      api_key  = "api-key...",
       model    = "gpt-4",
       base_url = "https://api.openai.com/v1" # any OpenAI-compatible endpoint
     )
@@ -319,7 +327,7 @@ each setting is resolved independently, so they can be mixed):
     plain, human-readable file of `field: value` lines and is *parsed,
     never executed*:
 
-        api_key: sk-...
+        api_key: api-key...
         model: gpt-4
         base_url: https://api.openai.com/v1
 
@@ -346,11 +354,11 @@ equivalent mutant is behaviorally identical to the original, no test can
 kill it, so running its test suite is wasted work.
 [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
 therefore analyzes every generated mutant up front and **skips the test
-run** for those judged equivalent — they are recorded as survived
+run** for those judged equivalent: they are recorded as survived
 directly. Mutants judged `NOT_EQUIVALENT` or `DONT_KNOW` are tested as
-usual. (The trade-off is that the equivalence pass now covers all
+usual. The trade-off is that the equivalence pass now covers all
 mutants, not only survivors, so it makes more API calls; in exchange it
-avoids the far more expensive test runs on equivalent mutants.)
+avoids the far more expensive test runs on equivalent mutants.
 
 Mutants are analyzed in **bounded batches** (default 25 per request),
 and each mutant is shown to the model as a small **unified diff** of its
