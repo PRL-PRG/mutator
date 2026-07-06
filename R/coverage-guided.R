@@ -6,14 +6,7 @@
 # under the testthat strategy; see mutate_package(coverage_guided=).
 
 # Disable covr's comment-based exclusions (its "nocov" line and start/end range
-# markers). They tell covr to emit *no coverage* for the marked code, but that
-# code still runs and its mutants can still be killed -- so an excluded file would
-# look UNCOVERED and be wrongly auto-SURVIVED. Vendored compat files (e.g. r-lib's
-# compat-types-check.R) wrap the whole file in such markers, which is exactly this
-# trap. Point the exclusion markers at sentinels that never appear in source so
-# covr instruments everything; genuinely unexecuted lines still stay uncovered.
-# (This comment deliberately avoids the literal covr marker tokens so that running
-# covr on mutator itself does not treat this line as an unbalanced range start.)
+# markers). Should probably remove now that we honour covr annotations.
 covr_no_exclusions <- list(
   covr.exclude_start = "<<mutator-no-exclude-start>>",
   covr.exclude_end = "<<mutator-no-exclude-end>>",
@@ -24,7 +17,6 @@ covr_no_exclusions <- list(
 # the same structure: list(by_file = <named by source basename> of trace records
 # `list(first, last, tests = <test tokens>, ambiguous = <logical>)`), consumed by
 # select_test_files(). Both run the suite once, doubling as the baseline check
-# (errors / test failures here are fatal, like a failing baseline run).
 build_coverage_test_map <- function(pkg_dir, backend = "record_tests", cran = TRUE) {
   switch(backend,
     record_tests = build_coverage_map_record_tests(pkg_dir),
@@ -38,7 +30,7 @@ build_coverage_test_map <- function(pkg_dir, backend = "record_tests", cran = TR
 # test, so a failing baseline surfaces as an error (fatal). Attribution comes from
 # covr's per-test recording; because covr credits a covered trace to the *deepest
 # test-directory frame*, code reached through a helper-*.R/setup-*.R wrapper is
-# credited to the helper, not the test-*.R file -- such traces are marked
+# credited to the helper, not the test-*.R file Such traces are marked
 # "ambiguous" so select_test_files() falls back to the full suite. Keyed by source
 # basename (unique within R/) to sidestep covr's relative-vs-absolute paths.
 build_coverage_map_record_tests <- function(pkg_dir) {
@@ -53,7 +45,7 @@ build_coverage_map_record_tests <- function(pkg_dir) {
   # covr's record_tests credits a covered trace to the *deepest test-directory
   # frame on the call stack*. When a test drives package code through a function
   # defined in a helper-*.R / setup-*.R file (a very common pattern, e.g. a
-  # roundtrip wrapper), covr credits the helper, not the test-*.R file -- so the
+  # roundtrip wrapper), covr credits the helper, not the test-*.R file, so the
   # real triggering test is unknown. We mark such traces "ambiguous" and run the
   # full suite for them rather than risk excluding the killing test. Only files
   # whose name starts with "test" are real, selectable testthat files.
@@ -80,8 +72,8 @@ build_coverage_map_record_tests <- function(pkg_dir) {
 # R code (a character vector of commands) run inside covr's instrumented session
 # by the per_file backend. It runs the suite ONCE through a testthat reporter that,
 # per test file, zeroes covr's trace counters on start_file and snapshots the
-# non-zero ones on end_file -- so each covered line is attributed to exactly the
-# test file that was running, with no helper/setup collapse. Counters are reset by
+# non-zero ones on end_file so each covered line is attributed to exactly the
+# test file that was running, with no helper/setup files misattributed. Counters are reset by
 # zeroing `$value` (covr's own clear_counters() *removes* entries, which breaks
 # counting). Failures are summed so the run also serves as the baseline check.
 perfile_collect_code <- function(testdir, out, not_cran, pkgname) {
@@ -116,8 +108,8 @@ perfile_collect_code <- function(testdir, out, not_cran, pkgname) {
 # per_file backend: instrument the package once, then run the suite a single time
 # under perfile_collect_code()'s reporter, which attributes coverage per test file
 # directly (no record_tests, no helper-attribution collapse, so no "ambiguous"
-# fallback). Cost is ~one full instrumented run. Depends on covr internals
-# (.counters), so it is the opt-in backend.
+# fallback). Cost is about one full instrumented run. Depends on covr internals
+# (.counters), so it is an opt-in backend.
 build_coverage_map_per_file <- function(pkg_dir, cran = TRUE) {
   if (!requireNamespace("R6", quietly = TRUE)) {
     stop("Package 'R6' is required for the per_file coverage backend.", call. = FALSE)
@@ -181,6 +173,8 @@ build_coverage_map_per_file <- function(pkg_dir, cran = TRUE) {
 #   - traces overlapping the mutated range -> union of their test tokens
 #   - no overlap (e.g. an untraced `function(){` line) -> all tokens for the file
 #   - covered only at load time (no test) -> "RUN_ALL" (sound: line is reachable)
+# Note that we have ratehr fine-grained information about which test files cover which lines, 
+# but testthat only allows per-file filtering when running the test suite of a package.
 select_test_files <- function(cov_map, src_basename, start_line, end_line) {
   records <- cov_map$by_file[[src_basename]]
   if (is.null(records)) {
@@ -200,7 +194,7 @@ select_test_files <- function(cov_map, src_basename, start_line, end_line) {
     toks <- toks[!is.na(toks)]
     if (length(toks) > 0) toks else "RUN_ALL"
   }
-  # Overlap rung -- skipped when the mutation engine gave no line range (NA), in
+  # Overlap: skipped when the mutation engine gave no line range (NA), in
   # which case we drop straight to the file-level region fallback below.
   if (!is.na(start_line) && !is.na(end_line)) {
     overlapping <- Filter(
