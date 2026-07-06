@@ -113,6 +113,12 @@ result <- mutate_package("path/to/your/package", timeout_seconds = 60)
 result <- mutate_package("path/to/your/package", mutation_dir = tempdir())
 ```
 
+`mutator`, in addition to show you the number of generated mutants, the
+surviving ones, and the mutation score, returns an invisible list with
+four components, a list of the generated mutants, a list of mutant
+outcomes, a list of phase durations, and a summary of the mutation
+testing run.
+
 Mutant outcomes are reported as:
 
 - `SURVIVED`: tests passed for the mutant

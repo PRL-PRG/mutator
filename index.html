@@ -144,6 +144,7 @@
 <span></span>
 <span><span class="co"># Optional: control where mutant files are written</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/your/package"</span>, mutation_dir <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><code>mutator</code>, in addition to show you the number of generated mutants, the surviving ones, and the mutation score, returns an invisible list with four components, a list of the generated mutants, a list of mutant outcomes, a list of phase durations, and a summary of the mutation testing run.</p>
 <p>Mutant outcomes are reported as:</p>
 <ul>
 <li>
