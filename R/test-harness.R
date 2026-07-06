@@ -7,7 +7,7 @@
 # forward to testthat::test_dir(), with `package` and `reporter` removed (the
 # mutator supplies its own reporter and loads the dev package via load_all()).
 # Returns list() when there is no harness, no test_check() call, or the call
-# cannot be parsed/evaluated from literals -- in which case the full suite runs.
+# cannot be parsed/evaluated from literals, in which case the full suite runs.
 extract_harness_test_args <- function(harness_file) {
   if (!file.exists(harness_file)) {
     return(list())
@@ -73,4 +73,3 @@ get_package_name <- function(pkg_path) {
   }
   desc[1, "Package"]
 }
-

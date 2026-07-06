@@ -3,7 +3,7 @@
 # setup.sh -- install the tools and dependencies needed to run the
 # mutation-testing benchmark (mutator vs. muttest vs. universalmutator).
 #
-# Idempotent: re-running skips anything already present. No root required --
+# Idempotent: re-running skips anything already present. No root required;
 # everything lands under the benchmark dir (.venv) or $HOME/.local.
 #
 # Installs:

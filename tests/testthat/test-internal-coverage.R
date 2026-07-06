@@ -186,7 +186,7 @@ test_that("identify_equivalent_mutants batches requests and merges all verdicts"
 
     # 7 mutants / batch of 3 -> 3 requests (3, 3, 1).
     expect_equal(calls, 3)
-    # Every mutant is classified -- none dropped across batches.
+    # Every mutant is classified; none dropped across batches.
     expect_length(res, n)
     expect_true(all(vapply(
         res, function(m) identical(m$equivalence_status, "NOT EQUIVALENT"), logical(1)

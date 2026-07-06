@@ -299,7 +299,7 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
   ), file.path(pkg_dir, "R", "add.R"))
 
   # Test calls into the compiled code, so it only passes if the restored .so is
-  # present -- guarding the libs/ restore step end to end.
+  # present, guarding the libs/ restore step end to end.
   writeLines("stopifnot(testCompiledFallback::add2(2, 3) == 5)",
     file.path(pkg_dir, "tests", "test-add.R"))
 
@@ -308,7 +308,7 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
   expect_true(is.list(result))
   expect_true(length(result$test_results) > 0)
   # Baseline succeeded (mutate_package would have errored otherwise) and every
-  # mutant produced a verdict -- i.e. installs with the restored .so worked.
+  # mutant produced a verdict, i.e. installs with the restored .so worked.
   expect_true(all(unlist(result$test_results) %in% c("KILLED", "SURVIVED", "HANG")))
 })
 
@@ -709,7 +709,7 @@ test_that("coverage_guided yields the same verdicts as the full suite", {
   # Four functions, each in its own file:
   #  - direct_fun: tested directly inside a test_that block
   #  - helper_fun: tested ONLY through a helper-defined wrapper (the case covr's
-  #    record_tests mis-attributes to the helper file -- the soundness trap)
+  #    record_tests mis-attributes to the helper file, the soundness trap)
   #  - dead_fun:   not exercised by any test (an uncovered survivor)
   #  - nocov_fun:  tested, but excluded from mutation with covr's # nocov markers
   writeLines("direct_fun <- function(x) x + 1", file.path(pkg_dir, "R", "direct.R"))
@@ -723,7 +723,7 @@ test_that("coverage_guided yields the same verdicts as the full suite", {
   writeLines("library(testthat)\nlibrary(cgpkg)\ntest_check(\"cgpkg\")",
              file.path(pkg_dir, "tests", "testthat.R"))
   # The wrapper lives in a helper-*.R file, so the helper_fun() call site is
-  # inside the helper -- exactly what makes covr credit the helper, not the test.
+  # inside the helper, exactly what makes covr credit the helper, not the test.
   writeLines("wrap <- function(x) helper_fun(x)",
              file.path(pkg_dir, "tests", "testthat", "helper-wrap.R"))
   writeLines("test_that(\"direct\", { expect_equal(direct_fun(1), 2) })",
@@ -754,7 +754,7 @@ test_that("coverage_guided yields the same verdicts as the full suite", {
     expect_setequal(names(on), names(off))
     # The key guarantee: coverage-guided selection never changes a verdict.
     # record_tests relies on the helper-attribution safeguard; per_file attributes
-    # per file directly -- either way verdicts must match the full suite.
+    # per file directly; either way verdicts must match the full suite.
     expect_identical(on[names(off)], off, info = info)
     # Mutants in the untested file survive; the `# nocov` file is excluded from
     # mutation generation before coverage-guided selection runs.

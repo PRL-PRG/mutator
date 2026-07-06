@@ -4,7 +4,7 @@
 #
 # For every package present in results/benchmark_results*.csv (or those passed as
 # args), times one run of its framework-appropriate suite via test_command()
-# (load_all + test_dir / tinytest / rtests -- exactly how the tools run it, but
+# (load_all + test_dir / tinytest / rtests, exactly how the tools run it, but
 # once and without coverage instrumentation). Takes the MIN of 2 runs to drop
 # first-run compilation noise. Writes results/baselines.csv (package, baseline_s).
 

@@ -92,7 +92,7 @@ bench_universalmutator <- function(pkg_dir, budget, mode = "regex",
   # `<-` -> `<+` yield non-parseable mutants that get killed trivially and inflate
   # the score. The AST tools (mutator, muttest) only ever emit parseable mutants,
   # so for a fair comparison we drop mutants that fail to parse(). This mirrors
-  # universalmutator's own validity step (which is a no-op for R) -- equivalent to
+  # universalmutator's own validity step (which is a no-op for R), equivalent to
   # `mutate --cmd "Rscript -e parse(MUTANT)"` but run in one R session for speed.
   # It is a *validity* filter only; it does not dedupe equivalent mutants (the
   # compiler's TCE step), which universalmutator also skips for R.

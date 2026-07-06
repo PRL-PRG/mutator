@@ -2,7 +2,7 @@
 #
 # Best settings (documented in README): the full preset mutator set (matching and
 # exceeding mutator's operator coverage), parallel `workers`, and the default
-# (full) test strategy for score correctness -- the faster FileTestStrategy is
+# (full) test strategy for score correctness; the faster FileTestStrategy is
 # noted in the README but not used. muttest has no mutant cap, so we build the
 # full plan and sample `budget` rows with the shared SEED.
 #
@@ -32,7 +32,7 @@ suppressWarnings(suppressMessages(library(muttest)))
 # ways per mutant, leaving muttest's runner and mutations untouched:
 #  - kill_strict: muttest's own definition (an expectation FAILED);
 #  - kill_incl:   standard mutation-testing definition (failed OR the mutant made a
-#                 test ERROR/crash) -- comparable to mutator and universalmutator.
+#                 test ERROR/crash), comparable to mutator and universalmutator.
 .kill_reporter <- function() {
   R6::R6Class("KillReporter", inherit = muttest::MutationReporter,
     public = list(

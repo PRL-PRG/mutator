@@ -130,9 +130,9 @@ static bool isFortyTwo(SEXP x)
     return !ISNA(REAL(x)[0]) && !ISNAN(REAL(x)[0]) && REAL(x)[0] == 42.0;
 }
 
-// The constant-value replacements -- numeric `0 -> 42` and `nonzero -> 0`
+// The constant-value replacements, namely numeric `0 -> 42` and `nonzero -> 0`
 // (makeScalarValueReplacement), plus assignment-RHS `-> 42` and ordinary-call
-// `-> 42` -- generate many low-signal / near-equivalent mutants and many trivial
+// `-> 42`, generate many low-signal / near-equivalent mutants and many trivial
 // type-error kills, so they are disabled for now. The code is kept intact; flip
 // this to `true` to re-enable the whole family.
 static constexpr bool kEnableValueReplacements = false;
@@ -497,8 +497,8 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
     }
 
     // A `{ ... }` block exposes each of its direct children as a statement that
-    // can be deleted. Detecting this here -- rather than via a single whole-tree
-    // flag -- means deletion is offered for real block statements at any nesting
+    // can be deleted. Detecting this here, rather than via a single whole-tree
+    // flag, means deletion is offered for real block statements at any nesting
     // depth, and never for sub-expressions such as an operand of `+`.
     const bool this_is_block =
         (TYPEOF(fun) == SYMSXP && fun == SYM.s_lbrace);

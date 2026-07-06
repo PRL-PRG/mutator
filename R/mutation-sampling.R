@@ -36,7 +36,7 @@ wilson_ci <- function(k, n, confidence = 0.95) {
 # `confidence`. Worst-case sizing (p = 0.5) so the interval holds for any true
 # score, with a finite-population correction against the `N` generated mutants,
 # capped at `N` (when the requested precision needs more mutants than exist, test
-# them all -- the score is then exact up to equivalent mutants). See Gopinath et
+# them all; the score is then exact up to equivalent mutants). See Gopinath et
 # al., "How hard does mutation analysis have to be, anyway?" (ISSRE 2015): the
 # required sample size depends on the target precision, not on `N`.
 required_sample_size <- function(margin, confidence, N) {
@@ -48,4 +48,3 @@ required_sample_size <- function(margin, confidence, N) {
   n_fpc <- n0 / (1 + (n0 - 1) / N)          # finite-population correction
   as.integer(min(N, ceiling(n_fpc)))
 }
-

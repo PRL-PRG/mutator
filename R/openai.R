@@ -50,7 +50,7 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
 
     # Read original source code once; it is shared by every request. Each mutant
     # is shown to the model as a small *unified diff* of its edit (plus a short
-    # `change:` label) -- compact, unambiguous, and in a format LLMs read
+    # `change:` label): compact, unambiguous, and in a format LLMs read
     # natively, without embedding the full mutated file per mutant.
     orig_raw_lines <- readLines(src_file, warn = FALSE)
     orig_code <- paste(orig_raw_lines, collapse = "\n")
@@ -163,7 +163,7 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
         survived_mutants[[mid]]$equivalence_status <- cls$status
         if (isTRUE(cls$equivalent)) {
             equiv_count <- equiv_count + 1
-            # Reasons are only requested (and stored) for EQUIVALENT mutants --
+            # Reasons are only requested (and stored) for EQUIVALENT mutants:
             # the rare, high-stakes calls worth auditing.
             if (mid %in% names(reasons)) {
                 survived_mutants[[mid]]$equivalence_reason <- unname(reasons[[mid]])
