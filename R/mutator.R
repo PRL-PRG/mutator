@@ -16,7 +16,6 @@ delete_line_mutants <- function(src_file,
   non_empty <- which(nzchar(lines))
   non_comment <- which(!grepl("^\\s*#", lines))
 
-  # Only keep lines that are both non-empty and non-comments
   valid_lines <- intersect(non_empty, non_comment)
 
   # Drop any lines inside a `# mutator:ignore-*` region (line-precise here, since
@@ -171,9 +170,7 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 
     # Sharpen the reported location: to the precise sub-expression span when the
     # optional imputesrcref oracle is available, otherwise at least to the
-    # enclosing statement line via the original keep.source tree. Done after the
-    # exclusion check so `# mutator:ignore-*` keeps its documented
-    # function-granular semantics regardless of which oracle applies.
+    # enclosing statement line via the original keep.source tree. 
     if (is.list(info)) {
       info <- refine_mutation_info(info, parsed, imputed_exprs, m)
     }
@@ -223,9 +220,9 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' \itemize{
 #'   \item If `tests/testthat/` exists, the mutant is loaded in-process with
 #'   `pkgload::load_all()` (no installation) and its tests are run the way the
-#'   package's own `tests/testthat.R` harness runs them -- i.e. with the same
+#'   package's own `tests/testthat.R` harness runs them, i.e. with the same
 #'   arguments (notably any `filter`) that the harness passes to
-#'   `testthat::test_check()` -- via `testthat::test_dir()`.
+#'   `testthat::test_check()`, via `testthat::test_dir()`.
 #'   \item Otherwise, if `tests/` exists, mutator installs the mutant package
 #'   with `--install-tests` and runs `tools::testInstalledPackage()`.
 #' }
@@ -238,17 +235,15 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' @param detectEqMutants Logical; if `TRUE`, every generated mutant is analyzed
 #'   for equivalence using the OpenAI-based workflow *before* the test suites are
 #'   run. Mutants judged equivalent are recorded as survived without running
-#'   their tests (no test can kill an equivalent mutant), which avoids that
-#'   wasted work; the remaining mutants are tested as usual.
+#'   their tests as no test can kill an equivalent mutant ;
+#'   the remaining mutants are tested as usual.
 #' @param mutation_dir Optional directory to store generated mutant files.
 #'   If `NULL`, a temporary directory is used.
-#' @param max_mutants Optional cap on the number of mutants tested.
+#' @param max_mutants Sample that number of mutants for testing. If `NULL`,
+#'   all mutants are tested.
 #' @param timeout_seconds Optional timeout in seconds for each mutant run.
 #'   If `NULL`, timeout is derived from baseline runtime with a small minimum
-#'   floor. Each mutant's tests run in a separate subprocess, so the limit is
-#'   enforced as a hard wall-clock kill even when a mutant loops inside compiled
-#'   code (via \pkg{callr} for the `testthat` strategy and
-#'   `system2(timeout=)` for the installed-tests strategy).
+#'   floor. Still works with compiled native code.
 #' @param config_dir Directory searched for a `.openai_config` file when
 #'   `detectEqMutants = TRUE` (see [get_openai_config()]). Defaults to the
 #'   current working directory.
@@ -261,13 +256,11 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   so `testthat::skip_on_cran()` / `skip_if_offline()` guards take effect and
 #'   the same tests CRAN would run are used (skipping network/slow tests the
 #'   package marks). Set to `FALSE` to run the full suite (`NOT_CRAN = "true"`),
-#'   as `devtools::test()` does. Note this only affects tests the package
-#'   actually guards; unguarded network tests still run.
+#'   as `devtools::test()` does.
 #' @param fail_fast Logical; if `TRUE` (the default), a mutant's test run stops
 #'   at the first failing test rather than running the whole suite. A mutant is
 #'   `KILLED` as soon as one test detects it, so the remainder of the suite is
-#'   wasted work; stopping early speeds up the test-running phase without
-#'   changing any mutant's verdict. Set to `FALSE` to run the full suite for
+#'   wasted work. Set to `FALSE` to run the full suite for
 #'   every mutant. Applies to the `testthat` strategy; the installed-tests
 #'   fallback already stops at the first failing test file regardless of this
 #'   flag.
@@ -275,32 +268,23 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   symlinks the unchanged directories of the original package (only the mutated
 #'   `R/` file is materialised), which is fast but makes those directories shared
 #'   writable state across the parallel workers. If `TRUE`, the `src/` and
-#'   `tests/` directories are deep-copied into every mutant copy instead. The
-#'   `installed` strategy no longer recompiles per mutant (it builds once and
-#'   installs each mutant with `--no-libs`, see `strategy`), so the shared-`src/`
-#'   build race no longer requires isolation. Use `isolate = TRUE` when a package
+#'   `tests/` directories are deep-copied into every mutant copy instead. 
+#'   Use `isolate = TRUE` when a package
 #'   has **non-hermetic tests** that write files into `tests/` (or `src/`) and
 #'   parallel runs therefore produce spurious `KILLED`/`HANG` verdicts; it gives
-#'   each worker its own copy at the cost of extra disk. Running with `cores = 1`
-#'   avoids such contention without the copy cost.
+#'   each worker its own copy at the cost of extra disk. Note that unning with 
+#'  `cores = 1` avoids such contention without the copy cost.
 #' @param strategy Test strategy to use. `"auto"` (the default) picks the
 #'   `testthat` strategy when `tests/testthat/` exists and the installed-tests
 #'   strategy otherwise. `"testthat"` forces the in-process `testthat::test_dir()`
 #'   path (requires `tests/testthat/`). `"installed"` forces the
 #'   `R CMD INSTALL --install-tests` + `tools::testInstalledPackage()` path
-#'   (requires `tests/`); this works for `testthat` packages too — useful for
-#'   comparing the two strategies. To avoid recompiling on every mutant, the
-#'   unmutated package is installed (and its C/C++ compiled) **once** into a
-#'   template library; each mutant is then installed with `--no-libs` (R code
-#'   only) and the template's prebuilt shared objects are restored before its
-#'   tests run. This relies on compiled code never being mutated, and it also
-#'   means concurrent mutant installs no longer write into a shared `src/`.
+#'   (requires `tests/`). 
 #' @param exclude_files Optional character vector of shell-style glob patterns
 #'   (e.g. `"import-standalone-*"`) matched against the **base names** of the
 #'   `.R` files in `R/`. Matching files are skipped entirely before any mutants
-#'   are generated — useful for vendored/standalone code, generated files, or
-#'   anything the test suite is not meant to cover. `NULL` (the default) mutates
-#'   every file. This complements the in-source `# mutator:ignore-file` and
+#'   are generated. `NULL` (the default) mutates every file. This complements 
+#'   the in-source `# mutator:ignore-file` and
 #'   `# mutator:ignore-start` / `# mutator:ignore-end` directives, which exclude
 #'   a whole file or a line region from within the source itself. Note that for
 #'   operator mutations the engine only resolves positions to the enclosing
@@ -310,8 +294,7 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' @param coverage_guided Logical; if `TRUE`, only the tests that actually
 #'   exercise a mutant's mutated line(s) are run for that mutant, instead of the
 #'   whole suite. Coverage is measured once on the unmutated package with
-#'   \pkg{covr} (`options(covr.record_tests = TRUE)`); that single coverage run
-#'   also doubles as the baseline check (the suite is not run twice). A mutant on
+#'   \pkg{covr} (`options(covr.record_tests = TRUE)`). A mutant on
 #'   a line no test covers cannot be killed, so it is reported `SURVIVED` without
 #'   running any test. Selection is at the test-*file* level (testthat filters by
 #'   file); under the assumption that the suite deterministically exercises the code,
@@ -462,7 +445,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   # mutator never mutates compiled code, every mutant links an identical shared
   # object, so each mutant install skips compilation (`R CMD INSTALL --no-libs`)
   # and restores the prebuilt `libs/` from this template. This avoids recompiling
-  # on every mutant and -- crucially -- avoids writing into the (shared) source
+  # on every mutant and avoids writing into the (shared) source
   # `src/`, the contention that otherwise makes concurrent installs clobber each
   # other's build outputs. Populated by build_installed_template() below.
   installed_template_lib <- NULL
@@ -532,11 +515,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           # the reporter abort at the first failing context; test_dir() still sees
           # the failure and throws, which the caller turns into KILLED. Only the
           # ProgressReporter actually aborts on max-fails (Silent/Summary do not),
-          # so we keep it -- but point its output at a throwaway file so the
+          # so we keep it, but point its output at a throwaway file so the
           # per-failure detail never reaches this subprocess's captured stdout.
-          # That gives fail-fast without the noise. (The brief "Maximum number of
-          # failures" notice still goes to stdout; it is only shown when
-          # isFullLog = TRUE, see the surfacing branch below.)
           if (fail_fast) {
             Sys.setenv(TESTTHAT_MAX_FAILS = "1")
           } else {
@@ -548,7 +528,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           # testthat::test_check() is test_dir() with the harness's extra arguments
           # (notably `filter`) forwarded. `harness_args` holds those arguments (see
           # extract_harness_test_args()), so we run exactly the tests the package
-          # author / R CMD check would, but against the load_all()'d dev package
+          # author / R CMD check would, but against the loaded dev package
           # (load_package = "none") rather than an installed one.
           reporter_file <- tempfile("mutator_reporter_")
           reporter <- testthat::ProgressReporter$new(file = reporter_file)
@@ -811,7 +791,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
   # The testthat strategy runs each mutant through the package's own
   # tests/testthat.R harness (i.e. testthat::test_check()) rather than calling
-  # test_dir() blindly, so it tests exactly what the author / R CMD check do --
+  # test_dir() blindly, so it tests exactly what the author / R CMD check do,
   # including any `filter` the harness passes. These harness arguments are the
   # same for every mutant, so extract them once here and forward them to the
   # test_dir() call inside run_testthat_tests().
@@ -865,8 +845,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   # install of the unmutated package, compiling its C/C++ a single time. Done
   # before the baseline run so the baseline, the contended calibration, and
   # every mutant all go through the fast --no-libs install path. A failure here
-  # means the unmutated package does not install/compile -- fatal, like a failing
-  # baseline.
+  # means the unmutated package does not install/compile. A failure is considered
+  # as fatal as a failing baseline run.
   build_installed_template <- function() {
     installed_pkg_name <<- get_package_name(pkg_dir)
     template_lib <- tempfile("mutator_template_lib_")
@@ -923,9 +903,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           # The covr coverage run executes the package's tests/testthat.R harness
           # (test_check(), which errors on any failing test), so it doubles as the
           # baseline check: the suite runs once, not twice. The instrumented timing
-          # over-estimates a normal run, which only loosens the timeout *floor*; the
-          # real per-mutant timeout comes from the uninstrumented contended
-          # calibration below. A covr error here (failing suite or broken covr
+          # over-estimates a normal run. A covr error here (failing suite or broken covr
           # setup) is caught by the handler and surfaced as a fatal baseline failure.
           cov_map <- build_coverage_test_map(pkg_dir, backend = coverage_backend, cran = cran)
           baseline_passed <- TRUE
@@ -1002,8 +980,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   # parallel mutants; under the in-process testthat strategy, coverage-guided runs
   # (which run filtered test subsets) make testthat rewrite the reference
   # snapshots, corrupting the original package's `_snaps` and inflating the score
-  # with spurious kills. Only the small `_snaps` dir is copied; everything else
-  # stays a cheap symlink.
+  # with spurious kills. 
   mirror_tests_isolating_snaps <- function(from, to) {
     dir.create(to, recursive = TRUE, showWarnings = FALSE)
     for (entry in list.files(from, all.files = TRUE, no.. = TRUE, full.names = TRUE)) {
@@ -1023,12 +1000,11 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
   # When `isolate` is set, these directories are deep-copied into every mutant
   # package instead of being symlinked to the shared original. `src/` is the
-  # directory R CMD INSTALL writes `.o`/`.so` into, so sharing it lets parallel
-  # installs clobber each other's build artifacts (false KILLED/HANG); `tests/`
+  # directory R CMD INSTALL writes `.o`/`.so` into, so sharing it would let parallel
+  # installs corrupt each other's build artifacts (false KILLED/HANG); `tests/`
   # is where non-hermetic tests are most likely to write files. Copying them
-  # gives each parallel worker its own writable scratch space at the cost of
-  # extra disk and (for `src/`) per-mutant recompilation. See the README's
-  # "Parallel execution" notes.
+  # gives each parallel worker its own space at the cost of
+  # extra disk and (for `src/`) per-mutant recompilation. 
   isolate_copy_dirs <- if (isTRUE(isolate)) c("src", "tests") else character(0)
 
   create_linked_package_copy <- function(pkg_dir, src_file, mutated_file, target_root) {
@@ -1092,7 +1068,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   # `target_margin` derives the sample size from a desired CI half-width (worst
   # case, finite-population corrected, capped at total_generated); `max_mutants`
   # is an explicit cap. Sampling happens before materializing package copies, so
-  # the distribution is unchanged -- it just avoids building unused copies.
+  # the distribution is unchanged: it just avoids building unused copies.
   sample_cap <- max_mutants
   if (!is.null(target_margin) && total_generated > 0) {
     sample_cap <- required_sample_size(target_margin, confidence, total_generated)
@@ -1131,17 +1107,12 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   }
   generation_seconds <- as.numeric(Sys.time() - generation_started, units = "secs")
 
-  # options(
-  #   future.devices.onMisuse = "warning",   # or "ignore"
-  #   future.connections.onMisuse = "ignore" # similar check for open file‑conns
-  # )
 
   mutant_ids <- names(mutants)
   parallel_results <- list()
   workers_to_use <- max(1, min(cores, max(1, length(mutants))))
 
-  # coverage_guided: precompute, per mutant, which tests to run -- in the master
-  # process, so no covr/selection work happens inside the parallel workers. Each
+  # coverage_guided: precompute, per mutant, which tests to run. Each
   # entry is either list(action = "survived") (the mutated line is covered by no
   # test, so it cannot be killed) or list(action = "run", test_filter = <regex or
   # NULL>). When the optimization is off, mutant_test_plan stays empty and every
@@ -1172,7 +1143,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
           list(action = "run", test_filter = coverage_filter_regex(toks))
         } else {
           # Coverage and harness filter disagree: fall back to the harness's tests
-          # (do not invent SURVIVED) -- conservative and still correct.
+          # (do not invent SURVIVED). Conservative.
           list(action = "run", test_filter = NULL)
         }
       }
@@ -1183,7 +1154,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
   # An equivalent mutant is behaviorally identical to the original, so no test
   # can kill it: running its (often expensive) test suite is wasted work. We
   # therefore detect equivalence up front, on every generated mutant, and skip
-  # the test run for those judged EQUIVALENT -- they are recorded as SURVIVED
+  # the test run for those judged EQUIVALENT: they are recorded as SURVIVED
   # directly (see below, where their test plan is forced to "survived"). Mutants
   # judged NOT EQUIVALENT or Uncertain still run their tests as usual.
   #
@@ -1331,7 +1302,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
     # Skip the test run for mutants judged EQUIVALENT: no test can kill them, so
     # they survive by definition. Reuse the coverage plan's "survived" short
-    # circuit -- run_one_mutant() returns SURVIVED without executing any tests.
+    # circuit: run_one_mutant() returns SURVIVED without executing any tests.
     n_equivalent_skipped <- 0L
     for (id in names(equivalence_info)) {
       if (isTRUE(equivalence_info[[id]]$equivalent)) {
@@ -1350,8 +1321,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
   # --- Calibrate the timeout against *contended* conditions ----------------
   # The baseline above ran alone, but mutants run `workers_to_use`-wide. For
-  # packages with heavy per-run startup cost -- loading many dependencies, or
-  # recompiling C on every R CMD INSTALL -- running that many test suites at
+  # packages with heavy per-run startup cost, e.g. loading many dependencies, or
+  # recompiling C on every R CMD INSTALL, running that many test suites at
   # once inflates each one's wall-clock well beyond the solo baseline, because
   # they contend for CPU, disk and memory. A timeout derived from the *solo*
   # baseline then fires on essentially every mutant (we have observed 100% false
@@ -1370,7 +1341,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     # would not capture the real per-mutant recompile cost. The result is a far
     # too-small contended baseline and a timeout that fires on every isolated
     # mutant (100% false HANG). So under isolation we calibrate against one
-    # isolated, *unmutated* copy of the package per worker -- exactly what a
+    # isolated, *unmutated* copy of the package per worker:: exactly what a
     # mutant run does, minus the mutation.
     calib_pkgs <- rep(list(pkg_dir), workers_to_use)
     if (isTRUE(isolate) && length(r_files) > 0) {
@@ -1447,7 +1418,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     names(pkg_dir_list) <- mutant_ids
 
     run_one_mutant <- function(id) {
-      # coverage_guided: a mutant whose line no test covers cannot be killed --
+      # coverage_guided: a mutant whose line no test covers cannot be killed:
       # report SURVIVED without running anything. Otherwise run only the selected
       # tests (test_filter); NULL means the full suite (optimization off or fallback).
       plan <- mutant_test_plan[[id]]
@@ -1456,11 +1427,7 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       }
       pkg <- pkg_dir_list[[id]]
       test_filter <- if (is.null(plan)) NULL else plan$test_filter
-      # No setTimeLimit() here: each test strategy enforces its own hard
-      # subprocess timeout (callr for testthat, system2 for installed-tests) and
-      # signals a timeout with a "reached ... time limit" message. An outer
-      # setTimeLimit() could fire while we are blocked waiting on the child,
-      # unwinding past the code that kills/collects it and orphaning the process.
+    
       tryCatch(
         {
           passed <- run_tests(pkg, test_filter = test_filter)
