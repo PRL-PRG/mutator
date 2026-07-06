@@ -172,21 +172,21 @@
 <p><code><a href="reference/mutate_package.html">mutate_package()</a></code> exposes a number of options to control how mutants are run, which tests are selected, and how results are refined. Each is covered in depth in the <strong><a href="https://prl-prg.github.io/mutator/articles/configuration.html">Configuration article</a></strong>:</p>
 <ul>
 <li>
-<strong>Timeouts and the contended baseline</strong> — how the per-mutant <code>HANG</code> timeout is self-calibrated from a parallelism-aware baseline, and <code>timeout_seconds</code> to override it.</li>
+<strong>Timeouts and the contended baseline</strong>: how the per-mutant <code>HANG</code> timeout is self-calibrated from a parallelism-aware baseline, and <code>timeout_seconds</code> to override it.</li>
 <li>
-<strong>CRAN mode</strong> (<code>cran</code>) — run the tests CRAN would (skipping guarded slow/network tests) or the full suite.</li>
+<strong>CRAN mode</strong> (<code>cran</code>): run the tests CRAN would (skipping guarded slow/network tests) or the full suite.</li>
 <li>
-<strong>Fail-fast</strong> (<code>fail_fast</code>) — stop each mutant’s run at the first failing test.</li>
+<strong>Fail-fast</strong> (<code>fail_fast</code>): stop each mutant’s run at the first failing test.</li>
 <li>
-<strong>Parallel execution and isolation</strong> (<code>isolate</code>, <code>cores</code>) — symlink-vs-copy of the package tree and how to handle non-hermetic tests, plus the optional <code>pbmcapply</code> progress bar.</li>
+<strong>Parallel execution and isolation</strong> (<code>isolate</code>, <code>cores</code>): symlink-vs-copy of the package tree and how to handle non-hermetic tests, plus the optional <code>pbmcapply</code> progress bar.</li>
 <li>
-<strong>Excluding code from mutation</strong> — <code>exclude_files</code>, in-source <code># mutator:ignore-*</code> directives, covr <code># nocov</code> annotations, and <code>.covrignore</code>.</li>
+<strong>Excluding code from mutation</strong>: <code>exclude_files</code>, in-source <code># mutator:ignore-*</code> directives, covr <code># nocov</code> annotations, and <code>.covrignore</code>.</li>
 <li>
-<strong>Coverage-guided test selection</strong> (<code>coverage_guided</code>, <code>coverage_backend</code>) — run only the tests that cover each mutated line.</li>
+<strong>Coverage-guided test selection</strong> (<code>coverage_guided</code>, <code>coverage_backend</code>): run only the tests that cover each mutated line.</li>
 <li>
-<strong>Precise mutant locations</strong> — the optional <code>imputesrcref</code> package for narrower operator-mutant source ranges.</li>
+<strong>Precise mutant locations</strong>: the optional <code>imputesrcref</code> package for narrower operator-mutant source ranges.</li>
 <li>
-<strong>Equivalent mutant detection</strong> (<code>detectEqMutants</code>) — configuring the OpenAI-compatible API used to flag equivalent mutants.</li>
+<strong>Equivalent mutant detection</strong> (<code>detectEqMutants</code>): configuring the OpenAI-compatible API used to flag equivalent mutants.</li>
 </ul>
 </div>
 <div class="section level2">
@@ -267,6 +267,14 @@
 <strong>R6</strong>: For the <code>per_file</code> coverage backend reporter</li>
 <li>
 <strong>httr</strong> and <strong>jsonlite</strong>: For OpenAI API integration</li>
+<li>
+<strong>cli</strong>: For progress bars and user feedback</li>
+<li>
+<strong>pkgbuild</strong>: For building package copies for mutation testing</li>
+<li>
+<strong>pbmcapply</strong>: For progress bars in parallel execution</li>
+<li>
+<strong>imputesrcref</strong>: For precise mutant source ranges (optional)</li>
 </ul>
 </li>
 <li>
