@@ -121,22 +121,22 @@ The fallback path supports non-`testthat` layouts (for example `tinytest`-driven
 which tests are selected, and how results are refined. Each is covered in depth
 in the **[Configuration article](https://prl-prg.github.io/mutator/articles/configuration.html)**:
 
-- **Timeouts and the contended baseline** — how the per-mutant `HANG` timeout is
+- **Timeouts and the contended baseline**: how the per-mutant `HANG` timeout is
   self-calibrated from a parallelism-aware baseline, and `timeout_seconds` to
   override it.
-- **CRAN mode** (`cran`) — run the tests CRAN would (skipping guarded
+- **CRAN mode** (`cran`): run the tests CRAN would (skipping guarded
   slow/network tests) or the full suite.
-- **Fail-fast** (`fail_fast`) — stop each mutant's run at the first failing test.
-- **Parallel execution and isolation** (`isolate`, `cores`) — symlink-vs-copy of
+- **Fail-fast** (`fail_fast`): stop each mutant's run at the first failing test.
+- **Parallel execution and isolation** (`isolate`, `cores`): symlink-vs-copy of
   the package tree and how to handle non-hermetic tests, plus the optional
   `pbmcapply` progress bar.
-- **Excluding code from mutation** — `exclude_files`, in-source
+- **Excluding code from mutation**: `exclude_files`, in-source
   `# mutator:ignore-*` directives, covr `# nocov` annotations, and `.covrignore`.
-- **Coverage-guided test selection** (`coverage_guided`, `coverage_backend`) —
+- **Coverage-guided test selection** (`coverage_guided`, `coverage_backend`):
   run only the tests that cover each mutated line.
-- **Precise mutant locations** — the optional `imputesrcref` package for
+- **Precise mutant locations**: the optional `imputesrcref` package for
   narrower operator-mutant source ranges.
-- **Equivalent mutant detection** (`detectEqMutants`) — configuring the
+- **Equivalent mutant detection** (`detectEqMutants`): configuring the
   OpenAI-compatible API used to flag equivalent mutants.
 
 ## Mutation Operators
@@ -167,6 +167,10 @@ mutator depends on:
   - **callr**: For subprocess test execution and hard timeouts
   - **R6**: For the `per_file` coverage backend reporter
   - **httr** and **jsonlite**: For OpenAI API integration
+  - **cli**: For progress bars and user feedback
+  - **pkgbuild**: For building package copies for mutation testing
+  - **pbmcapply**: For progress bars in parallel execution
+  - **imputesrcref**: For precise mutant source ranges (optional)
 - **LinkingTo**: `testthat` (for Catch2 C++ test headers)
 - **C++17**: For native mutation engine implementation
 
