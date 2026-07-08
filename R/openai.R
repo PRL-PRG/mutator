@@ -215,6 +215,7 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
 #' @param mutant_details List of mutant details including IDs and mutation info
 #'
 #' @return A formatted prompt string for the OpenAI API
+#' @keywords internal
 create_equivalent_mutant_prompt <- function(original_code, mutant_details) {
     ids <- vapply(mutant_details, function(m) as.character(m$id), character(1))
 
@@ -270,6 +271,7 @@ create_equivalent_mutant_prompt <- function(original_code, mutant_details) {
 #'   `openai_api_error` object: a list with a `message` describing the cause
 #'   (HTTP status plus response body, or the network error), so callers can
 #'   surface *why* a request failed rather than a bare `NULL`.
+#' @keywords internal
 call_openai_api <- function(prompt, config) {
     api_error <- function(message) {
         structure(list(message = message), class = "openai_api_error")
@@ -357,7 +359,7 @@ call_openai_api <- function(prompt, config) {
 #' @param api_key API key string.
 #' @param model Model name (e.g. `"gpt-4"`).
 #' @param base_url Base URL of an OpenAI-compatible Chat Completions API, such
-#'   as `"https://api.openai.com/v1"` or `"http://localhost:11434/v1"`.
+#'   as `"https://api.openai.com/v1"` or another provider endpoint.
 #' @param max_parallel_requests Maximum number of equivalence-detection API
 #'   requests to run concurrently. Use this to stay under a provider's
 #'   per-key parallel-request limit (exceeding it returns HTTP 429). `NA`

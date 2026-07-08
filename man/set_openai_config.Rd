@@ -17,7 +17,7 @@ set_openai_config(
 \item{model}{Model name (e.g. \code{"gpt-4"}).}
 
 \item{base_url}{Base URL of an OpenAI-compatible Chat Completions API, such
-as \code{"https://api.openai.com/v1"} or \code{"http://localhost:11434/v1"}.}
+as \code{"https://api.openai.com/v1"} or another provider endpoint.}
 
 \item{max_parallel_requests}{Maximum number of equivalence-detection API
 requests to run concurrently. Use this to stay under a provider's

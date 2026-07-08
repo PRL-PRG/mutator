@@ -235,7 +235,7 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' @param detectEqMutants Logical; if `TRUE`, every generated mutant is analyzed
 #'   for equivalence using the OpenAI-based workflow *before* the test suites are
 #'   run. Mutants judged equivalent are recorded as survived without running
-#'   their tests as no test can kill an equivalent mutant ;
+#'   their tests, as no test can kill an equivalent mutant;
 #'   the remaining mutants are tested as usual.
 #' @param mutation_dir Optional directory to store generated mutant files.
 #'   If `NULL`, a temporary directory is used.
@@ -272,8 +272,8 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   Use `isolate = TRUE` when a package
 #'   has **non-hermetic tests** that write files into `tests/` (or `src/`) and
 #'   parallel runs therefore produce spurious `KILLED`/`HANG` verdicts; it gives
-#'   each worker its own copy at the cost of extra disk. Note that unning with 
-#'  `cores = 1` avoids such contention without the copy cost.
+#'   each worker its own copy at the cost of extra disk. Note that running with
+#'   `cores = 1` avoids such contention without the copy cost.
 #' @param strategy Test strategy to use. `"auto"` (the default) picks the
 #'   `testthat` strategy when `tests/testthat/` exists and the installed-tests
 #'   strategy otherwise. `"testthat"` forces the in-process `testthat::test_dir()`

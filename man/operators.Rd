@@ -1,5 +1,5 @@
-\name{myfunctions}
-\alias{myfunctions}
+\name{operators}
+\alias{operators}
 \title{Mutation Operators Supported by mutator}
 \description{
 This help page lists the mutation operators that the \code{mutator} package supports for mutation testing in R.

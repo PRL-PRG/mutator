@@ -20,3 +20,4 @@ surface \emph{why} a request failed rather than a bare \code{NULL}.
 \description{
 Makes a POST request to the OpenAI Chat Completions API.
 }
+\keyword{internal}

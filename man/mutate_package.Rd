@@ -36,7 +36,7 @@ mutate_package(
 \item{detectEqMutants}{Logical; if \code{TRUE}, every generated mutant is analyzed
 for equivalence using the OpenAI-based workflow \emph{before} the test suites are
 run. Mutants judged equivalent are recorded as survived without running
-their tests as no test can kill an equivalent mutant ;
+their tests, as no test can kill an equivalent mutant;
 the remaining mutants are tested as usual.}
 
 \item{mutation_dir}{Optional directory to store generated mutant files.
@@ -81,7 +81,7 @@ writable state across the parallel workers. If \code{TRUE}, the \verb{src/} and
 Use \code{isolate = TRUE} when a package
 has \strong{non-hermetic tests} that write files into \verb{tests/} (or \verb{src/}) and
 parallel runs therefore produce spurious \code{KILLED}/\code{HANG} verdicts; it gives
-each worker its own copy at the cost of extra disk. Note that unning with
+each worker its own copy at the cost of extra disk. Note that running with
 \code{cores = 1} avoids such contention without the copy cost.}
 
 \item{exclude_files}{Optional character vector of shell-style glob patterns
