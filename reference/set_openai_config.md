@@ -29,7 +29,7 @@ set_openai_config(
 - base_url:
 
   Base URL of an OpenAI-compatible Chat Completions API, such as
-  `"https://api.openai.com/v1"` or `"http://localhost:11434/v1"`.
+  `"https://api.openai.com/v1"` or another provider endpoint.
 
 - max_parallel_requests:
 

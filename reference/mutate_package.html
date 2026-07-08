@@ -89,7 +89,7 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <dd><p>Logical; if <code>TRUE</code>, every generated mutant is analyzed
 for equivalence using the OpenAI-based workflow <em>before</em> the test suites are
 run. Mutants judged equivalent are recorded as survived without running
-their tests as no test can kill an equivalent mutant ;
+their tests, as no test can kill an equivalent mutant;
 the remaining mutants are tested as usual.</p></dd>
 
 
@@ -150,7 +150,7 @@ writable state across the parallel workers. If <code>TRUE</code>, the <code>src/
 Use <code>isolate = TRUE</code> when a package
 has <strong>non-hermetic tests</strong> that write files into <code>tests/</code> (or <code>src/</code>) and
 parallel runs therefore produce spurious <code>KILLED</code>/<code>HANG</code> verdicts; it gives
-each worker its own copy at the cost of extra disk. Note that unning with
+each worker its own copy at the cost of extra disk. Note that running with
 <code>cores = 1</code> avoids such contention without the copy cost.</p></dd>
 
 
@@ -289,9 +289,9 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   <span style="color: #00BBBB; font-weight: bold;">R/add.R:1</span>   '+' -&gt; '-'</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>     &gt; <span style="color: #555555;">1</span> | <span style="color: #BB0000;">add &lt;- function(x, y) x + y</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Timing (seconds):</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          0.8</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          0.9</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutant generation:     0.0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.0</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.2</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Equivalence detection: 0.0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Mutation Testing Summary:</span>
@@ -315,7 +315,7 @@ through the slower installed-tests path for comparison).</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

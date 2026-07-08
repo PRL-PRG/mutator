@@ -49,7 +49,7 @@ mutate_package(
   Logical; if `TRUE`, every generated mutant is analyzed for equivalence
   using the OpenAI-based workflow *before* the test suites are run.
   Mutants judged equivalent are recorded as survived without running
-  their tests as no test can kill an equivalent mutant ; the remaining
+  their tests, as no test can kill an equivalent mutant; the remaining
   mutants are tested as usual.
 
 - mutation_dir:
@@ -113,7 +113,7 @@ mutate_package(
   instead. Use `isolate = TRUE` when a package has **non-hermetic
   tests** that write files into `tests/` (or `src/`) and parallel runs
   therefore produce spurious `KILLED`/`HANG` verdicts; it gives each
-  worker its own copy at the cost of extra disk. Note that unning with
+  worker its own copy at the cost of extra disk. Note that running with
   `cores = 1` avoids such contention without the copy cost.
 
 - exclude_files:
@@ -270,9 +270,9 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   R/add.R:1   '+' -> '-'
 #>     > 1 | add <- function(x, y) x + y
 #> Timing (seconds):
-#>   Baseline run:          0.8
+#>   Baseline run:          0.9
 #>   Mutant generation:     0.0
-#>   Test execution:        1.0
+#>   Test execution:        1.2
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
