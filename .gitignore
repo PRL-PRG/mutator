@@ -19,3 +19,4 @@ mutator.Rcheck
 *tar.gz
 docs
 *.gcda
+*.gcno
