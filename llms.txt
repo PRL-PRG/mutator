@@ -3,8 +3,7 @@
 [![R-CMD-check](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml)
 [![Codecov test
 coverage](https://codecov.io/gh/PRL-PRG/mutator/graph/badge.svg)](https://app.codecov.io/gh/PRL-PRG/mutator)
-[![Mutation
-score](https://img.shields.io/endpoint?url=https%3A%2F%2Fprl-prg.github.io%2Fmutator%2Fmutation-score.json)](https://github.com/PRL-PRG/mutator/actions/workflows/mutation-score.yaml)
+[![mutator](https://img.shields.io/endpoint?url=https%3A%2F%2Fprl-prg.github.io%2Fmutator%2Fmutation-score.json)](https://github.com/PRL-PRG/mutator/actions/workflows/mutation-score.yaml)
 [![pkgdown
 reference](https://img.shields.io/badge/pkgdown-reference-blue.svg)](https://prl-prg.github.io/mutator/)
 

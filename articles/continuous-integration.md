@@ -54,6 +54,7 @@ All inputs are optional.
 | `isolate` | `true` | Deep-copy `src/` and `tests/` per mutant, for non-hermetic suites. |
 | `coverage-guided` | `true` | Run only the tests covering each mutated line. Disabled automatically, with a warning, for installed-tests packages. |
 | `exclude-files` | `""` | Glob patterns of `R/` files to skip. |
+| `badge-label` | `mutator` | Label shown on the shields.io badge. |
 | `deploy-badge` | `false` | Publish a badge. Requires `contents: write`. |
 | `badge-branch` | `gh-pages` | Branch the badge JSON is deployed to. |
 | `mutator-spec` | `github::PRL-PRG/mutator` | pak spec used to install mutator, for example `any::mutator` once it is on CRAN. |
@@ -113,11 +114,13 @@ jobs:
 Reference the badge in your README, replacing `OWNER/REPO`:
 
 ``` markdown
-![mutation score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/gh-pages/mutation-score.json)
+![mutator](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/gh-pages/mutation-score.json)
 ```
 
-The badge colour tracks the score: green above 80%, yellow above 60%,
-orange above 40%, and red below.
+The badge is labelled `mutator`; its message shows the score and, when
+the run sampled mutants, a compact asymmetric confidence interval such
+as `83.2% -5.2/+4.7% (95% CI)`. The badge colour tracks the score: green
+above 80%, yellow above 60%, orange above 40%, and red below.
 
 ## Permissions and private dependencies
 

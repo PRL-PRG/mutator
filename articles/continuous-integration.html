@@ -163,28 +163,33 @@ automatically, with a warning, for installed-tests packages.</td>
 <td>Glob patterns of <code>R/</code> files to skip.</td>
 </tr>
 <tr class="odd">
+<td><code>badge-label</code></td>
+<td><code>mutator</code></td>
+<td>Label shown on the shields.io badge.</td>
+</tr>
+<tr class="even">
 <td><code>deploy-badge</code></td>
 <td><code>false</code></td>
 <td>Publish a badge. Requires <code>contents: write</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>badge-branch</code></td>
 <td><code>gh-pages</code></td>
 <td>Branch the badge JSON is deployed to.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>mutator-spec</code></td>
 <td><code>github::PRL-PRG/mutator</code></td>
 <td>pak spec used to install mutator, for example
 <code>any::mutator</code> once it is on CRAN.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>install-imputesrcref</code></td>
 <td><code>true</code></td>
 <td>Install the optional imputesrcref package to refine mutant
 locations.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>r-version</code></td>
 <td><code>release</code></td>
 <td>R version passed to <code>setup-r</code>.</td>
@@ -239,9 +244,12 @@ deploys it to <code>gh-pages</code> (or <code>badge-branch</code>):</p>
 <span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="at">      </span><span class="fu">deploy-badge</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
 <p>Reference the badge in your README, replacing
 <code>OWNER/REPO</code>:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode markdown"><code class="sourceCode markdown"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="al">![mutation score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/gh-pages/mutation-score.json)</span></span></code></pre></div>
-<p>The badge colour tracks the score: green above 80%, yellow above 60%,
-orange above 40%, and red below.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode markdown"><code class="sourceCode markdown"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="al">![mutator](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/gh-pages/mutation-score.json)</span></span></code></pre></div>
+<p>The badge is labelled <code>mutator</code>; its message shows the
+score and, when the run sampled mutants, a compact asymmetric confidence
+interval such as <code>83.2% -5.2/+4.7% (95% CI)</code>. The badge
+colour tracks the score: green above 80%, yellow above 60%, orange above
+40%, and red below.</p>
 </div>
 <div class="section level2">
 <h2 id="permissions-and-private-dependencies">Permissions and private dependencies<a class="anchor" aria-label="anchor" href="#permissions-and-private-dependencies"></a>
