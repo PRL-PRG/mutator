@@ -199,8 +199,8 @@ directive:
 `.covrignore` (covr’s file-level coverage-exclusion list), mutator reads
 it too: each line is a glob expanded relative to the package root (a
 matched directory expands to the files under it), and matching `R/`
-files are skipped before generation — the same mechanism covr uses. So
-files you already exclude from coverage need no extra mutator
+files are skipped before generation, using the same mechanism covr uses.
+So files you already exclude from coverage need no extra mutator
 configuration.
 
 **Granularity.** Excluding whole *files* and whole *functions* is
@@ -221,15 +221,22 @@ granularity can be improved with the optional
 
 Most mutants are settled by a small subset of the suite, and a mutant on
 a line that **no test exercises** can never be killed. With
-`coverage_guided = TRUE` (`testthat` strategy only) mutator measures
-coverage once with [covr](https://covr.r-lib.org/) and then, for each
-mutant, runs only the test files that cover its mutated line, and skips
-running tests altogether for mutants on uncovered lines (reported
-`SURVIVED` immediately).
+`coverage_guided = TRUE` (the default) mutator measures coverage once
+with [covr](https://covr.r-lib.org/) and then, for each mutant, runs
+only the test files that cover its mutated line, and skips running tests
+altogether for mutants on uncovered lines (reported `SURVIVED`
+immediately).
+
+Coverage guidance applies to the `testthat` strategy only. When the
+resolved strategy is the installed-tests fallback, mutator cannot
+attribute coverage to test files, so it emits a warning and runs the
+full suite for every mutant. Pass `coverage_guided = FALSE` to disable
+the optimisation (and that warning).
 
 ``` r
 
-mutate_package("path/to/pkg", coverage_guided = TRUE)
+# On by default; pass FALSE to run the full suite for every mutant.
+mutate_package("path/to/pkg", coverage_guided = FALSE)
 ```
 
 The single coverage run also serves as the baseline check (it runs the

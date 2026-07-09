@@ -34,6 +34,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/configuration.html">Configuration</a></li>
+    <li><a class="dropdown-item" href="../articles/continuous-integration.html">Continuous integration</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -255,8 +256,8 @@ package root has a <code>.covrignore</code> (covr’s file-level
 coverage-exclusion list), mutator reads it too: each line is a glob
 expanded relative to the package root (a matched directory expands to
 the files under it), and matching <code>R/</code> files are skipped
-before generation — the same mechanism covr uses. So files you already
-exclude from coverage need no extra mutator configuration.</p>
+before generation, using the same mechanism covr uses. So files you
+already exclude from coverage need no extra mutator configuration.</p>
 <p><strong>Granularity.</strong> Excluding whole <em>files</em> and
 whole <em>functions</em> is reliable. More fine-grained than that is
 not, for operator mutations: R mostly only attaches source references to
@@ -275,13 +276,20 @@ be improved with the optional <a href="#imputesrcref"><code>imputesrcref</code><
 </h2>
 <p>Most mutants are settled by a small subset of the suite, and a mutant
 on a line that <strong>no test exercises</strong> can never be killed.
-With <code>coverage_guided = TRUE</code> (<code>testthat</code> strategy
-only) mutator measures coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr</a> and then, for each mutant, runs
-only the test files that cover its mutated line, and skips running tests
-altogether for mutants on uncovered lines (reported
-<code>SURVIVED</code> immediately).</p>
+With <code>coverage_guided = TRUE</code> (the default) mutator measures
+coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr</a> and then,
+for each mutant, runs only the test files that cover its mutated line,
+and skips running tests altogether for mutants on uncovered lines
+(reported <code>SURVIVED</code> immediately).</p>
+<p>Coverage guidance applies to the <code>testthat</code> strategy only.
+When the resolved strategy is the installed-tests fallback, mutator
+cannot attribute coverage to test files, so it emits a warning and runs
+the full suite for every mutant. Pass
+<code>coverage_guided = FALSE</code> to disable the optimisation (and
+that warning).</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="co"># On by default; pass FALSE to run the full suite for every mutant.</span></span>
+<span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>The single coverage run also serves as the baseline check (it runs
 the package’s own <code>tests/testthat.R</code> harness, which fails if
 any test fails), so the suite is not run twice. Selection is at the

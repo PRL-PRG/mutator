@@ -22,7 +22,7 @@ mutate_package(
   isolate = FALSE,
   exclude_files = NULL,
   strategy = c("auto", "testthat", "installed"),
-  coverage_guided = FALSE,
+  coverage_guided = TRUE,
   coverage_backend = c("record_tests", "per_file"),
   target_margin = NULL,
   confidence = 0.95,
@@ -151,8 +151,10 @@ mutate_package(
   any test. Selection is at the test-*file* level (testthat filters by
   file); under the assumption that the suite deterministically exercises
   the code, it should not change a mutant's verdict, only which tests
-  run. Requires the `testthat` strategy (errors otherwise). Defaults to
-  `FALSE`.
+  run. Defaults to `TRUE`. Coverage guidance is only available under the
+  `testthat` strategy; when the resolved strategy is the installed-tests
+  fallback, mutator emits a warning and runs the full suite for every
+  mutant. Pass `FALSE` to disable it (and silence that warning).
 
 - coverage_backend:
 
@@ -270,9 +272,9 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   R/add.R:1   '+' -> '-'
 #>     > 1 | add <- function(x, y) x + y
 #> Timing (seconds):
-#>   Baseline run:          0.9
+#>   Baseline run:          1.1
 #>   Mutant generation:     0.0
-#>   Test execution:        1.2
+#>   Test execution:        1.1
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:

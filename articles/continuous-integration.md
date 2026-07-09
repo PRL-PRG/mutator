@@ -1,0 +1,154 @@
+# Continuous integration
+
+This article explains how to run mutator on a package in GitHub Actions
+using the reusable workflow that ships with the package, how to gate a
+pull request on a minimum mutation score, and how to publish a badge.
+
+## The reusable workflow
+
+mutator provides a reusable workflow at
+`PRL-PRG/mutator/.github/workflows/mutation-testing.yaml`. A repository
+adopts it with a short caller workflow rather than by copying any
+script. The workflow checks out your package, installs it together with
+mutator and its dependencies, runs
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md),
+uploads a results artifact, and writes a Markdown summary to the run’s
+Summary tab.
+
+Add `.github/workflows/mutation-testing.yaml` to your repository:
+
+``` yaml
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+name: mutation-testing
+
+jobs:
+  mutation:
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
+    with:
+      target-margin: "0.10"
+```
+
+Pin to a released tag such as `@v0.1.0`. The reusable workflow lives in
+the mutator package repository and is versioned with the package, so the
+tag you pin matches a mutator release. Bump the tag in your caller when
+you want to move to a newer release. You can also pin to a branch (for
+example `@main`) to track the latest changes, at the cost of
+reproducibility.
+
+## Inputs
+
+All inputs are optional.
+
+| Input | Default | Meaning |
+|----|----|----|
+| `target-margin` | `"0.10"` | Sample mutants to this plus or minus CI half-width, as a proportion. Empty tests every mutant. |
+| `max-mutants` | `""` | Fixed cap on sampled mutants. Takes precedence over `target-margin`. |
+| `fail-under` | `""` | Fail the job when the score is below this percentage. |
+| `cores` | `"0"` | Parallel workers. `"0"` auto-detects. |
+| `timeout-seconds` | `""` | Per-mutant timeout. Empty derives it from the baseline run. |
+| `isolate` | `true` | Deep-copy `src/` and `tests/` per mutant, for non-hermetic suites. |
+| `coverage-guided` | `true` | Run only the tests covering each mutated line. Disabled automatically, with a warning, for installed-tests packages. |
+| `exclude-files` | `""` | Glob patterns of `R/` files to skip. |
+| `deploy-badge` | `false` | Publish a badge. Requires `contents: write`. |
+| `badge-branch` | `gh-pages` | Branch the badge JSON is deployed to. |
+| `mutator-spec` | `github::PRL-PRG/mutator` | pak spec used to install mutator, for example `any::mutator` once it is on CRAN. |
+| `install-imputesrcref` | `true` | Install the optional imputesrcref package to refine mutant locations. |
+| `r-version` | `release` | R version passed to `setup-r`. |
+
+## Enforcing a minimum mutation score
+
+Set `fail-under` to the percentage below which the job should fail. The
+workflow computes the mutation score, and if it is below the threshold
+the job exits non-zero, which blocks the pull request:
+
+``` yaml
+jobs:
+  mutation:
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
+    with:
+      fail-under: "75"
+      target-margin: "0.05"
+```
+
+Two points make a threshold gate reliable:
+
+1.  Reduce sampling noise. The score is estimated from a sample of
+    mutants, so a run-to-run variation exists. Use a tighter
+    `target-margin` (for example `"0.05"`) or a large `max-mutants` when
+    you gate on `fail-under`, so the estimate does not cross the
+    threshold by chance. The half-width you choose is roughly how far
+    the reported score can sit from the true score.
+2.  Ratchet the threshold. Start `fail-under` at, or slightly below,
+    your current score, then raise it as you add tests. This locks in
+    progress without failing the build on the day you adopt it.
+
+Leave `fail-under` empty to report the score on every run without
+failing.
+
+The measured score, its confidence interval, and the killed, survived,
+and hanged counts appear in the run’s Summary tab and in the uploaded
+artifact regardless of whether a threshold is set.
+
+## Badge
+
+Set `deploy-badge: true` and grant the caller job `contents: write`. The
+workflow writes a [shields.io endpoint](https://shields.io/endpoint)
+JSON file and deploys it to `gh-pages` (or `badge-branch`):
+
+``` yaml
+jobs:
+  mutation:
+    permissions:
+      contents: write
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
+    with:
+      deploy-badge: true
+```
+
+Reference the badge in your README, replacing `OWNER/REPO`:
+
+``` markdown
+![mutation score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/gh-pages/mutation-score.json)
+```
+
+The badge colour tracks the score: green above 80%, yellow above 60%,
+orange above 40%, and red below.
+
+## Permissions and private dependencies
+
+The workflow reads `GITHUB_TOKEN` to install packages from GitHub, which
+is provided automatically. You only need to set
+`permissions: contents: write` on the caller job when `deploy-badge` is
+true, because publishing the badge pushes to a branch. Pull request runs
+never deploy the badge.
+
+If your package depends on packages that are not on CRAN, pass them
+through `extra-packages` as pak specs:
+
+``` yaml
+    with:
+      extra-packages: "github::owner/dependency, any::somePackage"
+```
+
+## Tuning the run
+
+Mutation testing runs the test suite once per mutant, so a large package
+can take a while. To keep CI fast:
+
+- Cap work with `max-mutants`, or let `target-margin` size the sample
+  for you.
+- `coverage-guided` is on by default and runs only the tests that cover
+  each mutated line. It applies to packages tested with testthat; for
+  installed-tests packages the workflow warns and runs the full suite.
+- Use `exclude-files` to skip generated or vendored files under `R/`.
+- Raise `cores` on a larger runner, or leave it at `"0"` to use every
+  core.
+
+See the [Configuration
+article](https://prl-prg.github.io/mutator/articles/configuration.md)
+for how these options behave in detail.

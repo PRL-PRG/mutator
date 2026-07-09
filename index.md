@@ -129,6 +129,35 @@ See the [pkgdown
 reference](https://prl-prg.github.io/mutator/reference/) for the full
 argument and return-value documentation.
 
+## Continuous integration (GitHub Actions)
+
+mutator ships a reusable workflow so any R-package repository can run
+mutation testing in CI without copying scripts. Add a caller workflow at
+`.github/workflows/mutation-testing.yaml`:
+
+``` yaml
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+name: mutation-testing
+
+jobs:
+  mutation:
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
+    with:
+      target-margin: "0.10"   # sample to +/-10 percentage points
+      fail-under: "75"        # fail CI below a 75% mutation score
+```
+
+Pin to a released tag such as `@v0.1.0`; the workflow is versioned with
+the mutator package, so the tag matches the package version. Set
+`deploy-badge: true` (with `contents: write` permission) to publish a
+shields.io badge. See the [Continuous integration
+article](https://prl-prg.github.io/mutator/articles/continuous-integration.html)
+for every input, threshold guidance, and badge setup.
+
 ## Mutation testing modes
 
 mutator selects a package test strategy automatically:
@@ -170,7 +199,9 @@ article](https://prl-prg.github.io/mutator/articles/configuration.html)**:
   `# mutator:ignore-*` directives, covr `# nocov` annotations, and
   `.covrignore`.
 - **Coverage-guided test selection** (`coverage_guided`,
-  `coverage_backend`): run only the tests that cover each mutated line.
+  `coverage_backend`): on by default, runs only the tests that cover
+  each mutated line (testthat strategy; warns and runs the full suite
+  otherwise).
 - **Precise mutant locations**: the optional `imputesrcref` package for
   narrower operator-mutant source ranges.
 - **Equivalent mutant detection** (`detectEqMutants`): configuring the

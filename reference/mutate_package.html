@@ -21,6 +21,7 @@ tests against each mutant in parallel, and summarizes mutation outcomes."></head
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/configuration.html">Configuration</a></li>
+    <li><a class="dropdown-item" href="../articles/continuous-integration.html">Continuous integration</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -61,7 +62,7 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <span>  isolate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  exclude_files <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"installed"</span><span class="op">)</span>,</span>
-<span>  coverage_guided <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  coverage_backend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"record_tests"</span>, <span class="st">"per_file"</span><span class="op">)</span>,</span>
 <span>  target_margin <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  confidence <span class="op">=</span> <span class="fl">0.95</span>,</span>
@@ -185,8 +186,11 @@ whole suite. Coverage is measured once on the unmutated package with
 a line no test covers cannot be killed, so it is reported <code>SURVIVED</code> without
 running any test. Selection is at the test-<em>file</em> level (testthat filters by
 file); under the assumption that the suite deterministically exercises the code,
-it should not change a mutant's verdict, only which tests run. Requires
-the <code>testthat</code> strategy (errors otherwise). Defaults to <code>FALSE</code>.</p></dd>
+it should not change a mutant's verdict, only which tests run. Defaults to
+<code>TRUE</code>. Coverage guidance is only available under the <code>testthat</code> strategy;
+when the resolved strategy is the installed-tests fallback, mutator emits a
+warning and runs the full suite for every mutant. Pass <code>FALSE</code> to disable
+it (and silence that warning).</p></dd>
 
 
 <dt id="arg-coverage-backend">coverage_backend<a class="anchor" aria-label="anchor" href="#arg-coverage-backend"></a></dt>
@@ -289,9 +293,9 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   <span style="color: #00BBBB; font-weight: bold;">R/add.R:1</span>   '+' -&gt; '-'</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>     &gt; <span style="color: #555555;">1</span> | <span style="color: #BB0000;">add &lt;- function(x, y) x + y</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Timing (seconds):</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          0.9</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          1.1</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutant generation:     0.0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.2</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.1</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Equivalence detection: 0.0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Mutation Testing Summary:</span>
