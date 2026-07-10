@@ -52,7 +52,7 @@ test_check(\"%s\")", pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.
 })", pkg_name), file.path(pkg_dir, "tests", "testthat", "test-my-abs.R"))
 
   # Run mutation on the minimal package
-  result <- mutate_package(pkg_dir, cores = 1)
+  result <- mutate_package(pkg_dir, cores = 1, max_mutants = 2, coverage_guided = FALSE)
 
   # Check the structure of the result
   expect_true(is.list(result))
@@ -115,7 +115,7 @@ test_check(\"%s\")", pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.
   expect_equal(f_sub(5, 3), 2)
 })", file.path(pkg_dir, "tests", "testthat", "test-basic.R"))
 
-  result <- mutate_package(pkg_dir, cores = 1)
+  result <- mutate_package(pkg_dir, cores = 1, max_mutants = 2, coverage_guided = FALSE)
 
   first_mutant <- result$package_mutants[[1]]
   expect_true(!is.null(first_mutant))
@@ -170,7 +170,7 @@ RoxygenNote: 7.1.1", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
   writeLines("test_that(\"add\", { expect_equal(f_add(1, 2), 3) })",
     file.path(pkg_dir, "tests", "testthat", "test-basic.R"))
 
-  result <- mutate_package(pkg_dir, cores = 1, isolate = TRUE)
+  result <- mutate_package(pkg_dir, cores = 1, isolate = TRUE, max_mutants = 2, coverage_guided = FALSE)
   mutant_pkg <- result$package_mutants[[1]]$path
 
   # DESCRIPTION (not in the isolate set) is still symlinked, but tests/ is a real
@@ -249,7 +249,7 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
 
   writeLines("stopifnot(TRUE)", file.path(pkg_dir, "tests", "test-inc.R"))
 
-  result <- mutate_package(pkg_dir, cores = 1)
+  result <- mutate_package(pkg_dir, cores = 1, max_mutants = 2, coverage_guided = FALSE)
 
   expect_true(is.list(result))
   expect_true("package_mutants" %in% names(result))
@@ -419,13 +419,15 @@ test_that("cran mode controls skip_on_cran via NOT_CRAN", {
 
   # CRAN mode (default): the killing test is skipped -> mutant survives.
   res_cran <- suppressMessages(
-    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, cran = TRUE)
+    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, cran = TRUE,
+      coverage_guided = FALSE)
   )
   expect_true(any(vapply(res_cran$test_results, function(x) identical(x, "SURVIVED"), logical(1))))
 
   # Dev mode: the guard is lifted -> the test runs and kills the mutant.
   res_dev <- suppressMessages(
-    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, cran = FALSE)
+    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, cran = FALSE,
+      coverage_guided = FALSE)
   )
   expect_true(any(vapply(res_dev$test_results, function(x) identical(x, "KILLED"), logical(1))))
   expect_false(any(vapply(res_dev$test_results, function(x) identical(x, "SURVIVED"), logical(1))))

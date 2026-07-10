@@ -598,7 +598,9 @@ test_that("mutate_package supports a user-provided mutation_dir", {
         pkg_dir = pkg_info$pkg_dir,
         cores = 1,
         mutation_dir = custom_mutation_dir,
-        isFullLog = TRUE
+        isFullLog = TRUE,
+        max_mutants = 2,
+        coverage_guided = FALSE
     )
     on.exit(unlink(custom_mutation_dir, recursive = TRUE), add = TRUE)
 
