@@ -68,12 +68,14 @@ static bool isCallTo(SEXP x, SEXP sym)
     return TYPEOF(x) == LANGSXP && isSymbol(CAR(x), sym);
 }
 
+// # nocov start (only reached from the disabled value-replacement family)
 static bool isAssignmentSymbol(SEXP fun)
 {
     return isSymbol(fun, SYM.s_assign) ||
            isSymbol(fun, SYM.s_eq_assign) ||
            isSymbol(fun, SYM.s_super_assign);
 }
+// # nocov end
 
 static bool isScalarConstant(SEXP x)
 {
@@ -95,10 +97,12 @@ static bool isMutableScalarConstant(SEXP x)
     return x != R_NilValue && isScalarConstant(x);
 }
 
+// # nocov start (only reached from the disabled value-replacement family)
 static bool isNumericScalarConstant(SEXP x)
 {
     return (TYPEOF(x) == INTSXP || TYPEOF(x) == REALSXP) && Rf_length(x) == 1;
 }
+// # nocov end
 
 static bool isNAConstant(SEXP x)
 {
@@ -121,6 +125,7 @@ static bool isNAConstant(SEXP x)
     }
 }
 
+// # nocov start (kEnableValueReplacements is disabled; see below)
 static bool isFortyTwo(SEXP x)
 {
     if (!isNumericScalarConstant(x))
@@ -129,6 +134,7 @@ static bool isFortyTwo(SEXP x)
         return INTEGER(x)[0] != NA_INTEGER && INTEGER(x)[0] == 42;
     return !ISNA(REAL(x)[0]) && !ISNAN(REAL(x)[0]) && REAL(x)[0] == 42.0;
 }
+// # nocov end
 
 // The constant-value replacements, namely numeric `0 -> 42` and `nonzero -> 0`
 // (makeScalarValueReplacement), plus assignment-RHS `-> 42` and ordinary-call
@@ -183,10 +189,12 @@ static SEXP makeNAReplacement(SEXP x)
     }
 }
 
+// # nocov start (only reached from the disabled value-replacement family)
 static SEXP makeFortyTwo()
 {
     return Rf_ScalarReal(42.0);
 }
+// # nocov end
 
 // A length-1 NA of the requested R type: NA (logical), NA_integer_, NA_real_,
 // NA_character_. Used to swap an NA constant for a differently-typed NA, probing
@@ -213,6 +221,7 @@ static SEXP makeNotCall(SEXP expr)
     return Rf_lang2(SYM.s_not, Rf_duplicate(expr));
 }
 
+// # nocov start (only reached from the disabled value-replacement family)
 static bool isOrdinaryFunctionCall(SEXP expr)
 {
     if (TYPEOF(expr) != LANGSXP || TYPEOF(CAR(expr)) != SYMSXP)
@@ -248,6 +257,7 @@ static bool isOrdinaryFunctionCall(SEXP expr)
              isSymbol(fun, SYM.s_lbrace) ||
              isSymbol(fun, SYM.s_lparen));
 }
+// # nocov end
 
 static void addNodeReplacement(std::vector<OperatorPos> &ops,
                                const std::vector<int> &path,

@@ -601,195 +601,15 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
 
   run_installed_package_tests <- function(pkg_path) {
     set_last_test_failure(NULL)
-
-    # Hard wall-clock limit for the install/test subprocesses. setTimeLimit()
-    # cannot interrupt these (they run outside the R interpreter), so the limit
-    # is enforced via system2(timeout = ). 0 means "no limit" and is used for
-    # the baseline run, where effective_timeout_seconds is not yet known (NA).
-    run_timeout <- if (is.finite(effective_timeout_seconds) && effective_timeout_seconds > 0) {
-      effective_timeout_seconds
-    } else {
-      0
-    }
-
-    pkg_name <- tryCatch(
-      get_package_name(pkg_path),
-      error = function(e) {
-        set_last_test_failure(paste0("Cannot read package metadata: ", e$message))
-        message("Package metadata error: ", e$message)
-        NULL
-      }
+    res <- run_installed_pkg_tests(
+      pkg_path,
+      timeout_seconds = effective_timeout_seconds,
+      template_lib = installed_template_lib,
+      template_has_libs = installed_template_has_libs,
+      cran = cran
     )
-    if (is.null(pkg_name)) {
-      return(FALSE)
-    }
-
-    temp_lib <- tempfile("mutator_lib_")
-    temp_out <- tempfile("mutator_test_out_")
-    dir.create(temp_lib, recursive = TRUE, showWarnings = FALSE)
-    dir.create(temp_out, recursive = TRUE, showWarnings = FALSE)
-    on.exit(unlink(temp_lib, recursive = TRUE, force = TRUE), add = TRUE)
-    on.exit(unlink(temp_out, recursive = TRUE, force = TRUE), add = TRUE)
-
-    r_bin <- file.path(R.home("bin"), "R")
-    # When a prebuilt template library exists, install only the (mutated) R code
-    # and tests with --no-libs and restore the template's compiled libs/ below.
-    # This skips recompiling C/C++ on every mutant and avoids touching the shared
-    # source src/. Without a template (e.g. a pure-R package), a normal install
-    # is used.
-    use_template <- !is.null(installed_template_lib)
-    install_args <- c(
-      "CMD", "INSTALL",
-      "--install-tests",
-      "--no-multiarch",
-      # --no-libs leaves the package without its shared object until we restore it
-      # below, so suppress R's end-of-install test load (it would fail to find the
-      # .so). The real tests run against the restored libs/ afterwards.
-      if (use_template) c("--no-libs", "--no-test-load"),
-      paste0("--library=", temp_lib),
-      pkg_path
-    )
-    install_started <- Sys.time()
-    install_output <- tryCatch(
-      suppressWarnings(system2(
-        r_bin,
-        args = install_args,
-        stdout = TRUE,
-        stderr = TRUE,
-        timeout = run_timeout
-      )),
-      error = function(e) e
-    )
-
-    if (inherits(install_output, "error")) {
-      set_last_test_failure(paste0("Installation command failed: ", install_output$message))
-      message("Install error: ", install_output$message)
-      return(FALSE)
-    }
-
-    install_status <- attr(install_output, "status")
-    if (is.null(install_status)) {
-      install_status <- 0L
-    }
-    # system2() reports a timeout kill as status 124. Signal it with a message
-    # the caller recognises so the mutant is classified as HANG (not KILLED).
-    if (identical(as.integer(install_status), 124L)) {
-      stop("reached elapsed time limit: package installation exceeded the mutant timeout")
-    }
-    if (!identical(as.integer(install_status), 0L)) {
-      set_last_test_failure(
-        paste0(
-          "Installation failed for package '", pkg_name,
-          "'. Ensure runtime/test dependencies are installed and package sources are valid."
-        )
-      )
-      message("Install error while running fallback tests for package: ", pkg_name)
-      if (length(install_output) > 0) {
-        message(paste(utils::tail(install_output, 10), collapse = "\n"))
-      }
-      return(FALSE)
-    }
-
-    # Restore the prebuilt shared objects from the template. They are identical
-    # for every mutant (compiled code is never mutated), and --no-libs left the
-    # installed package without a libs/ directory, so copy the template's into
-    # place. Skipped for pure-R packages (template has no libs/).
-    if (use_template && installed_template_has_libs) {
-      restored <- tryCatch(
-        file.copy(
-          file.path(installed_template_lib, pkg_name, "libs"),
-          file.path(temp_lib, pkg_name),
-          recursive = TRUE
-        ),
-        error = function(e) FALSE
-      )
-      if (!isTRUE(all(restored))) {
-        set_last_test_failure("Could not restore prebuilt shared objects from the install template.")
-        message("Install error: failed to restore libs/ from template for package: ", pkg_name)
-        return(FALSE)
-      }
-    }
-
-    # Charge install time against the per-mutant budget so install + tests share
-    # a single wall-clock limit (rather than allowing one full timeout per
-    # phase). 0 keeps the baseline run unlimited.
-    test_timeout <- run_timeout
-    if (run_timeout > 0) {
-      install_elapsed <- as.numeric(Sys.time() - install_started, units = "secs")
-      test_timeout <- run_timeout - install_elapsed
-      if (test_timeout <= 0) {
-        stop("reached elapsed time limit: package installation exhausted the mutant timeout")
-      }
-    }
-
-    test_code <- tryCatch(
-      {
-        old_r_libs <- Sys.getenv("R_LIBS", unset = "")
-        on.exit(Sys.setenv(R_LIBS = old_r_libs), add = TRUE)
-
-        # Ensure subprocesses spawned by tools::testInstalledPackage can find
-        # the freshly installed package in the temporary library.
-        fallback_libs <- paste(c(temp_lib, .libPaths()), collapse = .Platform$path.sep)
-        Sys.setenv(R_LIBS = fallback_libs)
-
-        # Run the installed-package tests in a separate process so a hard
-        # wall-clock timeout can be enforced: tools::testInstalledPackage()
-        # spawns its own test subprocesses, which setTimeLimit() cannot reach.
-        runner <- tempfile("mutator_test_runner_", fileext = ".R")
-        on.exit(unlink(runner), add = TRUE)
-        writeLines(
-          c(
-            # Control NOT_CRAN so skip_on_cran()/skip_if_offline() in the
-            # installed tests behave as on CRAN ("false") or run everything
-            # ("true"). Child processes spawned per test file inherit it.
-            sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(if (cran) "false" else "true")),
-            sprintf(
-              "status <- tools::testInstalledPackage(pkg = %s, lib.loc = %s, outDir = %s, types = \"tests\")",
-              deparse(pkg_name), deparse(temp_lib), deparse(temp_out)
-            ),
-            "if (!is.numeric(status)) status <- 1L",
-            "quit(save = \"no\", status = as.integer(status))"
-          ),
-          runner
-        )
-
-        rscript <- file.path(R.home("bin"), "Rscript")
-        run_output <- suppressWarnings(system2(
-          rscript,
-          args = c("--vanilla", shQuote(runner)),
-          stdout = TRUE,
-          stderr = TRUE,
-          timeout = test_timeout
-        ))
-        status <- attr(run_output, "status")
-        if (is.null(status)) 0L else as.integer(status)
-      },
-      error = function(e) e
-    )
-
-    if (inherits(test_code, "error")) {
-      set_last_test_failure(paste0("Installed-package test execution failed: ", test_code$message))
-      message("Fallback test execution error: ", test_code$message)
-      return(FALSE)
-    }
-
-    # A status of 124 means the test subprocess was killed on timeout; surface it
-    # as a HANG via a message the caller recognises.
-    if (identical(test_code, 124L)) {
-      stop("reached elapsed time limit: installed-package tests exceeded the mutant timeout")
-    }
-
-    passed <- identical(test_code, 0L)
-    if (!passed) {
-      set_last_test_failure(
-        paste0(
-          "Installed package tests failed for '", pkg_name,
-          "'. Check files under tests/ and verify dependencies required by tests are available."
-        )
-      )
-    }
-
-    passed
+    set_last_test_failure(res$failure)
+    res$passed
   }
 
   # The testthat strategy runs each mutant through the package's own
@@ -1726,4 +1546,190 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
       confidence = confidence
     )
   ))
+}
+
+# Install a mutant package into a throwaway library and run its installed tests
+# in a subprocess with a hard wall-clock timeout. Extracted from mutate_package()
+# so the install/restore/test-failure/timeout branches can be unit-tested
+# directly. Returns list(passed, failure): `failure` is a message to surface
+# (NULL on success); a timeout raises an error whose message the caller
+# recognises as a HANG rather than a KILLED verdict.
+run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
+                                    template_lib, template_has_libs, cran) {
+  failure <- NULL
+
+  # Hard wall-clock limit for the install/test subprocesses. setTimeLimit()
+  # cannot interrupt these (they run outside the R interpreter), so the limit is
+  # enforced via system2(timeout = ). 0 means "no limit" and is used for the
+  # baseline run, where the timeout is not yet known (NA).
+  run_timeout <- if (is.finite(timeout_seconds) && timeout_seconds > 0) {
+    timeout_seconds
+  } else {
+    0
+  }
+
+  pkg_name <- tryCatch(
+    get_package_name(pkg_path),
+    error = function(e) {
+      failure <<- paste0("Cannot read package metadata: ", e$message)
+      message("Package metadata error: ", e$message)
+      NULL
+    }
+  )
+  if (is.null(pkg_name)) {
+    return(list(passed = FALSE, failure = failure))
+  }
+
+  temp_lib <- tempfile("mutator_lib_")
+  temp_out <- tempfile("mutator_test_out_")
+  dir.create(temp_lib, recursive = TRUE, showWarnings = FALSE)
+  dir.create(temp_out, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(temp_lib, recursive = TRUE, force = TRUE), add = TRUE)
+  on.exit(unlink(temp_out, recursive = TRUE, force = TRUE), add = TRUE)
+
+  r_bin <- file.path(R.home("bin"), "R")
+  # When a prebuilt template library exists, install only the (mutated) R code
+  # and tests with --no-libs and restore the template's compiled libs/ below.
+  # This skips recompiling C/C++ on every mutant. Without a template (e.g. a
+  # pure-R package), a normal install is used.
+  use_template <- !is.null(template_lib)
+  install_args <- c(
+    "CMD", "INSTALL",
+    "--install-tests",
+    "--no-multiarch",
+    if (use_template) c("--no-libs", "--no-test-load"),
+    paste0("--library=", temp_lib),
+    pkg_path
+  )
+  install_started <- Sys.time()
+  install_output <- tryCatch(
+    suppressWarnings(system2(
+      r_bin,
+      args = install_args,
+      stdout = TRUE,
+      stderr = TRUE,
+      timeout = run_timeout
+    )),
+    error = function(e) e
+  )
+
+  if (inherits(install_output, "error")) {
+    failure <- paste0("Installation command failed: ", install_output$message)
+    message("Install error: ", install_output$message)
+    return(list(passed = FALSE, failure = failure))
+  }
+
+  install_status <- attr(install_output, "status")
+  if (is.null(install_status)) {
+    install_status <- 0L
+  }
+  # system2() reports a timeout kill as status 124. Signal it with a message the
+  # caller recognises so the mutant is classified as HANG (not KILLED).
+  if (identical(as.integer(install_status), 124L)) {
+    stop("reached elapsed time limit: package installation exceeded the mutant timeout")
+  }
+  if (!identical(as.integer(install_status), 0L)) {
+    failure <- paste0(
+      "Installation failed for package '", pkg_name,
+      "'. Ensure runtime/test dependencies are installed and package sources are valid."
+    )
+    message("Install error while running fallback tests for package: ", pkg_name)
+    if (length(install_output) > 0) {
+      message(paste(utils::tail(install_output, 10), collapse = "\n"))
+    }
+    return(list(passed = FALSE, failure = failure))
+  }
+
+  # Restore the prebuilt shared objects from the template (--no-libs left the
+  # installed package without a libs/ directory). Skipped for pure-R packages.
+  if (use_template && template_has_libs) {
+    restored <- tryCatch(
+      file.copy(
+        file.path(template_lib, pkg_name, "libs"),
+        file.path(temp_lib, pkg_name),
+        recursive = TRUE
+      ),
+      error = function(e) FALSE
+    )
+    if (!isTRUE(all(restored))) {
+      failure <- "Could not restore prebuilt shared objects from the install template."
+      message("Install error: failed to restore libs/ from template for package: ", pkg_name)
+      return(list(passed = FALSE, failure = failure))
+    }
+  }
+
+  # Charge install time against the per-mutant budget so install + tests share a
+  # single wall-clock limit. 0 keeps the baseline run unlimited.
+  test_timeout <- run_timeout
+  if (run_timeout > 0) {
+    install_elapsed <- as.numeric(Sys.time() - install_started, units = "secs")
+    test_timeout <- run_timeout - install_elapsed
+    if (test_timeout <= 0) {
+      stop("reached elapsed time limit: package installation exhausted the mutant timeout")
+    }
+  }
+
+  test_code <- tryCatch(
+    {
+      old_r_libs <- Sys.getenv("R_LIBS", unset = "")
+      on.exit(Sys.setenv(R_LIBS = old_r_libs), add = TRUE)
+
+      # Ensure subprocesses spawned by tools::testInstalledPackage can find the
+      # freshly installed package in the temporary library.
+      fallback_libs <- paste(c(temp_lib, .libPaths()), collapse = .Platform$path.sep)
+      Sys.setenv(R_LIBS = fallback_libs)
+
+      # Run the installed-package tests in a separate process so a hard
+      # wall-clock timeout can be enforced: tools::testInstalledPackage() spawns
+      # its own test subprocesses, which setTimeLimit() cannot reach.
+      runner <- tempfile("mutator_test_runner_", fileext = ".R")
+      on.exit(unlink(runner), add = TRUE)
+      writeLines(
+        c(
+          sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(if (cran) "false" else "true")),
+          sprintf(
+            "status <- tools::testInstalledPackage(pkg = %s, lib.loc = %s, outDir = %s, types = \"tests\")",
+            deparse(pkg_name), deparse(temp_lib), deparse(temp_out)
+          ),
+          "if (!is.numeric(status)) status <- 1L",
+          "quit(save = \"no\", status = as.integer(status))"
+        ),
+        runner
+      )
+
+      rscript <- file.path(R.home("bin"), "Rscript")
+      run_output <- suppressWarnings(system2(
+        rscript,
+        args = c("--vanilla", shQuote(runner)),
+        stdout = TRUE,
+        stderr = TRUE,
+        timeout = test_timeout
+      ))
+      status <- attr(run_output, "status")
+      if (is.null(status)) 0L else as.integer(status)
+    },
+    error = function(e) e
+  )
+
+  if (inherits(test_code, "error")) {
+    failure <- paste0("Installed-package test execution failed: ", test_code$message)
+    message("Fallback test execution error: ", test_code$message)
+    return(list(passed = FALSE, failure = failure))
+  }
+
+  # A status of 124 means the test subprocess was killed on timeout; surface it
+  # as a HANG via a message the caller recognises.
+  if (identical(test_code, 124L)) {
+    stop("reached elapsed time limit: installed-package tests exceeded the mutant timeout")
+  }
+
+  passed <- identical(test_code, 0L)
+  if (!passed) {
+    failure <- paste0(
+      "Installed package tests failed for '", pkg_name,
+      "'. Check files under tests/ and verify dependencies required by tests are available."
+    )
+  }
+
+  list(passed = passed, failure = failure)
 }
