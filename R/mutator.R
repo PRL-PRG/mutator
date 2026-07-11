@@ -1633,6 +1633,10 @@ run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
     if (test_timeout <= 0) {
       stop("reached elapsed time limit: package installation exhausted the mutant timeout")
     }
+    # R versions before 4.6 do not reliably enforce fractional `system2()`
+    # timeouts.  Keep at least one second of the remaining wall-clock budget
+    # while passing a value that works consistently across supported R releases.
+    test_timeout <- max(1L, as.integer(ceiling(test_timeout)))
   }
 
   test_code <- tryCatch(
