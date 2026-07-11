@@ -19,5 +19,8 @@ jobs:
       mutator-spec: local::.
       target-margin: "0.10"
       isolate: true
+      # Exact file-level coverage attribution (no helper-file fallback), so each
+      # mutant runs only the test file(s) that cover it.
+      coverage-backend: per_file
       deploy-badge: true
       artifact-name: mutation-score

@@ -64,6 +64,10 @@ on:
         description: Run only the tests that cover each mutated line. Automatically disabled (with a warning) for installed-tests packages.
         type: boolean
         default: true
+      coverage-backend:
+        description: How coverage-guided attributes coverage to tests, "record_tests" (default) or "per_file" (exact file-level attribution, no helper fallback).
+        type: string
+        default: record_tests
       exclude-files:
         description: Glob patterns (comma/space separated) of R/ files to skip.
         type: string
@@ -139,6 +143,7 @@ jobs:
           MUTATOR_TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
           MUTATOR_ISOLATE: ${{ inputs.isolate }}
           MUTATOR_COVERAGE_GUIDED: ${{ inputs.coverage-guided }}
+          MUTATOR_COVERAGE_BACKEND: ${{ inputs.coverage-backend }}
           MUTATOR_EXCLUDE_FILES: ${{ inputs.exclude-files }}
           MUTATOR_FAIL_UNDER: ${{ inputs.fail-under }}
           MUTATOR_SHOW_CONFIDENCE_INTERVAL: ${{ inputs.show-confidence-interval }}

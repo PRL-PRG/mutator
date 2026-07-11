@@ -1,0 +1,157 @@
+# Build a minimal installable testthat package from a named list of R/ files
+# and test files. Returns the package directory (caller cleans up temp_dir).
+make_exclusion_pkg <- function(temp_dir, pkg_name, r_files, test_files) {
+  pkg_dir <- file.path(temp_dir, pkg_name)
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+
+  writeLines(sprintf("Package: %s
+Version: 0.1.0
+Title: Test Package for mutator
+Description: A test package for mutation testing.
+Author: Test Author
+License: MIT
+RoxygenNote: 7.1.1", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+  writeLines(sprintf("library(testthat)\nlibrary(%s)\n\ntest_check(\"%s\")", pkg_name, pkg_name),
+    file.path(pkg_dir, "tests", "testthat.R"))
+
+  for (nm in names(r_files)) {
+    writeLines(r_files[[nm]], file.path(pkg_dir, "R", nm))
+  }
+  for (nm in names(test_files)) {
+    writeLines(test_files[[nm]], file.path(pkg_dir, "tests", "testthat", nm))
+  }
+  pkg_dir
+}
+
+test_that("exclude_files and # mutator:ignore-file skip whole files", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE))
+
+  pkg_dir <- make_exclusion_pkg(
+    temp_dir, "exclMutatoR",
+    r_files = list(
+      "core.R" = "core_add <- function(x, y) x + y",
+      "vendored.R" = "vendored_sub <- function(a, b) a - b",
+      "generated.R" = c(
+        "# mutator:ignore-file",
+        "generated_mul <- function(p, q) p * q"
+      )
+    ),
+    test_files = list(
+      "test-core.R" = "test_that('core', {
+  expect_equal(core_add(1, 2), 3)
+  expect_equal(vendored_sub(5, 2), 3)
+  expect_equal(generated_mul(2, 3), 6)
+})"
+    )
+  )
+
+  result <- mutate_package(pkg_dir, cores = 1, max_line_deletions = 0,
+    exclude_files = c("vendored*"))
+
+  srcs <- vapply(result$package_mutants, function(m) basename(m$src), character(1))
+  expect_true(length(srcs) > 0)
+  # vendored.R excluded by the exclude_files glob; generated.R by its directive.
+  expect_false("vendored.R" %in% srcs)
+  expect_false("generated.R" %in% srcs)
+  # core.R is still mutated.
+  expect_true("core.R" %in% srcs)
+})
+
+test_that("# mutator:ignore-start/-end excludes a function's mutants", {
+  # ignore-start/-end is an in-source, file-level directive applied during mutant
+  # *generation*, so this checks it via mutate_file() directly (no test runs)
+  # rather than mutate_package(). keep_fn comes first (lines 1-3); drop_fn is
+  # wrapped in an ignore region.
+  funcs <- c(
+    "keep_fn <- function(x, y) {",
+    "  x + y",
+    "}",
+    "# mutator:ignore-start",
+    "drop_fn <- function(a, b) {",
+    "  a - b",
+    "}",
+    "# mutator:ignore-end"
+  )
+
+  extract_start_lines <- function(mutants) {
+    vapply(mutants, function(m) {
+      mm <- regmatches(m$info, regexpr("Range: ([0-9]+):", m$info))
+      if (length(mm) == 0) return(NA_integer_)
+      as.integer(sub("Range: ([0-9]+):", "\\1", mm))
+    }, integer(1))
+  }
+
+  mutate_lines <- function(lines) {
+    src <- tempfile(fileext = ".R")
+    writeLines(lines, src)
+    mutate_file(src, out_dir = tempfile("m_"), max_line_deletions = 5)
+  }
+
+  with_region <- mutate_lines(funcs)
+  no_region <- mutate_lines(funcs[-c(4, 8)])
+
+  # The region removes drop_fn's mutants, so fewer are generated overall.
+  expect_lt(length(with_region), length(no_region))
+
+  # Every generated mutant is attributed to keep_fn (lines 1-3); none to the
+  # excluded drop_fn region (lines >= 4).
+  starts <- extract_start_lines(with_region)
+  expect_true(length(starts) > 0)
+  expect_true(all(starts <= 3L, na.rm = TRUE))
+})
+
+test_that("max_line_deletions is off by default and adds line-deletion mutants when set", {
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("furrr")
+  skip_if_not_installed("future")
+
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE))
+
+  # A minimal body (lines 2-4 individually deletable, no arithmetic/constants)
+  # keeps the generated-mutant count low so both mutate_package() runs stay fast.
+  # This intentionally exercises the mutate_package parameter end to end (its
+  # default of 0, and enabling it), so it uses mutate_package(), not mutate_file().
+  funcs <- c(
+    "g <- function(x) {",
+    "  a <- x",
+    "  a",
+    "}"
+  )
+  tests <- list("test-g.R" = "test_that('g', {
+  expect_equal(g(5), 5)
+})")
+
+  count_line_dels <- function(result) {
+    sum(vapply(result$package_mutants,
+      function(m) grepl("deleted line", m$mutation_info, fixed = TRUE),
+      logical(1)))
+  }
+
+  # The default (max_line_deletions = 0) generates no line-deletion mutants;
+  # they are redundant with the AST block-deletion mutants generated by default.
+  default_res <- mutate_package(
+    make_exclusion_pkg(temp_dir, "lineDelDefaultMutatoR",
+      r_files = list("g.R" = funcs), test_files = tests),
+    cores = 1, coverage_guided = FALSE)
+  expect_equal(count_line_dels(default_res), 0L)
+
+  # Enabling the option adds one line-deletion mutant per deletable body line (2
+  # requested here) on top of the AST mutants, so the total strictly increases.
+  enabled_res <- mutate_package(
+    make_exclusion_pkg(temp_dir, "lineDelEnabledMutatoR",
+      r_files = list("g.R" = funcs), test_files = tests),
+    cores = 1, max_line_deletions = 2, coverage_guided = FALSE)
+  expect_equal(count_line_dels(enabled_res), 2L)
+  expect_gt(length(enabled_res$package_mutants),
+    length(default_res$package_mutants))
+})
