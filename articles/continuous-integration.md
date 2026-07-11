@@ -49,6 +49,7 @@ All inputs are optional.
 | `target-margin` | `"0.10"` | Sample mutants to this plus or minus CI half-width, as a proportion. Empty tests every mutant. |
 | `max-mutants` | `""` | Fixed cap on sampled mutants. Takes precedence over `target-margin`. |
 | `fail-under` | `""` | Fail the job when the score is below this percentage. |
+| `show-confidence-interval` | `true` | Show the confidence interval with a sampled mutation score in the badge and job summary. |
 | `cores` | `"0"` | Parallel workers. `"0"` auto-detects. |
 | `timeout-seconds` | `""` | Per-mutant timeout. Empty derives it from the baseline run. |
 | `isolate` | `true` | Deep-copy `src/` and `tests/` per mutant, for non-hermetic suites. |
@@ -121,6 +122,10 @@ The badge is labelled `mutator`; its message shows the score and, when
 the run sampled mutants, a compact asymmetric confidence interval such
 as `83.2% -5.2/+4.7% (95% CI)`. The badge colour tracks the score: green
 above 80%, yellow above 60%, orange above 40%, and red below.
+
+Set `show-confidence-interval: false` to show only the mutation score in
+both the badge and the job summary. The confidence interval remains part
+of the uploaded mutation results.
 
 ## Permissions and private dependencies
 

@@ -136,60 +136,66 @@ Empty tests every mutant.</td>
 <td>Fail the job when the score is below this percentage.</td>
 </tr>
 <tr class="even">
+<td><code>show-confidence-interval</code></td>
+<td><code>true</code></td>
+<td>Show the confidence interval with a sampled mutation score in the
+badge and job summary.</td>
+</tr>
+<tr class="odd">
 <td><code>cores</code></td>
 <td><code>"0"</code></td>
 <td>Parallel workers. <code>"0"</code> auto-detects.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>timeout-seconds</code></td>
 <td><code>""</code></td>
 <td>Per-mutant timeout. Empty derives it from the baseline run.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>isolate</code></td>
 <td><code>true</code></td>
 <td>Deep-copy <code>src/</code> and <code>tests/</code> per mutant, for
 non-hermetic suites.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>coverage-guided</code></td>
 <td><code>true</code></td>
 <td>Run only the tests covering each mutated line. Disabled
 automatically, with a warning, for installed-tests packages.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>exclude-files</code></td>
 <td><code>""</code></td>
 <td>Glob patterns of <code>R/</code> files to skip.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>badge-label</code></td>
 <td><code>mutator</code></td>
 <td>Label shown on the shields.io badge.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>deploy-badge</code></td>
 <td><code>false</code></td>
 <td>Publish a badge. Requires <code>contents: write</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>badge-branch</code></td>
 <td><code>gh-pages</code></td>
 <td>Branch the badge JSON is deployed to.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>mutator-spec</code></td>
 <td><code>github::PRL-PRG/mutator</code></td>
 <td>pak spec used to install mutator, for example
 <code>any::mutator</code> once it is on CRAN.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>install-imputesrcref</code></td>
 <td><code>true</code></td>
 <td>Install the optional imputesrcref package to refine mutant
 locations.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>r-version</code></td>
 <td><code>release</code></td>
 <td>R version passed to <code>setup-r</code>.</td>
@@ -250,6 +256,9 @@ score and, when the run sampled mutants, a compact asymmetric confidence
 interval such as <code>83.2% -5.2/+4.7% (95% CI)</code>. The badge
 colour tracks the score: green above 80%, yellow above 60%, orange above
 40%, and red below.</p>
+<p>Set <code>show-confidence-interval: false</code> to show only the
+mutation score in both the badge and the job summary. The confidence
+interval remains part of the uploaded mutation results.</p>
 </div>
 <div class="section level2">
 <h2 id="permissions-and-private-dependencies">Permissions and private dependencies<a class="anchor" aria-label="anchor" href="#permissions-and-private-dependencies"></a>
