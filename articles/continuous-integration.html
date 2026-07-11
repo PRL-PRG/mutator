@@ -164,38 +164,45 @@ non-hermetic suites.</td>
 automatically, with a warning, for installed-tests packages.</td>
 </tr>
 <tr class="odd">
+<td><code>coverage-backend</code></td>
+<td><code>record_tests</code></td>
+<td>How coverage is attributed to tests. <code>"per_file"</code> gives
+exact file-level attribution (no helper-file fallback), at the cost of
+relying on covr internals.</td>
+</tr>
+<tr class="even">
 <td><code>exclude-files</code></td>
 <td><code>""</code></td>
 <td>Glob patterns of <code>R/</code> files to skip.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>badge-label</code></td>
 <td><code>mutator</code></td>
 <td>Label shown on the shields.io badge.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>deploy-badge</code></td>
 <td><code>false</code></td>
 <td>Publish a badge. Requires <code>contents: write</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>badge-branch</code></td>
 <td><code>gh-pages</code></td>
 <td>Branch the badge JSON is deployed to.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>mutator-spec</code></td>
 <td><code>github::PRL-PRG/mutator</code></td>
 <td>pak spec used to install mutator, for example
 <code>any::mutator</code> once it is on CRAN.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>install-imputesrcref</code></td>
 <td><code>true</code></td>
 <td>Install the optional imputesrcref package to refine mutant
 locations.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>r-version</code></td>
 <td><code>release</code></td>
 <td>R version passed to <code>setup-r</code>.</td>
