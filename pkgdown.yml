@@ -4,7 +4,7 @@ pkgdown_sha: ~
 articles:
   articles/configuration: configuration.html
   articles/continuous-integration: continuous-integration.html
-last_built: 2026-07-11T00:02Z
+last_built: 2026-07-11T00:08Z
 urls:
   reference: https://prl-prg.github.io/mutator/reference
   article: https://prl-prg.github.io/mutator/articles
