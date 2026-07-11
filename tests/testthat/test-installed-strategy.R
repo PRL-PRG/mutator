@@ -106,8 +106,11 @@ test_that("exceeding the timeout raises a HANG-signalling error", {
   pkg <- make_pkg("slowInstPkg", test_code = "Sys.sleep(60)")
   on.exit(unlink(dirname(pkg), recursive = TRUE), add = TRUE)
 
+  # Small budget: install finishes quickly, then the sleeping test is killed on
+  # timeout. (If a slow machine's install itself exceeds it, that path raises the
+  # same "reached elapsed time limit" error, so the assertion still holds.)
   expect_error(
-    suppressMessages(run_installed_pkg_tests(pkg, timeout_seconds = 5,
+    suppressMessages(run_installed_pkg_tests(pkg, timeout_seconds = 2,
       template_lib = NULL, template_has_libs = FALSE, cran = TRUE)),
     "reached elapsed time limit"
   )

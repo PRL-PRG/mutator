@@ -249,7 +249,7 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
 
   writeLines("stopifnot(TRUE)", file.path(pkg_dir, "tests", "test-inc.R"))
 
-  result <- mutate_package(pkg_dir, cores = 1, max_mutants = 2, coverage_guided = FALSE)
+  result <- mutate_package(pkg_dir, cores = 1, max_mutants = 1, coverage_guided = FALSE)
 
   expect_true(is.list(result))
   expect_true("package_mutants" %in% names(result))
@@ -306,8 +306,10 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
   writeLines("stopifnot(testCompiledFallback::add2(2, 3) == 5)",
     file.path(pkg_dir, "tests", "test-add.R"))
 
+  # Two sampled mutants are enough to exercise reuse of the one compiled build
+  # across separate --no-libs installs.
   result <- mutate_package(pkg_dir, cores = 2, strategy = "installed",
-    coverage_guided = FALSE)
+    coverage_guided = FALSE, max_mutants = 2)
 
   expect_true(is.list(result))
   expect_true(length(result$test_results) > 0)
@@ -345,7 +347,8 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
   # coverage_guided defaults to TRUE, but the resolved strategy is installed
   # tests: mutator should warn and run the full suite rather than error.
   expect_warning(
-    result <- mutate_package(pkg_dir, cores = 1, strategy = "installed"),
+    result <- mutate_package(pkg_dir, cores = 1, strategy = "installed",
+      max_mutants = 1),
     "coverage-guided optimisation requires the testthat strategy"
   )
   expect_true(is.list(result))
@@ -407,14 +410,16 @@ test_that("cran mode controls skip_on_cran via NOT_CRAN", {
     "Description: t.", "Author: a", "License: MIT"
   ), file.path(pkg_dir, "DESCRIPTION"))
   writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
-  writeLines("f <- function(x) x + 1", file.path(pkg_dir, "R", "f.R"))
+  # Two-arg body (x + y) generates a single `+` -> `-` mutant, keeping both runs
+  # fast (no constant mutants for a literal).
+  writeLines("f <- function(x, y) x + y", file.path(pkg_dir, "R", "f.R"))
   writeLines("library(testthat)\nlibrary(cranpkg)\ntest_check(\"cranpkg\")",
              file.path(pkg_dir, "tests", "testthat.R"))
   # An always-on test keeps the suite non-empty; the only test that can kill the
   # `+` -> `-` mutant is guarded by skip_on_cran().
   writeLines(c(
     "test_that(\"always\", { expect_true(TRUE) })",
-    "test_that(\"kills mutant but cran-guarded\", { skip_on_cran(); expect_equal(f(1), 2) })"
+    "test_that(\"kills mutant but cran-guarded\", { skip_on_cran(); expect_equal(f(1, 1), 2) })"
   ), file.path(pkg_dir, "tests", "testthat", "test-f.R"))
 
   # CRAN mode (default): the killing test is skipped -> mutant survives.
@@ -452,8 +457,9 @@ test_that("testthat strategy honors the tests/testthat.R harness filter", {
     "Description: t.", "Author: a", "License: MIT"
   ), file.path(pkg_dir, "DESCRIPTION"))
   writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
-  writeLines("f <- function(x) x + 1", file.path(pkg_dir, "R", "f.R"))
-  writeLines("g <- function(x) x * 2", file.path(pkg_dir, "R", "g.R"))
+  # Two-arg bodies keep one mutant each (a `+`/`*` operator, no constant mutants).
+  writeLines("f <- function(x, y) x + y", file.path(pkg_dir, "R", "f.R"))
+  writeLines("g <- function(x, y) x * y", file.path(pkg_dir, "R", "g.R"))
 
   # Harness restricts the run to test files matching "keep". The kept file tests
   # g(); the dropped file is the *only* thing that tests f().
@@ -461,13 +467,13 @@ test_that("testthat strategy honors the tests/testthat.R harness filter", {
     "library(testthat)\nlibrary(hfpkg)\ntest_check(\"hfpkg\", filter = \"keep\")",
     file.path(pkg_dir, "tests", "testthat.R")
   )
-  writeLines("test_that(\"keep g\", { expect_equal(g(2), 4) })",
+  writeLines("test_that(\"keep g\", { expect_equal(g(2, 2), 4) })",
              file.path(pkg_dir, "tests", "testthat", "test-keep.R"))
-  writeLines("test_that(\"drop f\", { expect_equal(f(1), 2) })",
+  writeLines("test_that(\"drop f\", { expect_equal(f(1, 1), 2) })",
              file.path(pkg_dir, "tests", "testthat", "test-drop.R"))
 
   res <- suppressMessages(
-    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0)
+    mutate_package(pkg_dir, cores = 1, max_line_deletions = 0, coverage_guided = FALSE)
   )
   v <- unlist(res$test_results)
   f_mutants <- grepl("^f\\.R", names(v))
@@ -499,7 +505,9 @@ test_that("fail_fast stops the suite at the first failing test but keeps the ver
     "Description: t.", "Author: a", "License: MIT"
   ), file.path(pkg_dir, "DESCRIPTION"))
   writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
-  writeLines("f <- function(x) x + 1", file.path(pkg_dir, "R", "f.R"))
+  # Two-arg body (x + y) yields a single `+` -> `-` mutant (no constant mutants),
+  # which is all this test needs and keeps both runs fast.
+  writeLines("f <- function(x, y) x + y", file.path(pkg_dir, "R", "f.R"))
   writeLines("library(testthat)\nlibrary(ffpkg)\ntest_check(\"ffpkg\")",
              file.path(pkg_dir, "tests", "testthat.R"))
 
@@ -508,7 +516,7 @@ test_that("fail_fast stops the suite at the first failing test but keeps the ver
   # time it runs, so the number of appends reveals how much of the suite ran.
   sentinel <- file.path(temp_dir, "sentinel.txt")
   writeLines(
-    "test_that(\"kills\", { expect_equal(f(1), 2) })",
+    "test_that(\"kills\", { expect_equal(f(1, 1), 2) })",
     file.path(pkg_dir, "tests", "testthat", "test-a-kill.R")
   )
   writeLines(
@@ -687,7 +695,6 @@ test_that("max_line_deletions is off by default and adds line-deletion mutants w
   funcs <- c(
     "g <- function(x) {",
     "  a <- x",
-    "  b <- x",
     "  a",
     "}"
   )
@@ -898,12 +905,13 @@ test_that("sampling reports a confidence interval and target_margin sizes the sa
   writeLines(c("Package: cipkg", "Version: 0.1.0", "Title: t", "Description: t.",
                "Author: a", "License: MIT"), file.path(pkg, "DESCRIPTION"))
   writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg, "NAMESPACE"))
-  # Several arithmetic/comparison sites -> enough mutants to sample from.
-  writeLines("g <- function(a, b) { if (a > b) a + b else a - b * 2 }",
+  # A few arithmetic/comparison sites -> enough mutants to sample from (>3, so
+  # res1's max_mutants = 3 leaves generated > tested) while staying small.
+  writeLines("g <- function(a, b) { if (a > b) a + b else a - b }",
              file.path(pkg, "R", "g.R"))
   writeLines("library(testthat)\nlibrary(cipkg)\ntest_check(\"cipkg\")",
              file.path(pkg, "tests", "testthat.R"))
-  writeLines("test_that(\"g\", { expect_equal(g(3, 1), 4); expect_equal(g(1, 3), -5) })",
+  writeLines("test_that(\"g\", { expect_equal(g(3, 1), 4); expect_equal(g(1, 3), -2) })",
              file.path(pkg, "tests", "testthat", "test-g.R"))
 
   # max_mutants sampling -> CI present in summary; tested < generated.
@@ -913,6 +921,6 @@ test_that("sampling reports a confidence interval and target_margin sizes the sa
   expect_length(res1$summary$mutation_score_ci, 2L)
 
   # target_margin derives the sample size (and rejects pairing with max_mutants above).
-  res2 <- suppressMessages(mutate_package(pkg, cores = 1, target_margin = 0.4, max_line_deletions = 0))
+  res2 <- suppressMessages(mutate_package(pkg, cores = 1, target_margin = 0.5, max_line_deletions = 0))
   expect_lte(res2$summary$tested, res2$summary$generated)
 })
