@@ -2,8 +2,8 @@ test_that("build_coverage_test_map dispatches to the selected backend", {
     build_coverage_test_map <- resolve_mutator_fn("build_coverage_test_map")
 
     testthat::local_mocked_bindings(
-        build_coverage_map_record_tests = function(pkg_dir) {
-            list(backend = "record_tests", pkg_dir = pkg_dir)
+        build_coverage_map_record_tests = function(pkg_dir, cran = TRUE) {
+            list(backend = "record_tests", pkg_dir = pkg_dir, cran = cran)
         },
         build_coverage_map_per_file = function(pkg_dir, cran = TRUE) {
             list(backend = "per_file", pkg_dir = pkg_dir, cran = cran)
@@ -12,8 +12,8 @@ test_that("build_coverage_test_map dispatches to the selected backend", {
     )
 
     expect_equal(
-        build_coverage_test_map("/pkg", backend = "record_tests"),
-        list(backend = "record_tests", pkg_dir = "/pkg")
+        build_coverage_test_map("/pkg", backend = "record_tests", cran = FALSE),
+        list(backend = "record_tests", pkg_dir = "/pkg", cran = FALSE)
     )
     expect_equal(
         build_coverage_test_map("/pkg", backend = "per_file", cran = FALSE),
@@ -66,6 +66,32 @@ test_that("build_coverage_map_record_tests converts covr traces into test tokens
     expect_equal(recs[[2]]$last, 6L)
     expect_equal(recs[[2]]$tests, "beta")
     expect_false(recs[[2]]$ambiguous)
+})
+
+test_that("build_coverage_map_record_tests applies and restores CRAN mode", {
+    build_coverage_map_record_tests <- resolve_mutator_fn("build_coverage_map_record_tests")
+    original <- Sys.getenv("NOT_CRAN", unset = NA_character_)
+    on.exit(restore_env_var("NOT_CRAN", original), add = TRUE)
+
+    observed <- character()
+    empty_cov <- structure(list(), class = "coverage", tests = list())
+    testthat::local_mocked_bindings(
+        package_coverage = function(...) {
+            observed <<- c(observed, Sys.getenv("NOT_CRAN", unset = NA_character_))
+            empty_cov
+        },
+        .package = "covr"
+    )
+
+    Sys.setenv(NOT_CRAN = "callers-value")
+    build_coverage_map_record_tests("/pkg", cran = TRUE)
+    expect_identical(observed[[1]], "false")
+    expect_identical(Sys.getenv("NOT_CRAN"), "callers-value")
+
+    Sys.unsetenv("NOT_CRAN")
+    build_coverage_map_record_tests("/pkg", cran = FALSE)
+    expect_identical(observed[[2]], "true")
+    expect_identical(Sys.getenv("NOT_CRAN", unset = NA_character_), NA_character_)
 })
 
 test_that("build_coverage_map_per_file handles failures and aggregates captured traces", {
@@ -170,4 +196,3 @@ test_that("coverage-guided selection chooses the smallest sound test set", {
     writeLines("helper <- TRUE", file.path(pkg, "tests", "testthat", "helper.R"))
     expect_equal(sort(list_test_tokens(pkg)), c(".beta", "alpha"))
 })
-

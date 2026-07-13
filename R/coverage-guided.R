@@ -19,7 +19,7 @@ covr_no_exclusions <- list(
 # select_test_files(). Both run the suite once, doubling as the baseline check
 build_coverage_test_map <- function(pkg_dir, backend = "record_tests", cran = TRUE) {
   switch(backend,
-    record_tests = build_coverage_map_record_tests(pkg_dir),
+    record_tests = build_coverage_map_record_tests(pkg_dir, cran = cran),
     per_file = build_coverage_map_per_file(pkg_dir, cran = cran),
     stop(sprintf("Unknown coverage backend '%s'.", backend), call. = FALSE)
   )
@@ -33,9 +33,20 @@ build_coverage_test_map <- function(pkg_dir, backend = "record_tests", cran = TR
 # credited to the helper, not the test-*.R file Such traces are marked
 # "ambiguous" so select_test_files() falls back to the full suite. Keyed by source
 # basename (unique within R/) to sidestep covr's relative-vs-absolute paths.
-build_coverage_map_record_tests <- function(pkg_dir) {
+build_coverage_map_record_tests <- function(pkg_dir, cran = TRUE) {
   old <- options(c(list(covr.record_tests = TRUE), covr_no_exclusions))
   on.exit(options(old), add = TRUE)
+  old_not_cran <- Sys.getenv("NOT_CRAN", unset = NA_character_)
+  on.exit({
+    if (is.na(old_not_cran)) {
+      Sys.unsetenv("NOT_CRAN")
+    } else {
+      Sys.setenv(NOT_CRAN = old_not_cran)
+    }
+  }, add = TRUE)
+  # package_coverage() runs the package harness in a child process, which
+  # inherits this value. Keep its test selection consistent with mutant runs.
+  Sys.setenv(NOT_CRAN = if (isTRUE(cran)) "false" else "true")
   cov <- covr::package_coverage(pkg_dir, type = "tests")
 
   # names(attr(cov, "tests")) look like "/abs/.../test-foo.R:2:3:2:28:3:28:2:2";
@@ -228,4 +239,3 @@ list_test_tokens <- function(pkg_dir) {
   )
   sub("\\.[rR]$", "", sub("^test-?", "", files))
 }
-
