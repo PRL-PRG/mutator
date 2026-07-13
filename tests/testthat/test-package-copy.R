@@ -64,11 +64,9 @@ test_check(\"%s\")", pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.
   expect_true(all(c("file_path", "start_line", "end_line", "details") %in% names(first_mutant$mutation_loc)))
 })
 
-test_that("mutate_package links unchanged package content", {
-  # Skip test if dependencies are not available
-  skip_if_not_installed("pkgload")
-  skip_if_not_installed("furrr")
-  skip_if_not_installed("future")
+test_that("create_mutant_package_copy links unchanged content and copies the mutated file", {
+  # Exercises the copy helper directly (no baseline/subprocess run), so it pins
+  # down exactly the symlink-vs-copy behaviour of a mutant package copy.
   # Sys.readlink-based assertions are not reliable on Windows CI.
   skip_on_os("windows")
 
@@ -86,54 +84,40 @@ test_that("mutate_package links unchanged package content", {
   dir.create(temp_dir)
   on.exit(unlink(temp_dir, recursive = TRUE))
 
-  pkg_name <- "testMutatorLinks"
-  pkg_dir <- file.path(temp_dir, pkg_name)
-  dir.create(pkg_dir)
+  pkg_dir <- file.path(temp_dir, "testMutatorLinks")
   dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
-  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)
-
-  writeLines(sprintf("Package: %s
-Version: 0.1.0
-Title: Test Package for mutator
-Description: A test package for mutation testing.
-Author: Test Author
-License: MIT
-RoxygenNote: 7.1.1", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
-
-  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
-
+  writeLines("Package: testMutatorLinks\nVersion: 0.1.0\nLicense: MIT",
+    file.path(pkg_dir, "DESCRIPTION"))
   writeLines("f_add <- function(x, y) { x + y }", file.path(pkg_dir, "R", "f_add.R"))
   writeLines("f_sub <- function(x, y) { x - y }", file.path(pkg_dir, "R", "f_sub.R"))
 
-  writeLines(sprintf("library(testthat)
-library(%s)
+  # A mutated version of f_add.R that the copy should materialise in place of it.
+  mutated_file <- tempfile(fileext = ".R")
+  writeLines("f_add <- function(x, y) { x - y }", mutated_file)
 
-test_check(\"%s\")", pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.R"))
+  mutant_pkg <- mutator:::create_mutant_package_copy(
+    pkg_dir = pkg_dir,
+    src_file = file.path(pkg_dir, "R", "f_add.R"),
+    mutated_file = mutated_file,
+    target_root = tempfile("mut_"),
+    isolate = FALSE
+  )
 
-  writeLines("test_that(\"basic arithmetic\", {
-  expect_equal(f_add(1, 2), 3)
-  expect_equal(f_sub(5, 3), 2)
-})", file.path(pkg_dir, "tests", "testthat", "test-basic.R"))
-
-  result <- mutate_package(pkg_dir, cores = 1, max_mutants = 2, coverage_guided = FALSE)
-
-  first_mutant <- result$package_mutants[[1]]
-  expect_true(!is.null(first_mutant))
-
-  mutant_pkg <- first_mutant$path
+  # Unchanged top-level content is symlinked to the original.
   expect_true(nzchar(Sys.readlink(file.path(mutant_pkg, "DESCRIPTION"))))
 
   mutant_r_files <- list.files(file.path(mutant_pkg, "R"), pattern = "\\.R$", full.names = TRUE)
   symlink_count <- sum(nzchar(vapply(mutant_r_files, Sys.readlink, character(1))))
-
-  # Exactly one file in R/ should be copied (the mutated one), all others linked.
+  # Exactly one file in R/ is copied (the mutated one); all others are linked.
   expect_equal(symlink_count, length(mutant_r_files) - 1)
+  # The copied file carries the mutated content, not the original.
+  expect_identical(
+    readLines(file.path(mutant_pkg, "R", "f_add.R")),
+    "f_add <- function(x, y) { x - y }"
+  )
 })
 
-test_that("mutate_package isolates src/ and tests/ when isolate = TRUE", {
-  skip_if_not_installed("pkgload")
-  skip_if_not_installed("furrr")
-  skip_if_not_installed("future")
+test_that("create_mutant_package_copy deep-copies tests/ when isolate = TRUE", {
   skip_on_os("windows")
 
   # Skip when symlinks are not supported (otherwise everything is copied anyway
@@ -151,27 +135,26 @@ test_that("mutate_package isolates src/ and tests/ when isolate = TRUE", {
   dir.create(temp_dir)
   on.exit(unlink(temp_dir, recursive = TRUE))
 
-  pkg_name <- "testMutatorIsolate"
-  pkg_dir <- file.path(temp_dir, pkg_name)
+  pkg_dir <- file.path(temp_dir, "testMutatorIsolate")
   dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
   dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)
-
-  writeLines(sprintf("Package: %s
-Version: 0.1.0
-Title: Test Package for mutator
-Description: A test package for mutation testing.
-Author: Test Author
-License: MIT
-RoxygenNote: 7.1.1", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
-  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+  writeLines("Package: testMutatorIsolate\nVersion: 0.1.0\nLicense: MIT",
+    file.path(pkg_dir, "DESCRIPTION"))
   writeLines("f_add <- function(x, y) { x + y }", file.path(pkg_dir, "R", "f_add.R"))
-  writeLines(sprintf("library(testthat)\nlibrary(%s)\n\ntest_check(\"%s\")",
-    pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.R"))
   writeLines("test_that(\"add\", { expect_equal(f_add(1, 2), 3) })",
     file.path(pkg_dir, "tests", "testthat", "test-basic.R"))
 
-  result <- mutate_package(pkg_dir, cores = 1, isolate = TRUE, max_mutants = 2, coverage_guided = FALSE)
-  mutant_pkg <- result$package_mutants[[1]]$path
+  mutated_file <- tempfile(fileext = ".R")
+  writeLines("f_add <- function(x, y) { x - y }", mutated_file)
+
+  mutant_pkg <- mutator:::create_mutant_package_copy(
+    pkg_dir = pkg_dir,
+    src_file = file.path(pkg_dir, "R", "f_add.R"),
+    mutated_file = mutated_file,
+    target_root = tempfile("mut_"),
+    isolate = TRUE,
+    test_strategy = "testthat"
+  )
 
   # DESCRIPTION (not in the isolate set) is still symlinked, but tests/ is a real
   # copied directory rather than a symlink to the shared original.

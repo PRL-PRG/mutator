@@ -71,3 +71,22 @@ test_that("an explicit mutant timeout bypasses calibration", {
 
   expect_identical(timeout, 12.5)
 })
+
+test_that("a derived mutant timeout respects the floor", {
+  # With one worker no contended calibration runs, so the timeout derives from
+  # baseline_seconds * multiplier; a tiny baseline is lifted to the floor.
+  timeout <- determine_mutant_timeout(
+    explicit_timeout = NULL,
+    baseline_seconds = 0.01,
+    workers = 1,
+    mutants = list(),
+    pkg_dir = tempdir(),
+    source_files = character(),
+    isolate = FALSE,
+    test_context = list(strategy = "testthat"),
+    full_log = FALSE,
+    floor_seconds = 5
+  )
+
+  expect_equal(timeout, 5)
+})
