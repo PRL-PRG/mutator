@@ -10,7 +10,7 @@ test_that("mutate_package generates and tests mutants", {
   on.exit(unlink(temp_dir, recursive = TRUE))
 
   # Set up package structure
-  pkg_name <- "testMutatoR"
+  pkg_name <- "testMutator"
   pkg_dir <- file.path(temp_dir, pkg_name)
   dir.create(pkg_dir)
   dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
@@ -86,7 +86,7 @@ test_that("mutate_package links unchanged package content", {
   dir.create(temp_dir)
   on.exit(unlink(temp_dir, recursive = TRUE))
 
-  pkg_name <- "testMutatoRLinks"
+  pkg_name <- "testMutatorLinks"
   pkg_dir <- file.path(temp_dir, pkg_name)
   dir.create(pkg_dir)
   dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
@@ -151,7 +151,7 @@ test_that("mutate_package isolates src/ and tests/ when isolate = TRUE", {
   dir.create(temp_dir)
   on.exit(unlink(temp_dir, recursive = TRUE))
 
-  pkg_name <- "testMutatoRIsolate"
+  pkg_name <- "testMutatorIsolate"
   pkg_dir <- file.path(temp_dir, pkg_name)
   dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
   dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)

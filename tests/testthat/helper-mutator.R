@@ -17,7 +17,7 @@ subtract <- function(a, b) {
 }
 
 # Create a minimal package for testing
-create_test_package <- function(pkg_name = "testMutatoR") {
+create_test_package <- function(pkg_name = "testMutator") {
   temp_dir <- tempfile()
   dir.create(temp_dir)
   
@@ -72,3 +72,29 @@ test_check(\"%s\")", pkg_name, pkg_name), file.path(pkg_dir, "tests", "testthat.
 cleanup_test_package <- function(pkg_info) {
   unlink(pkg_info$temp_dir, recursive = TRUE)
 } 
+# --- helpers hoisted from the former test-internal-coverage.R ---
+resolve_mutator_fn <- function(name) {
+    get0(name,
+        mode = "function",
+        inherits = TRUE,
+        ifnotfound = get(name, envir = asNamespace("mutator"))
+    )
+}
+# Save/restore a single environment variable across a test.
+restore_env_var <- function(name, value) {
+    if (is.na(value)) {
+        Sys.unsetenv(name)
+    } else {
+        args <- list(value)
+        names(args) <- name
+        do.call(Sys.setenv, args)
+    }
+}
+
+coverage_srcref <- function(file, first, last = first) {
+    structure(
+        c(first, 1L, last, 1L, 1L, 1L, first, last),
+        class = "srcref",
+        srcfile = list(filename = file)
+    )
+}

@@ -64,3 +64,127 @@ test_that("sampling reports a confidence interval and target_margin sizes the sa
   res2 <- suppressMessages(mutate_package(pkg, cores = 1, target_margin = 0.5, max_line_deletions = 0))
   expect_lte(res2$summary$tested, res2$summary$generated)
 })
+
+test_that("max_mutants validation rejects invalid values", {
+    mutate_file <- resolve_mutator_fn("mutate_file")
+    mutate_package <- resolve_mutator_fn("mutate_package")
+
+    src <- tempfile(fileext = ".R")
+    out_dir <- tempfile("mutations_validation_")
+    dir.create(out_dir, recursive = TRUE)
+    on.exit(unlink(c(src, out_dir), recursive = TRUE), add = TRUE)
+    writeLines("x <- 1", src)
+
+    expect_error(mutate_file(src, out_dir = out_dir, max_mutants = -1), "max_mutants")
+    expect_error(mutate_file(src, out_dir = out_dir, max_mutants = c(1, 2)), "single finite")
+    expect_error(mutate_file(src, out_dir = out_dir, max_mutants = 1.5), "whole number")
+
+    expect_error(mutate_package(tempdir(), max_mutants = -1), "max_mutants")
+    expect_error(mutate_package(tempdir(), max_mutants = c(1, 2)), "single finite")
+    expect_error(mutate_package(tempdir(), max_mutants = 1.5), "whole number")
+})
+
+test_that("timeout parameter validation rejects invalid values", {
+    mutate_package <- resolve_mutator_fn("mutate_package")
+
+    expect_error(mutate_package(tempdir(), timeout_seconds = 0), "timeout_seconds")
+    expect_error(mutate_package(tempdir(), timeout_seconds = c(1, 2)), "single finite")
+})
+
+test_that("mutate_package caps total mutants with max_mutants", {
+    mutate_package <- resolve_mutator_fn("mutate_package")
+
+    skip_if_not_installed("pkgload")
+    skip_if_not_installed("furrr")
+    skip_if_not_installed("future")
+
+    pkg_info <- create_test_package("testMutatorMaxMutantsCap")
+    on.exit(cleanup_test_package(pkg_info), add = TRUE)
+
+    mutation_dir <- tempfile("mutations_cap_")
+    dir.create(mutation_dir, recursive = TRUE)
+    on.exit(unlink(mutation_dir, recursive = TRUE), add = TRUE)
+
+    mut_paths <- c(
+        file.path(mutation_dir, "my_abs.R_001.R"),
+        file.path(mutation_dir, "my_abs.R_002.R"),
+        file.path(mutation_dir, "my_abs.R_003.R")
+    )
+    for (p in mut_paths) writeLines("my_abs <- function(x) x", p)
+
+    testthat::local_mocked_bindings(
+        mutate_file = function(...) {
+            list(
+                list(path = mut_paths[[1]], info = "m1"),
+                list(path = mut_paths[[2]], info = "m2"),
+                list(path = mut_paths[[3]], info = "m3")
+            )
+        },
+        .package = "mutator"
+    )
+    testthat::local_mocked_bindings(
+        future_map = function(.x, .f, ...) {
+            out <- lapply(.x, function(...) TRUE)
+            names(out) <- names(.x)
+            out
+        },
+        furrr_options = function(...) NULL,
+        .package = "furrr"
+    )
+    testthat::local_mocked_bindings(
+        plan = function(...) NULL,
+        .package = "future"
+    )
+
+    result <- mutate_package(
+        pkg_dir = pkg_info$pkg_dir,
+        cores = 1,
+        mutation_dir = mutation_dir,
+        max_mutants = 2
+    )
+
+    expect_true(is.list(result))
+    expect_length(result$test_results, 2)
+    expect_length(result$package_mutants, 2)
+})
+
+test_that("mutate_package supports max_mutants set to zero", {
+    mutate_package <- resolve_mutator_fn("mutate_package")
+
+    skip_if_not_installed("pkgload")
+    skip_if_not_installed("furrr")
+    skip_if_not_installed("future")
+
+    pkg_info <- create_test_package("testMutatorZeroMutants")
+    on.exit(cleanup_test_package(pkg_info), add = TRUE)
+
+    mutation_dir <- tempfile("mutations_zero_cap_")
+    dir.create(mutation_dir, recursive = TRUE)
+    on.exit(unlink(mutation_dir, recursive = TRUE), add = TRUE)
+
+    mut_path <- file.path(mutation_dir, "my_abs.R_001.R")
+    writeLines("my_abs <- function(x) x", mut_path)
+
+    testthat::local_mocked_bindings(
+        mutate_file = function(...) {
+            list(list(path = mut_path, info = "m1"))
+        },
+        .package = "mutator"
+    )
+    testthat::local_mocked_bindings(
+        plan = function(...) NULL,
+        .package = "future"
+    )
+
+    result <- mutate_package(
+        pkg_dir = pkg_info$pkg_dir,
+        cores = 1,
+        mutation_dir = mutation_dir,
+        max_mutants = 0
+    )
+
+    expect_true(is.list(result))
+    expect_equal(result$test_results, list())
+    expect_equal(result$package_mutants, list())
+})
+
