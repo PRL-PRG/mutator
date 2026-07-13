@@ -202,6 +202,49 @@ run_package_tests <- function(context, pkg_path, timeout_seconds = NA_real_,
   stop(sprintf("Unknown test strategy '%s'.", context$strategy), call. = FALSE)
 }
 
+package_has_native_sources <- function(pkg_dir) {
+  src_dir <- file.path(pkg_dir, "src")
+  dir.exists(src_dir) && length(list.files(
+    src_dir,
+    pattern = "\\.(c|cc|cpp|cxx|f|for|f90|f95|m|mm)$",
+    ignore.case = TRUE
+  )) > 0L
+}
+
+prepare_testthat_native_code <- function(pkg_dir) {
+  if (!package_has_native_sources(pkg_dir)) {
+    return(invisible(NULL))
+  }
+
+  result <- tryCatch(
+    callr::r(
+      function(pkg_dir) {
+        # nocov start
+        pkgload::load_all(
+          pkg_dir,
+          compile = TRUE,
+          attach = FALSE,
+          export_all = FALSE,
+          helpers = FALSE,
+          attach_testthat = FALSE,
+          quiet = TRUE
+        )
+        invisible(NULL)
+        # nocov end
+      },
+      args = list(pkg_dir = pkg_dir)
+    ),
+    error = function(e) e
+  )
+  if (inherits(result, "error")) {
+    stop(sprintf(
+      "Could not compile native code after the coverage baseline: %s",
+      conditionMessage(result)
+    ), call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 run_package_baseline <- function(pkg_dir, context, coverage_guided,
                                  coverage_backend) {
   coverage_map <- NULL
@@ -212,6 +255,10 @@ run_package_baseline <- function(pkg_dir, context, coverage_guided,
         backend = coverage_backend,
         cran = context$cran
       )
+      # covr builds an instrumented temporary copy and therefore does not leave
+      # compiled objects in the source package. Mutant copies share src/, so
+      # compile it once before parallel workers can race over the same outputs.
+      prepare_testthat_native_code(pkg_dir)
       passed <- TRUE
     } else {
       passed <- run_package_tests(context, pkg_dir)

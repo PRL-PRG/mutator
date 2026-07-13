@@ -15,6 +15,42 @@ test_that("package test strategy resolution is independent of orchestration", {
   expect_identical(resolve_package_test_strategy(pkg, "installed"), "installed-tests")
 })
 
+test_that("coverage baselines prepare native code before mutant execution", {
+  calls <- character()
+  testthat::local_mocked_bindings(
+    build_coverage_test_map = function(pkg_dir, backend, cran) {
+      calls <<- c(calls, sprintf("coverage:%s:%s", backend, cran))
+      list(by_file = list())
+    },
+    prepare_testthat_native_code = function(pkg_dir) {
+      calls <<- c(calls, paste0("compile:", pkg_dir))
+      invisible(NULL)
+    },
+    .package = "mutator"
+  )
+
+  result <- run_package_baseline(
+    pkg_dir = "/pkg",
+    context = list(cran = TRUE, strategy = "testthat"),
+    coverage_guided = TRUE,
+    coverage_backend = "per_file"
+  )
+
+  expect_identical(calls, c("coverage:per_file:TRUE", "compile:/pkg"))
+  expect_identical(result$coverage_map, list(by_file = list()))
+})
+
+test_that("native-source detection ignores pure-R packages", {
+  pkg <- tempfile("native_source_pkg_")
+  dir.create(file.path(pkg, "src"), recursive = TRUE)
+  on.exit(unlink(pkg, recursive = TRUE), add = TRUE)
+
+  writeLines("// header", file.path(pkg, "src", "code.h"))
+  expect_false(package_has_native_sources(pkg))
+  writeLines("void f(void) {}", file.path(pkg, "src", "code.c"))
+  expect_true(package_has_native_sources(pkg))
+})
+
 test_that("equivalent mutants short-circuit their test plan", {
   plan <- list(m1 = list(action = "run", test_filter = NULL))
   equivalence <- list(m1 = list(equivalent = TRUE))
