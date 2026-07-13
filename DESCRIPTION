@@ -27,6 +27,7 @@ Imports:
     covr,
     R6
 Suggests:
+    xml2,
     pkgbuild,
     cli,
     pbmcapply

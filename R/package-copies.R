@@ -1,15 +1,38 @@
 # Internal helpers for constructing lightweight package copies for mutants.
 
-link_or_copy <- function(from, to, recursive = FALSE) {
+link_or_copy <- function(from, to, recursive = FALSE, link = file.symlink) {
   from <- normalizePath(from, mustWork = TRUE)
   linked <- tryCatch(
-    file.symlink(from, to),
+    link(from, to),
     warning = function(w) FALSE,
     error = function(e) FALSE
   )
-  if (!isTRUE(linked)) {
-    file.copy(from, to, recursive = recursive)
+  target_exists <- if (dir.exists(from)) dir.exists(to) else file.exists(to)
+  link_works <- isTRUE(linked) && target_exists
+  if (link_works) {
+    return(invisible(TRUE))
   }
+
+  # A failed directory symlink must be copied *into* an existing destination
+  # directory. file.copy(from, to, recursive = TRUE) silently fails when `to`
+  # does not exist, which is the normal case for a new mutant package.
+  unlink(to, recursive = TRUE, force = TRUE)
+  copied <- if (dir.exists(from)) {
+    if (!isTRUE(recursive)) {
+      FALSE
+    } else {
+      created <- dir.create(to, recursive = TRUE, showWarnings = FALSE)
+      entries <- list.files(from, all.files = TRUE, no.. = TRUE, full.names = TRUE)
+      (isTRUE(created) || dir.exists(to)) &&
+        (length(entries) == 0L || all(file.copy(entries, to, recursive = TRUE)))
+    }
+  } else {
+    isTRUE(file.copy(from, to))
+  }
+  if (!isTRUE(copied)) {
+    stop(sprintf("Could not link or copy '%s' to '%s'.", from, to), call. = FALSE)
+  }
+  invisible(TRUE)
 }
 
 # TRUE if a tests/ tree contains a testthat snapshot directory.

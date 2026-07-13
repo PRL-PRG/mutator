@@ -117,6 +117,30 @@ test_that("create_mutant_package_copy links unchanged content and copies the mut
   )
 })
 
+test_that("link_or_copy copies directories when symlinks are unavailable", {
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  source <- file.path(temp_dir, "source")
+  target <- file.path(temp_dir, "target")
+  dir.create(file.path(source, "nested"), recursive = TRUE)
+  dir.create(file.path(source, "empty"))
+  writeLines("copied", file.path(source, "nested", "file.txt"))
+
+  expect_true(mutator:::link_or_copy(
+    source,
+    target,
+    recursive = TRUE,
+    link = function(...) FALSE
+  ))
+  expect_true(dir.exists(file.path(target, "empty")))
+  expect_identical(
+    readLines(file.path(target, "nested", "file.txt")),
+    "copied"
+  )
+})
+
 test_that("create_mutant_package_copy deep-copies tests/ when isolate = TRUE", {
   skip_on_os("windows")
 
