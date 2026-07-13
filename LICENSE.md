@@ -1,3 +1,5 @@
+Copyright © 2026 Pierre Donat-Bouillud and Assanali Amandykov
+
 GNU General Public License
 ==========================
 

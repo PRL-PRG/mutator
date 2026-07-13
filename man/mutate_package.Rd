@@ -162,6 +162,9 @@ Mutates all \code{.R} files under a package's \verb{R/} directory, runs the pack
 tests against each mutant in parallel, and summarizes mutation outcomes.
 }
 \details{
+The example is not run during routine automated checks because it creates and
+mutation-tests a throwaway package, which is too slow for that context.
+
 Test strategy is, by default, detected automatically:
 \itemize{
 \item If \verb{tests/testthat/} exists, the mutant is loaded in-process with
@@ -176,8 +179,6 @@ Pass \code{strategy} to override this (for example to run a \code{testthat} pack
 through the slower installed-tests path for comparison).
 }
 \examples{
-# Wrapped in \donttest{}: it loads and test-runs a throwaway package, which
-# is too slow/heavy for routine automated checks.
 \donttest{
 pkg <- file.path(tempdir(), "examplepkg")
 dir.create(file.path(pkg, "R"), recursive = TRUE, showWarnings = FALSE)

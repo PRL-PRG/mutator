@@ -216,6 +216,10 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' Mutates all `.R` files under a package's `R/` directory, runs the package's
 #' tests against each mutant in parallel, and summarizes mutation outcomes.
 #'
+#' @details
+#' The example is not run during routine automated checks because it creates and
+#' mutation-tests a throwaway package, which is too slow for that context.
+#'
 #' Test strategy is, by default, detected automatically:
 #' \itemize{
 #'   \item If `tests/testthat/` exists, the mutant is loaded in-process with
@@ -341,8 +345,6 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' }
 #'
 #' @examples
-#' # Wrapped in \donttest{}: it loads and test-runs a throwaway package, which
-#' # is too slow/heavy for routine automated checks.
 #' \donttest{
 #' pkg <- file.path(tempdir(), "examplepkg")
 #' dir.create(file.path(pkg, "R"), recursive = TRUE, showWarnings = FALSE)
