@@ -201,7 +201,7 @@ context("Mutator C++ tests")
         SEXP mutated = PROTECT(result.first);
 
         expect_true(result.second == true);
-        SEXP info = Rf_getAttrib(mutated, Rf_install("mutation_info"));
+        SEXP info = PROTECT(Rf_getAttrib(mutated, Rf_install("mutation_info")));
         expect_true(TYPEOF(info) == VECSXP);
 
         SEXP orig = VECTOR_ELT(info, 4); // original_symbol
@@ -211,7 +211,7 @@ context("Mutator C++ tests")
         expect_true(TYPEOF(file_path) == STRSXP);
         expect_true(STRING_ELT(file_path, 0) == NA_STRING);
 
-        UNPROTECT(2);
+        UNPROTECT(3);
     }
 
     test_that("applyFlipMutation records STRSXP original_symbol")
@@ -226,13 +226,13 @@ context("Mutator C++ tests")
         SEXP mutated = PROTECT(result.first);
 
         expect_true(result.second == true);
-        SEXP info = Rf_getAttrib(mutated, Rf_install("mutation_info"));
+        SEXP info = PROTECT(Rf_getAttrib(mutated, Rf_install("mutation_info")));
         expect_true(TYPEOF(info) == VECSXP);
 
         SEXP orig = VECTOR_ELT(info, 4); // original_symbol
         expect_true(TYPEOF(orig) == STRSXP);
         expect_true(std::string(CHAR(STRING_ELT(orig, 0))) == "+");
 
-        UNPROTECT(3);
+        UNPROTECT(4);
     }
 }

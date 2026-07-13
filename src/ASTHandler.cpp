@@ -334,23 +334,26 @@ std::vector<OperatorPos> ASTHandler::gatherOperators(SEXP expr, SEXP src_ref,
 
     _file_path.clear();
 
-    SEXP srcfile = Rf_getAttrib(src_ref, Rf_install("srcfile"));
+    SEXP srcfile = PROTECT(Rf_getAttrib(src_ref, Rf_install("srcfile")));
     if (srcfile != R_NilValue)
     {
-        SEXP filename = Rf_getAttrib(srcfile, SYM.s_filename);
+        SEXP filename = PROTECT(Rf_getAttrib(srcfile, SYM.s_filename));
         if (TYPEOF(filename) == STRSXP && LENGTH(filename) > 0)
         {
             _file_path = CHAR(STRING_ELT(filename, 0));
         }
         else if (TYPEOF(srcfile) == ENVSXP)
         {
-            SEXP env_name = getVarFromFrame(srcfile, SYM.s_filename);
+            SEXP env_name = PROTECT(getVarFromFrame(srcfile, SYM.s_filename));
             if (env_name != R_UnboundValue && TYPEOF(env_name) == STRSXP && LENGTH(env_name) > 0)
             {
                 _file_path = CHAR(STRING_ELT(env_name, 0));
             }
+            UNPROTECT(1);
         }
+        UNPROTECT(1);
     }
+    UNPROTECT(1);
 
     (void)is_inside_block; // block nesting is now detected during traversal
 

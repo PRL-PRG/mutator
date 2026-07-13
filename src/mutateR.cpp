@@ -31,35 +31,43 @@ static SEXP mutate_single(SEXP expr_sexp, SEXP src_ref_sexp, bool is_inside_bloc
     }
 
     SEXP buffer = R_NilValue;
-    SEXP res = R_NilValue;
     R_xlen_t n_mutants = 0;
+    int n = 0;
 
     {
         ASTHandler astHandler;
         std::vector<OperatorPos> operators =
             astHandler.gatherOperators(expr_sexp, src_ref_sexp, is_inside_block);
 
-        const int n = static_cast<int>(operators.size());
-        if (n == 0)
-            return Rf_allocVector(VECSXP, 0);
+        n = static_cast<int>(operators.size());
+        if (n > 0) {
+            Mutator mutator;
+            buffer = PROTECT(Rf_allocVector(VECSXP, n));
 
-        Mutator mutator;
-        buffer = PROTECT(Rf_allocVector(VECSXP, n));
+            for (int i = 0; i < n; ++i) {
+                auto result = mutator.applyMutation(expr_sexp, operators, i);
+                if (result.second) {
+                    SET_VECTOR_ELT(buffer, n_mutants, result.first);
+                    ++n_mutants;
+                }
+            }
 
-        for (int i = 0; i < n; ++i) {
-            auto result = mutator.applyMutation(expr_sexp, operators, i);
-            if (result.second)
-                SET_VECTOR_ELT(buffer, n_mutants++, result.first);
+            // The operator vector owns preserved replacement objects. Preserve
+            // the buffer independently before that vector is destroyed.
+            R_PreserveObject(buffer);
+            UNPROTECT(1);
         }
-
-        res = PROTECT(Rf_allocVector(VECSXP, n_mutants));
-        for (R_xlen_t i = 0; i < n_mutants; ++i)
-            SET_VECTOR_ELT(res, i, VECTOR_ELT(buffer, i));
     }
 
-    // Destroying NodeReplacementOperators releases preserved R objects. Keep the
-    // completed result protected until that cleanup has happened.
-    UNPROTECT(2);
+    if (n == 0)
+        return Rf_allocVector(VECSXP, 0);
+
+    SEXP res = PROTECT(Rf_allocVector(VECSXP, n_mutants));
+    for (R_xlen_t i = 0; i < n_mutants; ++i)
+        SET_VECTOR_ELT(res, i, VECTOR_ELT(buffer, i));
+
+    R_ReleaseObject(buffer);
+    UNPROTECT(1);
     return res;
 }
 
@@ -104,14 +112,13 @@ extern "C" SEXP C_mutate_file(SEXP exprs)
     if (TYPEOF(exprs) != EXPRSXP)
         Rf_error("Input must be an expression list (EXPRSXP).");
 
-    SEXP src_ref = Rf_getAttrib(exprs, Rf_install("srcref"));
+    SEXP src_ref = PROTECT(Rf_getAttrib(exprs, Rf_install("srcref")));
     if (TYPEOF(src_ref) != VECSXP || Rf_length(src_ref) != Rf_length(exprs))
         Rf_error("'srcref' attribute missing or malformed.");
 
     const int n_expr = Rf_length(exprs);
 
     std::vector<SEXP> valid_mutants;
-    int n_protected = 0;
 
     for (int i = 0; i < n_expr; ++i) {
         SEXP cur_expr     = VECTOR_ELT(exprs, i);
@@ -121,20 +128,18 @@ extern "C" SEXP C_mutate_file(SEXP exprs)
         // statement inside a `{ }` block. Block nesting (and the statement
         // deletions it enables) is discovered as the AST is traversed.
         SEXP cur_mutants  = PROTECT(mutate_single(cur_expr, cur_src_ref, false));
-        ++n_protected;
         if (TYPEOF(cur_mutants) != VECSXP)
             Rf_error("C_mutate_single did not return a list for expression %d.", i);
 
         const int n_mut   = Rf_length(cur_mutants);
         for (int j = 0; j < n_mut; ++j) {
-            SEXP file_mut = PROTECT(Rf_allocVector(EXPRSXP, n_expr)); ++n_protected;
-            SEXP mut_info = R_NilValue;
+            SEXP file_mut = PROTECT(Rf_allocVector(EXPRSXP, n_expr));
+            SEXP mut = PROTECT(VECTOR_ELT(cur_mutants, j));
+            SEXP mut_info = PROTECT(Rf_getAttrib(mut, Rf_install("mutation_info")));
 
             for (int k = 0; k < n_expr; ++k) {
                 if (k == i) {
-                    SEXP mut = VECTOR_ELT(cur_mutants, j);
                     SET_VECTOR_ELT(file_mut, k, mut);
-                    mut_info = Rf_getAttrib(mut, Rf_install("mutation_info"));
                 } else {
                     SET_VECTOR_ELT(file_mut, k, VECTOR_ELT(exprs, k));
                 }
@@ -146,17 +151,15 @@ extern "C" SEXP C_mutate_file(SEXP exprs)
                 valid_mutants.push_back(file_mut);
             }
 
-            UNPROTECT(1);
-            --n_protected;
+            UNPROTECT(3);
         }
 
         UNPROTECT(1);
-        --n_protected;
     }
 
     // Build the final R list
     const R_xlen_t n_valid = static_cast<R_xlen_t>(valid_mutants.size());
-    SEXP res = PROTECT(Rf_allocVector(VECSXP, n_valid)); ++n_protected;
+    SEXP res = PROTECT(Rf_allocVector(VECSXP, n_valid));
 
     for (R_xlen_t i = 0; i < n_valid; ++i)
         SET_VECTOR_ELT(res, i, valid_mutants[i]);
@@ -164,6 +167,6 @@ extern "C" SEXP C_mutate_file(SEXP exprs)
     for (SEXP mut : valid_mutants)
         R_ReleaseObject(mut);
 
-    UNPROTECT(n_protected);   // drops res but keeps it reachable as the return value
+    UNPROTECT(2);
     return res;
 }
