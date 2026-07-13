@@ -222,6 +222,10 @@ An invisible list with four components:
 
 ## Details
 
+The example is not run during routine automated checks because it
+creates and mutation-tests a throwaway package, which is too slow for
+that context.
+
 Test strategy is, by default, detected automatically:
 
 - If `tests/testthat/` exists, the mutant is loaded in-process with
@@ -243,8 +247,6 @@ package through the slower installed-tests path for comparison).
 ## Examples
 
 ``` r
-# Wrapped in \donttest{}: it loads and test-runs a throwaway package, which
-# is too slow/heavy for routine automated checks.
 # \donttest{
 pkg <- file.path(tempdir(), "examplepkg")
 dir.create(file.path(pkg, "R"), recursive = TRUE, showWarnings = FALSE)
@@ -274,7 +276,7 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> Timing (seconds):
 #>   Baseline run:          1.0
 #>   Mutant generation:     0.0
-#>   Test execution:        0.9
+#>   Test execution:        1.0
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:

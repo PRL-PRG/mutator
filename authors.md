@@ -3,6 +3,7 @@
 ## Authors
 
 - **Pierre Donat-Bouillud**. Author, maintainer, copyright holder.
+  [](https://orcid.org/0000-0003-4455-1130)
 
 - **Assanali Amandykov**. Author, copyright holder.
 
@@ -11,11 +12,11 @@
 Source:
 [`DESCRIPTION`](https://github.com/PRL-PRG/mutator/blob/main/DESCRIPTION)
 
-Donat-Bouillud P, Amandykov A (2026). *mutator: Mutation Testing for
-'R'*. R package version 0.1.0, <https://github.com/PRL-PRG/mutator>.
+Donat-Bouillud P, Amandykov A (2026). *mutator: Mutation Testing*. R
+package version 0.1.0, <https://github.com/PRL-PRG/mutator>.
 
     @Manual{,
-      title = {mutator: Mutation Testing for 'R'},
+      title = {mutator: Mutation Testing},
       author = {Pierre Donat-Bouillud and Assanali Amandykov},
       year = {2026},
       note = {R package version 0.1.0},

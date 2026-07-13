@@ -1,5 +1,7 @@
 # GNU General Public License
 
+Copyright © 2026 Pierre Donat-Bouillud and Assanali Amandykov
+
 *Version 3, 29 June 2007*  
 *Copyright © 2007 Free Software Foundation, Inc. \<<http://fsf.org/>\>*
 

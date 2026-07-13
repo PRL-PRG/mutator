@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Mutation Testing for R • mutator</title>
+<title>Mutation Testing • mutator</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Mutation Testing for R">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Mutation Testing">
 <meta name="description" content="Performs mutation testing for R packages to assess the effectiveness of a test suite. It mutates source files, runs package tests against each mutant, and reports which mutants were killed, survived, or timed out. Parallel execution is supported for larger code bases. The optional imputesrcref package, available from &lt;https://github.com/PRL-PRG/imputesrcref&gt;, improves source locations when installed.">
 <meta property="og:description" content="Performs mutation testing for R packages to assess the effectiveness of a test suite. It mutates source files, runs package tests against each mutant, and reports which mutants were killed, survived, or timed out. Parallel execution is supported for larger code bases. The optional imputesrcref package, available from &lt;https://github.com/PRL-PRG/imputesrcref&gt;, improves source locations when installed.">
 </head>
@@ -113,7 +113,14 @@
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Install from GitHub; package dependencies are installed automatically</span></span>
+<code class="sourceCode R"><span><span class="co"># Install the released version from CRAN</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"mutator"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="development-version">Development version<a class="anchor" aria-label="anchor" href="#development-version"></a>
+</h2>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Install the development version from GitHub; package dependencies are installed automatically</span></span>
 <span><span class="co"># install.packages("remotes")</span></span>
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"PRL-PRG/mutator"</span><span class="op">)</span></span>
 <span></span>
@@ -125,7 +132,7 @@
 <div class="section level2">
 <h2 id="quick-start-guide">Quick Start Guide<a class="anchor" aria-label="anchor" href="#quick-start-guide"></a>
 </h2>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/PRL-PRG/mutator" class="external-link">mutator</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Mutate a single file</span></span>
@@ -161,19 +168,19 @@
 <h2 id="continuous-integration-github-actions">Continuous integration (GitHub Actions)<a class="anchor" aria-label="anchor" href="#continuous-integration-github-actions"></a>
 </h2>
 <p>mutator ships a reusable workflow so any R-package repository can run mutation testing in CI without copying scripts. Add a caller workflow at <code>.github/workflows/mutation-testing.yaml</code>:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">on</span><span class="kw">:</span></span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="at">  </span><span class="fu">pull_request</span><span class="kw">:</span></span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="at">  </span><span class="fu">push</span><span class="kw">:</span></span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="at">    </span><span class="fu">branches</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">main</span><span class="kw">,</span><span class="at"> master</span><span class="kw">]</span></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a></span>
-<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="fu">name</span><span class="kw">:</span><span class="at"> mutation-testing</span></span>
-<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a></span>
-<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="fu">jobs</span><span class="kw">:</span></span>
-<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="at">  </span><span class="fu">mutation</span><span class="kw">:</span></span>
-<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0</span></span>
-<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="at">    </span><span class="fu">with</span><span class="kw">:</span></span>
-<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="at">      </span><span class="fu">target-margin</span><span class="kw">:</span><span class="at"> </span><span class="st">"0.10"</span><span class="co">   # sample to +/-10 percentage points</span></span>
-<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="at">      </span><span class="fu">fail-under</span><span class="kw">:</span><span class="at"> </span><span class="st">"75"</span><span class="co">        # fail CI below a 75% mutation score</span></span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">on</span><span class="kw">:</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="at">  </span><span class="fu">pull_request</span><span class="kw">:</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="at">  </span><span class="fu">push</span><span class="kw">:</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="at">    </span><span class="fu">branches</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">main</span><span class="kw">,</span><span class="at"> master</span><span class="kw">]</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="fu">name</span><span class="kw">:</span><span class="at"> mutation-testing</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="fu">jobs</span><span class="kw">:</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="at">  </span><span class="fu">mutation</span><span class="kw">:</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="at">    </span><span class="fu">with</span><span class="kw">:</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="at">      </span><span class="fu">target-margin</span><span class="kw">:</span><span class="at"> </span><span class="st">"0.10"</span><span class="co">   # sample to +/-10 percentage points</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="at">      </span><span class="fu">fail-under</span><span class="kw">:</span><span class="at"> </span><span class="st">"75"</span><span class="co">        # fail CI below a 75% mutation score</span></span></code></pre></div>
 <p>Pin to a released tag such as <code>@v0.1.0</code>; the workflow is versioned with the mutator package, so the tag matches the package version. Set <code>deploy-badge: true</code> (with <code>contents: write</code> permission) to publish a shields.io badge. See the <a href="https://prl-prg.github.io/mutator/articles/continuous-integration.html">Continuous integration article</a> for every input, threshold guidance, and badge setup.</p>
 </div>
 <div class="section level2">
@@ -316,7 +323,7 @@
 </li>
 </ul>
 <p>Run the full test suite with:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
@@ -348,7 +355,7 @@
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Pierre Donat-Bouillud <br><small class="roles"> Author, maintainer, copyright holder </small>   </li>
+<li>Pierre Donat-Bouillud <br><small class="roles"> Author, maintainer, copyright holder </small> <a href="https://orcid.org/0000-0003-4455-1130" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
 <li>Assanali Amandykov <br><small class="roles"> Author, copyright holder </small>   </li>
 </ul>
 </div>

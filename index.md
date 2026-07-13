@@ -77,7 +77,15 @@ suite effectiveness.
 
 ``` r
 
-# Install from GitHub; package dependencies are installed automatically
+# Install the released version from CRAN
+install.packages("mutator")
+```
+
+## Development version
+
+``` r
+
+# Install the development version from GitHub; package dependencies are installed automatically
 # install.packages("remotes")
 remotes::install_github("PRL-PRG/mutator")
 
