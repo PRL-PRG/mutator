@@ -25,3 +25,6 @@ SYSTEM_PROFILES <- list(
 
 SYSTEM_SEED <- 20260713L
 SYSTEM_TIMEOUT_SECONDS <- 120
+# Option invariance is about execution semantics, not sample size. Keep this
+# matrix bounded even when the full snapshot profile exercises more mutants.
+SYSTEM_INVARIANCE_MAX_MUTANTS <- 10L

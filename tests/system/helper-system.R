@@ -65,21 +65,104 @@ normalise_mutation_result <- function(result, fixture_dir) {
   list(outcome = "OK", summary = summary, mutants = paste(mutants, collapse = "\n"))
 }
 
-run_system_fixture <- function(package) {
+run_system_fixture_result <- function(package, options = list()) {
   fixture_dir <- file.path(SYSTEM_ROOT, "packages", "system", package)
   profile <- system_profile()
   set.seed(SYSTEM_SEED)
-  result <- suppressMessages(tryCatch(
-    mutate_package(
-      fixture_dir,
-      cores = 4,
-      max_mutants = profile$max_mutants,
-      timeout_seconds = SYSTEM_TIMEOUT_SECONDS,
-      coverage_guided = FALSE,
-      max_show = 0
-    ),
+  args <- utils::modifyList(list(
+    pkg_dir = fixture_dir,
+    cores = 4,
+    max_mutants = profile$max_mutants,
+    timeout_seconds = SYSTEM_TIMEOUT_SECONDS,
+    coverage_guided = FALSE,
+    max_show = 0
+  ), options)
+  suppressMessages(tryCatch(
+    do.call(mutate_package, args),
     error = function(e) e
+  ))
+}
+
+run_system_fixture <- function(package, options = list()) {
+  fixture_dir <- file.path(SYSTEM_ROOT, "packages", "system", package)
+  normalise_mutation_result(
+    run_system_fixture_result(package, options),
+    fixture_dir
   )
+}
+
+system_result_metrics <- function(result) {
+  fields <- c(
+    "generated", "tested", "killed", "hanged", "survived", "mutation_score"
   )
-  normalise_mutation_result(result, fixture_dir)
+  result$summary[fields]
+}
+
+system_invariance_variants <- function(package) {
+  fixture_dir <- file.path(SYSTEM_ROOT, "packages", "system", package)
+  is_testthat <- dir.exists(file.path(fixture_dir, "tests", "testthat"))
+  explicit_strategy <- if (is_testthat) "testthat" else "installed"
+  invariant_sample <- min(
+    system_profile()$max_mutants,
+    SYSTEM_INVARIANCE_MAX_MUTANTS
+  )
+
+  variants <- list(
+    serial_isolated_full_run = list(
+      max_mutants = invariant_sample,
+      cores = 1,
+      fail_fast = FALSE,
+      isolate = TRUE,
+      strategy = explicit_strategy,
+      coverage_guided = FALSE
+    )
+  )
+
+  if (is_testthat) {
+    variants$coverage_record_tests <- list(
+      max_mutants = invariant_sample,
+      strategy = "testthat",
+      coverage_guided = TRUE,
+      coverage_backend = "record_tests"
+    )
+    variants$coverage_per_file <- list(
+      max_mutants = invariant_sample,
+      strategy = "testthat",
+      coverage_guided = TRUE,
+      coverage_backend = "per_file"
+    )
+  }
+  variants
+}
+
+expect_system_result_invariant <- function(reference, candidate, variant) {
+  testthat::expect_false(
+    inherits(candidate, "error"),
+    info = sprintf(
+      "%s failed: %s",
+      variant,
+      if (inherits(candidate, "error")) conditionMessage(candidate) else ""
+    )
+  )
+  if (inherits(candidate, "error")) {
+    return(invisible(NULL))
+  }
+
+  info <- paste("system-test option variant:", variant)
+  testthat::expect_identical(
+    system_result_metrics(candidate),
+    system_result_metrics(reference),
+    info = info
+  )
+  testthat::expect_setequal(
+    names(candidate$test_results),
+    names(reference$test_results),
+    info = info
+  )
+  testthat::expect_identical(
+    candidate$test_results[names(reference$test_results)],
+    reference$test_results,
+    info = info
+  )
+  invisible(NULL)
 }
