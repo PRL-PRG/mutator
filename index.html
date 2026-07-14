@@ -326,6 +326,16 @@
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
+<div class="section level2">
+<h2 id="system-tests">System tests<a class="anchor" aria-label="anchor" href="#system-tests"></a>
+</h2>
+<p><code>mutator</code> includes a set of system tests that run mutation testing on 9 packages from CRAN. It compares the mutants, surviving, killed, hanged mutant detections, and the mutation score against the expected results using snapshot testing, with a fixed seed on 10 mutants or 50 mutants per package depending on the release cycle. It also compares the results across a set of configuration options that ought not to change the results. The system tests are located in <code>tests/system</code> and are automatically run as par of the CI.</p>
+</div>
+<div class="section level2">
+<h2 id="mutation-testing">Mutation testing<a class="anchor" aria-label="anchor" href="#mutation-testing"></a>
+</h2>
+<p>We practice dogfooding and run <code>mutator</code> on <code>mutator</code> test suite itself. This already led to numerous improvements in <code>mutator</code> speed, as waiting for the mutation score to be computed on a package with a long running test suite can be frustrating!</p>
+</div>
 </div>
 
   </main><aside class="col-md-3"><div class="links">

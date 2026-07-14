@@ -267,6 +267,24 @@ Run the full test suite with:
 devtools::test()
 ```
 
+## System tests
+
+`mutator` includes a set of system tests that run mutation testing on 9
+packages from CRAN. It compares the mutants, surviving, killed, hanged
+mutant detections, and the mutation score against the expected results
+using snapshot testing, with a fixed seed on 10 mutants or 50 mutants
+per package depending on the release cycle. It also compares the results
+across a set of configuration options that ought not to change the
+results. The system tests are located in `tests/system` and are
+automatically run as par of the CI.
+
+## Mutation testing
+
+We practice dogfooding and run `mutator` on `mutator` test suite itself.
+This already led to numerous improvements in `mutator` speed, as waiting
+for the mutation score to be computed on a package with a long running
+test suite can be frustrating!
+
 # Package index
 
 ## All functions
