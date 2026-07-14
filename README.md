@@ -1,6 +1,7 @@
  <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml)
+[![r-universe](https://prl-prg.r-universe.dev/mutator/badges/version)](https://prl-prg.r-universe.dev/mutator)
 [![Codecov test coverage](https://codecov.io/gh/PRL-PRG/mutator/graph/badge.svg)](https://app.codecov.io/gh/PRL-PRG/mutator)
 [![mutator](https://img.shields.io/endpoint?url=https%3A%2F%2Fprl-prg.github.io%2Fmutator%2Fmutation-score.json)](https://github.com/PRL-PRG/mutator/actions/workflows/mutation-score.yaml)
 [![pkgdown reference](https://img.shields.io/badge/pkgdown-reference-blue.svg)](https://prl-prg.github.io/mutator/)
@@ -235,6 +236,6 @@ devtools::test()
 
 ## Mutation testing 
 
-We practice dogfooding and run `mutator` on `mutator` test suite itself. 
+We practice dogfooding and run `mutator` on `mutator` test suite itself.
 This already led to numerous improvements in `mutator` speed, as waiting for the mutation
-score to be computed on a package with a long running test suite can be frustrating! 
+score to be computed on a package with a long running test suite can be frustrating!
