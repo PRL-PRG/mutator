@@ -1,6 +1,7 @@
 # mutator
 
 [![R-CMD-check](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml)
+[![r-universe](https://prl-prg.r-universe.dev/mutator/badges/version)](https://prl-prg.r-universe.dev/mutator)
 [![Codecov test
 coverage](https://codecov.io/gh/PRL-PRG/mutator/graph/badge.svg)](https://app.codecov.io/gh/PRL-PRG/mutator)
 [![mutator](https://img.shields.io/endpoint?url=https%3A%2F%2Fprl-prg.github.io%2Fmutator%2Fmutation-score.json)](https://github.com/PRL-PRG/mutator/actions/workflows/mutation-score.yaml)
