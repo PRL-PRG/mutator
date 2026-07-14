@@ -13,12 +13,12 @@ Source:
 [`DESCRIPTION`](https://github.com/PRL-PRG/mutator/blob/main/DESCRIPTION)
 
 Donat-Bouillud P, Amandykov A (2026). *mutator: Mutation Testing*. R
-package version 0.1.1, <https://github.com/PRL-PRG/mutator>.
+package version 0.1.1.9000, <https://github.com/PRL-PRG/mutator>.
 
     @Manual{,
       title = {mutator: Mutation Testing},
       author = {Pierre Donat-Bouillud and Assanali Amandykov},
       year = {2026},
-      note = {R package version 0.1.1},
+      note = {R package version 0.1.1.9000},
       url = {https://github.com/PRL-PRG/mutator},
     }
