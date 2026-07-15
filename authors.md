@@ -10,15 +10,15 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/PRL-PRG/mutator/blob/v0.1.0/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/PRL-PRG/mutator/blob/v0.1.1/DESCRIPTION)
 
 Donat-Bouillud P, Amandykov A (2026). *mutator: Mutation Testing*. R
-package version 0.1.0, <https://github.com/PRL-PRG/mutator>.
+package version 0.1.1, <https://github.com/PRL-PRG/mutator>.
 
     @Manual{,
       title = {mutator: Mutation Testing},
       author = {Pierre Donat-Bouillud and Assanali Amandykov},
       year = {2026},
-      note = {R package version 0.1.0},
+      note = {R package version 0.1.1},
       url = {https://github.com/PRL-PRG/mutator},
     }
