@@ -28,12 +28,12 @@ name: mutation-testing
 
 jobs:
   mutation:
-    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
     with:
       target-margin: "0.10"
 ```
 
-Pin to a released tag such as `@v0.1.1`. The reusable workflow lives in
+Pin to a released tag such as `@v0.1.0`. The reusable workflow lives in
 the mutator package repository and is versioned with the package, so the
 tag you pin matches a mutator release. Bump the tag in your caller when
 you want to move to a newer release. You can also pin to a branch (for
@@ -72,7 +72,7 @@ the job exits non-zero, which blocks the pull request:
 ``` yaml
 jobs:
   mutation:
-    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
     with:
       fail-under: "75"
       target-margin: "0.05"
@@ -108,7 +108,7 @@ jobs:
   mutation:
     permissions:
       contents: write
-    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
     with:
       deploy-badge: true
 ```

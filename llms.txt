@@ -1,7 +1,6 @@
 # mutator
 
 [![R-CMD-check](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/PRL-PRG/mutator/actions/workflows/R-CMD-check.yaml)
-[![r-universe](https://prl-prg.r-universe.dev/mutator/badges/version)](https://prl-prg.r-universe.dev/mutator)
 [![Codecov test
 coverage](https://codecov.io/gh/PRL-PRG/mutator/graph/badge.svg)](https://app.codecov.io/gh/PRL-PRG/mutator)
 [![mutator](https://img.shields.io/endpoint?url=https%3A%2F%2Fprl-prg.github.io%2Fmutator%2Fmutation-score.json)](https://github.com/PRL-PRG/mutator/actions/workflows/mutation-score.yaml)
@@ -153,13 +152,13 @@ name: mutation-testing
 
 jobs:
   mutation:
-    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.0
     with:
       target-margin: "0.10"   # sample to +/-10 percentage points
       fail-under: "75"        # fail CI below a 75% mutation score
 ```
 
-Pin to a released tag such as `@v0.1.1`; the workflow is versioned with
+Pin to a released tag such as `@v0.1.0`; the workflow is versioned with
 the mutator package, so the tag matches the package version. Set
 `deploy-badge: true` (with `contents: write` permission) to publish a
 shields.io badge. See the [Continuous integration
@@ -267,24 +266,6 @@ Run the full test suite with:
 
 devtools::test()
 ```
-
-## System tests
-
-`mutator` includes a set of system tests that run mutation testing on 9
-packages from CRAN. It compares the mutants, surviving, killed, hanged
-mutant detections, and the mutation score against the expected results
-using snapshot testing, with a fixed seed on 10 mutants or 50 mutants
-per package depending on the release cycle. It also compares the results
-across a set of configuration options that ought not to change the
-results. The system tests are located in `tests/system` and are
-automatically run as par of the CI.
-
-## Mutation testing
-
-We practice dogfooding and run `mutator` on `mutator` test suite itself.
-This already led to numerous improvements in `mutator` speed, as waiting
-for the mutation score to be computed on a package with a long running
-test suite can be frustrating!
 
 # Package index
 
