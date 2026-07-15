@@ -276,7 +276,7 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #> Timing (seconds):
 #>   Baseline run:          1.1
 #>   Mutant generation:     0.0
-#>   Test execution:        1.1
+#>   Test execution:        1.0
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
