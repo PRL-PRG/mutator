@@ -186,7 +186,7 @@ improved_result <- mutate_package(
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        2.2
+#>   Test execution:        2.1
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:

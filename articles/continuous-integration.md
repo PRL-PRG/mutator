@@ -119,6 +119,13 @@ Reference the badge in your README, replacing `OWNER/REPO`:
 ![mutator](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/gh-pages/mutation-score.json)
 ```
 
+This reads the JSON straight from `badge-branch` via
+`raw.githubusercontent.com`, so no GitHub Pages setup is needed. If you
+instead fetch it through a pkgdown Pages site
+(`https://OWNER.github.io/REPO/mutation-score.json`), GitHub Pages must
+be activated and serving from `badge-branch`, or the badge will not
+appear.
+
 The badge is labelled `mutator`; its message shows the score and, when
 the run sampled mutants, a compact asymmetric confidence interval such
 as `83.2% -5.2/+4.7% (95% CI)`. The badge colour tracks the score: green
