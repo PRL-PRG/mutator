@@ -1,13 +1,13 @@
 # Configuration
 
-This article documents the options that control how
+This vignette documents the options that control how
 [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
 runs: how mutant timeouts are calibrated, which tests are selected, how
 parallel workers are isolated, how to exclude code from mutation, and
 how the optional coverage-guided, precise-location, and
-equivalent-mutant-detection features behave. See the
-[reference](https://prl-prg.github.io/mutator/reference/index.md) for
-the full argument and return-value documentation.
+equivalent-mutant-detection features behave. See
+[`?mutate_package`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+for the full argument and return-value documentation.
 
 ## Timeouts and contention in parallel mode
 

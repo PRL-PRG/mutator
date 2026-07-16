@@ -1,6 +1,6 @@
 # Continuous integration
 
-This article explains how to run mutator on a package in GitHub Actions
+This vignette explains how to run mutator on a package in GitHub Actions
 using the reusable workflow that ships with the package, how to gate a
 pull request on a minimum mutation score, and how to publish a badge.
 

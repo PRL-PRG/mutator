@@ -98,8 +98,8 @@ result <- mutate_package(
 #>       4 |   x
 #> Timing (seconds):
 #>   Baseline run:          0.8
-#>   Mutant generation:     0.1
-#>   Test execution:        2.3
+#>   Mutant generation:     0.0
+#>   Test execution:        2.2
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
@@ -184,7 +184,7 @@ improved_result <- mutate_package(
 #> Generated 9 mutants from 1 source files.
 #> Running the test suites of 2 mutants...
 #> Timing (seconds):
-#>   Baseline run:          0.9
+#>   Baseline run:          0.8
 #>   Mutant generation:     0.0
 #>   Test execution:        2.2
 #>   Equivalence detection: 0.0
