@@ -13,6 +13,11 @@ test_that("wilson_ci and required_sample_size behave correctly", {
   # Finite-population correction shrinks it for small N, never exceeding N.
   expect_lt(mutator:::required_sample_size(0.05, 0.95, 200), 200)
   expect_lte(mutator:::required_sample_size(0.001, 0.95, 50), 50)
+  # Non-positive or non-finite N (no mutants, or a nonsensical count): nothing to
+  # sample. Without this guard the correction returns a negative or inflated size.
+  expect_identical(mutator:::required_sample_size(0.05, 0.95, 0), 0L)
+  expect_identical(mutator:::required_sample_size(0.05, 0.95, -5), 0L)
+  expect_identical(mutator:::required_sample_size(0.05, 0.95, Inf), 0L)
 })
 
 test_that("target_margin and confidence are validated", {

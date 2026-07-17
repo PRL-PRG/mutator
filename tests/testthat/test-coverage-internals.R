@@ -266,3 +266,17 @@ test_that("coverage-guided selection chooses the smallest sound test set", {
     writeLines("helper <- TRUE", file.path(pkg, "tests", "testthat", "helper.R"))
     expect_equal(sort(list_test_tokens(pkg)), c(".beta", "alpha"))
 })
+
+test_that("tinytest per-file collector wires CRAN mode into NOT_CRAN and at_home", {
+    tinytest_perfile_collect_code <- resolve_mutator_fn("tinytest_perfile_collect_code")
+
+    # CRAN mode: guarded tests are skipped, so NOT_CRAN is "false" and at_home FALSE.
+    cran_code <- tinytest_perfile_collect_code("inst/tinytest", "/tmp/out.rds", cran = TRUE)
+    expect_true(any(grepl('Sys.setenv(NOT_CRAN = "false")', cran_code, fixed = TRUE)))
+    expect_true(any(grepl("at_home <- FALSE", cran_code, fixed = TRUE)))
+
+    # Full suite: NOT_CRAN is "true" and at_home TRUE (the tinytest analogue).
+    home_code <- tinytest_perfile_collect_code("inst/tinytest", "/tmp/out.rds", cran = FALSE)
+    expect_true(any(grepl('Sys.setenv(NOT_CRAN = "true")', home_code, fixed = TRUE)))
+    expect_true(any(grepl("at_home <- TRUE", home_code, fixed = TRUE)))
+})
