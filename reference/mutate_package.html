@@ -62,7 +62,7 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <span>  fail_fast <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  isolate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  exclude_files <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"installed"</span><span class="op">)</span>,</span>
+<span>  strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"testthat"</span>, <span class="st">"tinytest"</span>, <span class="st">"tinytest-installed"</span>, <span class="st">"installed"</span><span class="op">)</span>,</span>
 <span>  coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  coverage_backend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"record_tests"</span>, <span class="st">"per_file"</span><span class="op">)</span>,</span>
 <span>  target_margin <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -138,7 +138,8 @@ as <code>devtools::test()</code> does.</p></dd>
 at the first failing test rather than running the whole suite. A mutant is
 <code>KILLED</code> as soon as one test detects it, so the remainder of the suite is
 wasted work. Set to <code>FALSE</code> to run the full suite for
-every mutant. Applies to the <code>testthat</code> strategy; the installed-tests
+every mutant. Applies to the <code>testthat</code> strategy; the <code>tinytest</code> strategy
+always runs the full set of selected test files, and the installed-tests
 fallback already stops at the first failing test file regardless of this
 flag.</p></dd>
 
@@ -148,7 +149,8 @@ flag.</p></dd>
 symlinks the unchanged directories of the original package (only the mutated
 <code>R/</code> file is materialised), which is fast but makes those directories shared
 writable state across the parallel workers. If <code>TRUE</code>, the <code>src/</code> and
-<code>tests/</code> directories are deep-copied into every mutant copy instead.
+<code>tests/</code> directories (or <code>src/</code> and <code>inst/</code> under the <code>tinytest</code> strategy)
+are deep-copied into every mutant copy instead.
 Use <code>isolate = TRUE</code> when a package
 has <strong>non-hermetic tests</strong> that write files into <code>tests/</code> (or <code>src/</code>) and
 parallel runs therefore produce spurious <code>KILLED</code>/<code>HANG</code> verdicts; it gives
@@ -172,39 +174,49 @@ line-precisely).</p></dd>
 
 <dt id="arg-strategy">strategy<a class="anchor" aria-label="anchor" href="#arg-strategy"></a></dt>
 <dd><p>Test strategy to use. <code>"auto"</code> (the default) picks the
-<code>testthat</code> strategy when <code>tests/testthat/</code> exists and the installed-tests
-strategy otherwise. <code>"testthat"</code> forces the in-process <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>
-path (requires <code>tests/testthat/</code>). <code>"installed"</code> forces the
-<code>R CMD INSTALL --install-tests</code> + <code><a href="https://rdrr.io/r/tools/testInstalledPackage.html" class="external-link">tools::testInstalledPackage()</a></code> path
-(requires <code>tests/</code>).</p></dd>
+<code>testthat</code> strategy when <code>tests/testthat/</code> exists, the <code>tinytest</code> strategy
+when <code>inst/tinytest/</code> exists, and the installed-tests strategy otherwise.
+<code>"testthat"</code> forces the in-process <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code> path (requires
+<code>tests/testthat/</code>). <code>"tinytest"</code> forces the in-process
+<code><a href="https://rdrr.io/pkg/tinytest/man/run_test_dir.html" class="external-link">tinytest::run_test_dir()</a></code> path (requires <code>inst/tinytest/</code>). Both in-process
+strategies load the package with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code>, which does not
+dispatch S4 methods defined on <code>...</code>-dispatching base generics such as
+<code><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq()</a></code>; a package that relies on those will fail the baseline, and the error
+points to <code>"tinytest-installed"</code>. <code>"tinytest-installed"</code> runs the tinytest
+suite against an installed copy (<code>R CMD INSTALL</code> + <code><a href="https://rdrr.io/pkg/tinytest/man/test_package.html" class="external-link">tinytest::test_package()</a></code>,
+requires <code>inst/tinytest/</code>): slower than dev-mode but matches an installed
+package (correct S4 dispatch) and still supports coverage guidance.
+<code>"installed"</code> forces the <code>R CMD INSTALL --install-tests</code> +
+<code><a href="https://rdrr.io/r/tools/testInstalledPackage.html" class="external-link">tools::testInstalledPackage()</a></code> path (requires <code>tests/</code>).</p></dd>
 
 
 <dt id="arg-coverage-guided">coverage_guided<a class="anchor" aria-label="anchor" href="#arg-coverage-guided"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, only the tests that actually
 exercise a mutant's mutated line(s) are run for that mutant, instead of the
 whole suite. Coverage is measured once on the unmutated package with
-<span class="pkg">covr</span> (<code>options(covr.record_tests = TRUE)</code>). A mutant on
-a line no test covers cannot be killed, so it is reported <code>SURVIVED</code> without
-running any test. Selection is at the test-<em>file</em> level (testthat filters by
-file); under the assumption that the suite deterministically exercises the code,
-it should not change a mutant's verdict, only which tests run. Defaults to
-<code>TRUE</code>. Coverage guidance is only available under the <code>testthat</code> strategy;
-when the resolved strategy is the installed-tests fallback, mutator emits a
-warning and runs the full suite for every mutant. Pass <code>FALSE</code> to disable
-it (and silence that warning).</p></dd>
+<span class="pkg">covr</span>. A mutant on a line no test covers cannot be killed, so it is
+reported <code>SURVIVED</code> without running any test. Selection is at the test-<em>file</em>
+level; under the assumption that the suite deterministically exercises the
+code, it should not change a mutant's verdict, only which tests run. Defaults
+to <code>TRUE</code>. Coverage guidance is available under the <code>testthat</code>, <code>tinytest</code>,
+and <code>tinytest-installed</code> strategies; when the resolved strategy is the generic
+installed-tests fallback, mutator emits a warning and runs the full suite for
+every mutant. Pass <code>FALSE</code> to disable it (and silence that warning).</p></dd>
 
 
 <dt id="arg-coverage-backend">coverage_backend<a class="anchor" aria-label="anchor" href="#arg-coverage-backend"></a></dt>
 <dd><p>How <code>coverage_guided</code> attributes coverage to tests
-(ignored when <code>coverage_guided = FALSE</code>). <code>"record_tests"</code> (the default) uses
-covr's <code>record_tests</code> in a single run; it relies only on covr's public output
-but, because covr credits a covered line to the deepest test-directory frame,
-code reached through a <code>helper-*.R</code>/<code>setup-*.R</code> wrapper is attributed to the
-helper rather than the originating <code>test-*.R</code> file, and such mutants
-conservatively run the whole suite. <code>"per_file"</code> instruments the package once
-and runs the suite a single time through a reporter that snapshots coverage
-per test file, giving exact file-level attribution (no helper fallback) at
-roughly the same cost; it depends on covr internals, so it is opt-in.</p></dd>
+under the <code>testthat</code> strategy (ignored when <code>coverage_guided = FALSE</code> and for
+the tinytest strategies, which have a single per-file driver). <code>"record_tests"</code>
+(the default) uses covr's <code>record_tests</code> in a single run; it relies only on
+covr's public output but, because covr credits a covered line to the deepest
+test-directory frame, code reached through a <code>helper-*.R</code>/<code>setup-*.R</code> wrapper
+is attributed to the helper rather than the originating <code>test-*.R</code> file, and
+such mutants conservatively run the whole suite. <code>"per_file"</code> instruments the
+package once and runs the suite a single time through a reporter that snapshots
+coverage per test file, giving exact file-level attribution (no helper
+fallback) at roughly the same cost; it depends on covr internals, so it is
+opt-in.</p></dd>
 
 
 <dt id="arg-target-margin">target_margin<a class="anchor" aria-label="anchor" href="#arg-target-margin"></a></dt>
@@ -259,10 +271,13 @@ mutation-tests a throwaway package, which is too slow for that context.</p>
 package's own <code>tests/testthat.R</code> harness runs them, i.e. with the same
 arguments (notably any <code>filter</code>) that the harness passes to
 <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code>, via <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>.</p></li>
+<li><p>Otherwise, if <code>inst/tinytest/</code> exists, the mutant is loaded in-process
+with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> (no installation) and its tests are run with
+<code>tinytest::run_test_dir("inst/tinytest")</code>.</p></li>
 <li><p>Otherwise, if <code>tests/</code> exists, mutator installs the mutant package
 with <code>--install-tests</code> and runs <code><a href="https://rdrr.io/r/tools/testInstalledPackage.html" class="external-link">tools::testInstalledPackage()</a></code>.</p></li>
-</ul><p>Pass <code>strategy</code> to override this (for example to run a <code>testthat</code> package
-through the slower installed-tests path for comparison).</p>
+</ul><p>Pass <code>strategy</code> to override this (for example to run a <code>testthat</code> or <code>tinytest</code>
+package through the slower installed-tests path for comparison).</p>
     </div>
 
     <div class="section level2">
@@ -294,9 +309,9 @@ through the slower installed-tests path for comparison).</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   <span style="color: #00BBBB; font-weight: bold;">R/add.R:1</span>   '+' -&gt; '-'</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>     &gt; <span style="color: #555555;">1</span> | <span style="color: #BB0000;">add &lt;- function(x, y) x + y</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Timing (seconds):</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          1.1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Baseline run:          0.9</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Mutant generation:     0.0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        1.0</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   Test execution:        0.9</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>   Equivalence detection: 0.0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Mutation Testing Summary:</span>

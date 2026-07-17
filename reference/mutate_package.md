@@ -21,7 +21,7 @@ mutate_package(
   fail_fast = TRUE,
   isolate = FALSE,
   exclude_files = NULL,
-  strategy = c("auto", "testthat", "installed"),
+  strategy = c("auto", "testthat", "tinytest", "tinytest-installed", "installed"),
   coverage_guided = TRUE,
   coverage_backend = c("record_tests", "per_file"),
   target_margin = NULL,
@@ -100,8 +100,10 @@ mutate_package(
   first failing test rather than running the whole suite. A mutant is
   `KILLED` as soon as one test detects it, so the remainder of the suite
   is wasted work. Set to `FALSE` to run the full suite for every mutant.
-  Applies to the `testthat` strategy; the installed-tests fallback
-  already stops at the first failing test file regardless of this flag.
+  Applies to the `testthat` strategy; the `tinytest` strategy always
+  runs the full set of selected test files, and the installed-tests
+  fallback already stops at the first failing test file regardless of
+  this flag.
 
 - isolate:
 
@@ -109,12 +111,13 @@ mutate_package(
   the unchanged directories of the original package (only the mutated
   `R/` file is materialised), which is fast but makes those directories
   shared writable state across the parallel workers. If `TRUE`, the
-  `src/` and `tests/` directories are deep-copied into every mutant copy
-  instead. Use `isolate = TRUE` when a package has **non-hermetic
-  tests** that write files into `tests/` (or `src/`) and parallel runs
-  therefore produce spurious `KILLED`/`HANG` verdicts; it gives each
-  worker its own copy at the cost of extra disk. Note that running with
-  `cores = 1` avoids such contention without the copy cost.
+  `src/` and `tests/` directories (or `src/` and `inst/` under the
+  `tinytest` strategy) are deep-copied into every mutant copy instead.
+  Use `isolate = TRUE` when a package has **non-hermetic tests** that
+  write files into `tests/` (or `src/`) and parallel runs therefore
+  produce spurious `KILLED`/`HANG` verdicts; it gives each worker its
+  own copy at the cost of extra disk. Note that running with `cores = 1`
+  avoids such contention without the copy cost.
 
 - exclude_files:
 
@@ -133,11 +136,24 @@ mutate_package(
 - strategy:
 
   Test strategy to use. `"auto"` (the default) picks the `testthat`
-  strategy when `tests/testthat/` exists and the installed-tests
-  strategy otherwise. `"testthat"` forces the in-process
+  strategy when `tests/testthat/` exists, the `tinytest` strategy when
+  `inst/tinytest/` exists, and the installed-tests strategy otherwise.
+  `"testthat"` forces the in-process
   [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html)
-  path (requires `tests/testthat/`). `"installed"` forces the
-  `R CMD INSTALL --install-tests` +
+  path (requires `tests/testthat/`). `"tinytest"` forces the in-process
+  [`tinytest::run_test_dir()`](https://rdrr.io/pkg/tinytest/man/run_test_dir.html)
+  path (requires `inst/tinytest/`). Both in-process strategies load the
+  package with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html),
+  which does not dispatch S4 methods defined on `...`-dispatching base
+  generics such as [`seq()`](https://rdrr.io/r/base/seq.html); a package
+  that relies on those will fail the baseline, and the error points to
+  `"tinytest-installed"`. `"tinytest-installed"` runs the tinytest suite
+  against an installed copy (`R CMD INSTALL` +
+  [`tinytest::test_package()`](https://rdrr.io/pkg/tinytest/man/test_package.html),
+  requires `inst/tinytest/`): slower than dev-mode but matches an
+  installed package (correct S4 dispatch) and still supports coverage
+  guidance. `"installed"` forces the `R CMD INSTALL --install-tests` +
   [`tools::testInstalledPackage()`](https://rdrr.io/r/tools/testInstalledPackage.html)
   path (requires `tests/`).
 
@@ -145,30 +161,32 @@ mutate_package(
 
   Logical; if `TRUE`, only the tests that actually exercise a mutant's
   mutated line(s) are run for that mutant, instead of the whole suite.
-  Coverage is measured once on the unmutated package with covr
-  (`options(covr.record_tests = TRUE)`). A mutant on a line no test
-  covers cannot be killed, so it is reported `SURVIVED` without running
-  any test. Selection is at the test-*file* level (testthat filters by
-  file); under the assumption that the suite deterministically exercises
+  Coverage is measured once on the unmutated package with covr. A mutant
+  on a line no test covers cannot be killed, so it is reported
+  `SURVIVED` without running any test. Selection is at the test-*file*
+  level; under the assumption that the suite deterministically exercises
   the code, it should not change a mutant's verdict, only which tests
-  run. Defaults to `TRUE`. Coverage guidance is only available under the
-  `testthat` strategy; when the resolved strategy is the installed-tests
-  fallback, mutator emits a warning and runs the full suite for every
-  mutant. Pass `FALSE` to disable it (and silence that warning).
+  run. Defaults to `TRUE`. Coverage guidance is available under the
+  `testthat`, `tinytest`, and `tinytest-installed` strategies; when the
+  resolved strategy is the generic installed-tests fallback, mutator
+  emits a warning and runs the full suite for every mutant. Pass `FALSE`
+  to disable it (and silence that warning).
 
 - coverage_backend:
 
-  How `coverage_guided` attributes coverage to tests (ignored when
-  `coverage_guided = FALSE`). `"record_tests"` (the default) uses covr's
-  `record_tests` in a single run; it relies only on covr's public output
-  but, because covr credits a covered line to the deepest test-directory
-  frame, code reached through a `helper-*.R`/`setup-*.R` wrapper is
-  attributed to the helper rather than the originating `test-*.R` file,
-  and such mutants conservatively run the whole suite. `"per_file"`
-  instruments the package once and runs the suite a single time through
-  a reporter that snapshots coverage per test file, giving exact
-  file-level attribution (no helper fallback) at roughly the same cost;
-  it depends on covr internals, so it is opt-in.
+  How `coverage_guided` attributes coverage to tests under the
+  `testthat` strategy (ignored when `coverage_guided = FALSE` and for
+  the tinytest strategies, which have a single per-file driver).
+  `"record_tests"` (the default) uses covr's `record_tests` in a single
+  run; it relies only on covr's public output but, because covr credits
+  a covered line to the deepest test-directory frame, code reached
+  through a `helper-*.R`/`setup-*.R` wrapper is attributed to the helper
+  rather than the originating `test-*.R` file, and such mutants
+  conservatively run the whole suite. `"per_file"` instruments the
+  package once and runs the suite a single time through a reporter that
+  snapshots coverage per test file, giving exact file-level attribution
+  (no helper fallback) at roughly the same cost; it depends on covr
+  internals, so it is opt-in.
 
 - target_margin:
 
@@ -237,12 +255,19 @@ Test strategy is, by default, detected automatically:
   via
   [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html).
 
+- Otherwise, if `inst/tinytest/` exists, the mutant is loaded in-process
+  with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
+  (no installation) and its tests are run with
+  `tinytest::run_test_dir("inst/tinytest")`.
+
 - Otherwise, if `tests/` exists, mutator installs the mutant package
   with `--install-tests` and runs
   [`tools::testInstalledPackage()`](https://rdrr.io/r/tools/testInstalledPackage.html).
 
-Pass `strategy` to override this (for example to run a `testthat`
-package through the slower installed-tests path for comparison).
+Pass `strategy` to override this (for example to run a `testthat` or
+`tinytest` package through the slower installed-tests path for
+comparison).
 
 ## Examples
 
@@ -274,9 +299,9 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   R/add.R:1   '+' -> '-'
 #>     > 1 | add <- function(x, y) x + y
 #> Timing (seconds):
-#>   Baseline run:          1.1
+#>   Baseline run:          0.9
 #>   Mutant generation:     0.0
-#>   Test execution:        1.0
+#>   Test execution:        0.9
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:

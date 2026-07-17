@@ -100,7 +100,7 @@
 <li>
 <strong>Coverage-guided Test Selection</strong>: Runs only the tests that cover mutated lines, also for improved performance</li>
 <li>
-<strong>Configurable Test Harness</strong>: Supports both <code>testthat</code> and non-<code>testthat</code> test layouts</li>
+<strong>Configurable Test Harness</strong>: First-class <code>testthat</code> and <code>tinytest</code> support, plus a generic installed-tests fallback for other layouts</li>
 <li>
 <strong>Timeout Management</strong>: Automatically calibrates timeouts for mutant test runs to prevent hangs</li>
 <li>
@@ -181,25 +181,17 @@
 <span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="at">  </span><span class="fu">mutation</span><span class="kw">:</span></span>
 <span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1</span></span>
 <span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="at">    </span><span class="fu">with</span><span class="kw">:</span></span>
-<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="at">      </span><span class="fu">target-margin</span><span class="kw">:</span><span class="at"> </span><span class="st">"0.10"</span><span class="co">   # sample to +/-10 percentage points</span></span>
-<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="at">      </span><span class="fu">fail-under</span><span class="kw">:</span><span class="at"> </span><span class="st">"75"</span><span class="co">        # fail CI below a 75% mutation score</span></span></code></pre></div>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="at">      </span><span class="fu">target-margin</span><span class="kw">:</span><span class="at"> </span><span class="st">"0.10"</span><span class="co"> # sample to +/-10 percentage points</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="at">      </span><span class="fu">fail-under</span><span class="kw">:</span><span class="at"> </span><span class="st">"75"</span><span class="co"> # fail CI below a 75% mutation score</span></span></code></pre></div>
 <p>Pin to a released tag such as <code>@v0.1.1</code>; the workflow is versioned with the mutator package, so the tag matches the package version. Set <code>deploy-badge: true</code> (with <code>contents: write</code> permission) to publish a shields.io badge. See the <a href="https://prl-prg.github.io/mutator/articles/continuous-integration.html">Continuous integration vignette</a> for every input, threshold guidance, and badge setup. From an installed copy, open it with <code><a href="articles/continuous-integration.html">vignette("continuous-integration", package = "mutator")</a></code>.</p>
-</div>
-<div class="section level2">
-<h2 id="mutation-testing-modes">Mutation testing modes<a class="anchor" aria-label="anchor" href="#mutation-testing-modes"></a>
-</h2>
-<p>mutator selects a package test strategy automatically:</p>
-<ul>
-<li>If <code>tests/testthat/</code> exists, mutator loads the mutant in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and mirrors the package’s own <code>tests/testthat.R</code> harness by forwarding extractable arguments (notably any <code>filter</code>) from <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> to <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>, without paying for an install per mutant.</li>
-<li>Otherwise, if <code>tests/</code> exists, mutator falls back to <code>tools::testInstalledPackage(..., types = "tests")</code> after installing each mutant with <code>--install-tests</code>.</li>
-</ul>
-<p>The fallback path supports non-<code>testthat</code> layouts (for example <code>tinytest</code>-driven packages that run through <code>tests/</code> scripts).</p>
 </div>
 <div class="section level2">
 <h2 id="configuration">Configuration<a class="anchor" aria-label="anchor" href="#configuration"></a>
 </h2>
 <p><code><a href="reference/mutate_package.html">mutate_package()</a></code> exposes a number of options to control how mutants are run, which tests are selected, and how results are refined. Each is covered in depth in the <strong><a href="https://prl-prg.github.io/mutator/articles/configuration.html">Configuration vignette</a></strong> (from an installed copy, open it with <code><a href="articles/configuration.html">vignette("configuration", package = "mutator")</a></code>):</p>
 <ul>
+<li>
+<strong>Test strategy selection</strong> (<code>strategy</code>): how mutator auto-detects a package’s test harness (<code>testthat</code>, <code>tinytest</code>, or the generic installed-tests fallback) and when to override it with <code>tinytest-installed</code>.</li>
 <li>
 <strong>Timeouts and the contended baseline</strong>: how the per-mutant <code>HANG</code> timeout is self-calibrated from a parallelism-aware baseline, and <code>timeout_seconds</code> to override it.</li>
 <li>
@@ -211,7 +203,7 @@
 <li>
 <strong>Excluding code from mutation</strong>: <code>exclude_files</code>, in-source <code># mutator:ignore-*</code> directives, covr <code># nocov</code> annotations, and <code>.covrignore</code>.</li>
 <li>
-<strong>Coverage-guided test selection</strong> (<code>coverage_guided</code>, <code>coverage_backend</code>): on by default, runs only the tests that cover each mutated line (testthat strategy; warns and runs the full suite otherwise).</li>
+<strong>Coverage-guided test selection</strong> (<code>coverage_guided</code>, <code>coverage_backend</code>): on by default, runs only the tests that cover each mutated line (testthat and tinytest strategies; warns and runs the full suite under the generic installed-tests fallback).</li>
 <li>
 <strong>Precise mutant locations</strong>: the optional <code>imputesrcref</code> package for narrower operator-mutant source ranges.</li>
 <li>
@@ -224,8 +216,8 @@
 <p>mutator currently generates these mutation families:</p>
 <table class="table">
 <colgroup>
-<col width="40%">
-<col width="60%">
+<col width="17%">
+<col width="82%">
 </colgroup>
 <thead><tr>
 <th>Family</th>
@@ -327,16 +319,16 @@
 <p>Run the full test suite with:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="system-tests">System tests<a class="anchor" aria-label="anchor" href="#system-tests"></a>
-</h2>
+<div class="section level3">
+<h3 id="system-tests">System tests<a class="anchor" aria-label="anchor" href="#system-tests"></a>
+</h3>
 <p><code>mutator</code> includes a set of system tests that run mutation testing on 9 packages from CRAN. It compares the mutants, surviving, killed, hanged mutant detections, and the mutation score against the expected results using snapshot testing, with a fixed seed on 10 mutants or 50 mutants per package depending on the release cycle. It also compares the results across a set of configuration options that ought not to change the results. The system tests are located in <code>tests/system</code> and are automatically run as par of the CI.</p>
 </div>
-<div class="section level2">
-<h2 id="mutation-testing">Mutation testing<a class="anchor" aria-label="anchor" href="#mutation-testing"></a>
-</h2>
+<div class="section level3">
+<h3 id="mutation-testing">Mutation testing<a class="anchor" aria-label="anchor" href="#mutation-testing"></a>
+</h3>
 <p>We practice dogfooding and run <code>mutator</code> on <code>mutator</code> test suite itself. This already led to numerous improvements in <code>mutator</code> speed, as waiting for the mutation score to be computed on a package with a long running test suite can be frustrating!</p>
+</div>
 </div>
 </div>
 

@@ -68,12 +68,45 @@
     
     
 <p>This vignette documents the options that control how
-<code><a href="../reference/mutate_package.html">mutate_package()</a></code> runs: how mutant timeouts are calibrated,
-which tests are selected, how parallel workers are isolated, how to
-exclude code from mutation, and how the optional coverage-guided,
-precise-location, and equivalent-mutant-detection features behave. See
+<code><a href="../reference/mutate_package.html">mutate_package()</a></code> runs: which test strategy is used, how
+mutant timeouts are calibrated, which tests are selected, how parallel
+workers are isolated, how to exclude code from mutation, and how the
+optional coverage-guided, precise-location, and
+equivalent-mutant-detection features behave. See
 <code><a href="../reference/mutate_package.html">?mutate_package</a></code> for the full argument and return-value
 documentation.</p>
+<div class="section level2">
+<h2 id="mutation-testing-modes-strategy">Mutation testing modes (<code>strategy</code>)<a class="anchor" aria-label="anchor" href="#mutation-testing-modes-strategy"></a>
+</h2>
+<p>mutator selects a package test strategy automatically:</p>
+<ul>
+<li>If <code>tests/testthat/</code> exists, mutator loads the mutant
+in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and mirrors the
+package’s own <code>tests/testthat.R</code> harness by forwarding
+extractable arguments (notably any <code>filter</code>) from
+<code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_check()</a></code> to
+<code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>, without paying for an install per
+mutant.</li>
+<li>Otherwise, if <code>inst/tinytest/</code> exists, mutator loads the
+mutant in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and runs
+<code>tinytest::run_test_dir("inst/tinytest")</code>, also without an
+install per mutant.</li>
+<li>Otherwise, if <code>tests/</code> exists, mutator falls back to
+<code>tools::testInstalledPackage(..., types = "tests")</code> after
+installing each mutant with <code>--install-tests</code>.</li>
+</ul>
+<p>Both in-process strategies use <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code>,
+which in some cases does not load a package the way an installed copy
+would (see <a href="https://github.com/r-lib/pkgload/issues/340" class="external-link">pkgload
+issue #340</a>). A tinytest package affected by this can be run against
+an installed copy with <code>strategy = "tinytest-installed"</code>
+(<code>R CMD INSTALL</code> plus <code><a href="https://rdrr.io/pkg/tinytest/man/test_package.html" class="external-link">tinytest::test_package()</a></code>),
+which is slower but matches an installed package and still supports
+coverage-guided selection. Pass <code>strategy</code> to
+<code><a href="../reference/mutate_package.html">mutate_package()</a></code> to override auto-detection:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, strategy <span class="op">=</span> <span class="st">"tinytest-installed"</span><span class="op">)</span></span></code></pre></div>
+</div>
 <div class="section level2">
 <h2 id="timeouts-and-contention-in-parallel-mode">Timeouts and contention in parallel mode<a class="anchor" aria-label="anchor" href="#timeouts-and-contention-in-parallel-mode"></a>
 </h2>
@@ -113,14 +146,16 @@ timeouts/kills from, e.g., tests that hit the network.</p>
 <p>Set <code>cran = FALSE</code> to run the <strong>full</strong> suite
 instead (<code>NOT_CRAN = "true"</code>, which is what happens by
 default when running <code>devtools::test()</code>):</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, cran <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
-<p>This applies to both test strategies (the <code>testthat</code>
-strategy and the installed-tests fallback). Note that it only affects
-tests the package <em>explicitly</em> guards with
-<code>skip_on_cran()</code> / <code>skip_if_offline()</code>; a package
-whose network test has no such guard will still run that test in either
-mode.</p>
+<p>This applies to every test strategy (<code>testthat</code>,
+<code>tinytest</code>, <code>tinytest-installed</code>, and the
+installed-tests fallback; the tinytest strategies map it to
+<code>run_test_dir(at_home = )</code>). Note that it only affects tests
+the package <em>explicitly</em> guards with <code>skip_on_cran()</code>
+/ <code>skip_if_offline()</code> (or <code>at_home()</code> for
+tinytest); a package whose network test has no such guard will still run
+that test in either mode.</p>
 </div>
 <div class="section level2">
 <h2 id="fail-fast-stop-at-the-first-failing-test">Fail-fast (stop at the first failing test)<a class="anchor" aria-label="anchor" href="#fail-fast-stop-at-the-first-failing-test"></a>
@@ -133,14 +168,16 @@ speeds up the test-running phase (often substantially for packages with
 large suites) without changing any mutant’s verdict.</p>
 <p>Set <code>fail_fast = FALSE</code> to run the full suite for every
 mutant:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, fail_fast <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>This applies to the <code>testthat</code> strategy: it sets
 <code>TESTTHAT_MAX_FAILS = 1</code> in the test subprocess and uses the
 progress reporter, which aborts the run at the first failing
 <code>test_that()</code> block. <code>SURVIVED</code> mutants are
 unaffected, as they have no failure to short-circuit on, so baseline
-timing and timeout calibration are unchanged. The installed-tests
+timing and timeout calibration are unchanged. The <code>tinytest</code>
+strategies run the full set of selected test files (a mutant is still
+<code>KILLED</code> on the first failing file), and the installed-tests
 fallback already stops at the first failing test <em>file</em>
 regardless of this flag.</p>
 </div>
@@ -155,12 +192,13 @@ design choices keep it correct:</p>
 <ul>
 <li>
 <strong>Compiled code is built once, not per mutant.</strong> For
-the <code>testthat</code> strategy, <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code>
-reuses the baseline’s compiled <code>src/</code> since C code is never
-mutated. The <code>installed</code>strategy compiles once into a
-<em>template</em> library and installs each mutant with
-<code>--no-libs</code>, which never writes into <code>src/</code>. This
-prevents parallel workers from fighting over the same compiled
+the in-process strategies (<code>testthat</code> and
+<code>tinytest</code>), <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> reuses the
+baseline’s compiled <code>src/</code> since C code is never mutated. The
+<code>installed</code> and <code>tinytest-installed</code> strategies
+compile once into a <em>template</em> library and install each mutant
+with <code>--no-libs</code>, which never writes into <code>src/</code>.
+This prevents parallel workers from fighting over the same compiled
 objects.</li>
 <li>
 <strong>Snapshot references are not shared.</strong> For
@@ -182,7 +220,7 @@ No contention, no extra disk, but the slowest option.</p></li>
 Each mutant gets its own deep copy of <code>src/</code> and
 <code>tests/</code> instead of a symlink, so file-writing tests can’t
 collide:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, isolate <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ol>
@@ -196,7 +234,7 @@ you see parallel-only <code>KILLED</code>/<code>HANG</code> results.</p>
 <p>When the optional <a href="https://cran.r-project.org/package=pbmcapply" class="external-link"><code>pbmcapply</code></a>
 package is installed, the multi-core test run shows a live progress
 bar.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pbmcapply"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
@@ -213,7 +251,7 @@ code.</p>
 glob patterns matched against the base names of the <code>.R</code>
 files in <code>R/</code>. Matching files are skipped entirely before any
 mutants are generated:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/scales"</span>, exclude_files <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"import-standalone-*"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><strong>2. In the source, with <code># mutator:ignore</code>
 directives.</strong> Place markers in the <code>.R</code> file
@@ -225,7 +263,7 @@ the <strong>whole file</strong>.</p></li>
 <p><code># mutator:ignore-start</code> /
 <code># mutator:ignore-end</code> exclude the <strong>line
 region</strong> between them (wrap a function to exclude it):</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># mutator:ignore-start</span></span>
 <span><span class="va">legacy_helper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="co"># not worth mutation-testing</span></span>
@@ -246,7 +284,7 @@ untested-by-design needs no separate mutator directive:</p>
 <li>
 <p>A bare <code># nocov</code> excludes its <strong>own
 line</strong>, and may trail code:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="va">impossible_state</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"unreachable"</span><span class="op">)</span> <span class="co"># nocov</span></span>
 <span><span class="op">}</span></span></code></pre></div>
@@ -282,13 +320,17 @@ coverage once with <a href="https://covr.r-lib.org/" class="external-link">covr<
 for each mutant, runs only the test files that cover its mutated line,
 and skips running tests altogether for mutants on uncovered lines
 (reported <code>SURVIVED</code> immediately).</p>
-<p>Coverage guidance applies to the <code>testthat</code> strategy only.
-When the resolved strategy is the installed-tests fallback, mutator
-cannot attribute coverage to test files, so it emits a warning and runs
-the full suite for every mutant. Pass
-<code>coverage_guided = FALSE</code> to disable the optimisation (and
-that warning).</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<p>Coverage guidance applies to the <code>testthat</code>,
+<code>tinytest</code>, and <code>tinytest-installed</code> strategies.
+covr builds the coverage-to-tests map against an instrumented, installed
+copy of the package; per test file, it maps each covered source line to
+the test files that reach it (for tinytest, by running each
+<code>inst/tinytest</code> file individually). When the resolved
+strategy is the generic installed-tests fallback, mutator cannot
+attribute coverage to test files, so it emits a warning and runs the
+full suite for every mutant. Pass <code>coverage_guided = FALSE</code>
+to disable the optimisation (and that warning).</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># On by default; pass FALSE to run the full suite for every mutant.</span></span>
 <span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>The single coverage run also serves as the baseline check (it runs
@@ -320,7 +362,7 @@ attribution</strong> with no helper fallback, at roughly the same cost
 as the single <code>record_tests</code> run (often faster overall, since
 more mutants get a narrowed test set). It reaches into covr internals,
 so it is opt-in:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>, coverage_backend <span class="op">=</span> <span class="st">"per_file"</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ul>
@@ -345,7 +387,7 @@ spans for many operator mutants, typically narrowing a whole-function
 range down to the exact sub-expression on a single line. It is a
 GitHub-only optional package listed in <code>Enhances</code>; install it
 yourself to opt in:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"PRL-PRG/imputesrcref"</span><span class="op">)</span></span></code></pre></div>
 <p>When it is <strong>not</strong> installed, <code>mutator</code>
@@ -358,7 +400,7 @@ oracle: mutant files are deparsed from the original code and are
 semantics regardless. For best results, install the package under test
 from source with parse data retained, since <code>imputesrcref</code>
 reads it:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"&lt;pkg&gt;"</span>, INSTALL_opts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"--with-keep.source"</span>, <span class="st">"--with-keep.parse.data"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -371,7 +413,7 @@ mixed):</p>
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"api-key..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>
@@ -399,7 +441,7 @@ and the base URL to the public OpenAI API. Set <code>base_url</code> to
 target a self-hosted or alternative OpenAI-compatible service (for
 example <code>http://localhost:11434/v1</code>).</p>
 <p>Enable the analysis when running package mutation tests:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, detectEqMutants <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>Equivalence detection runs <strong>before</strong> the test suites.
 Because an equivalent mutant is behaviorally identical to the original,

@@ -2,12 +2,51 @@
 
 This vignette documents the options that control how
 [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
-runs: how mutant timeouts are calibrated, which tests are selected, how
-parallel workers are isolated, how to exclude code from mutation, and
-how the optional coverage-guided, precise-location, and
-equivalent-mutant-detection features behave. See
+runs: which test strategy is used, how mutant timeouts are calibrated,
+which tests are selected, how parallel workers are isolated, how to
+exclude code from mutation, and how the optional coverage-guided,
+precise-location, and equivalent-mutant-detection features behave. See
 [`?mutate_package`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
 for the full argument and return-value documentation.
+
+## Mutation testing modes (`strategy`)
+
+mutator selects a package test strategy automatically:
+
+- If `tests/testthat/` exists, mutator loads the mutant in-process with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
+  and mirrors the package’s own `tests/testthat.R` harness by forwarding
+  extractable arguments (notably any `filter`) from
+  [`testthat::test_check()`](https://testthat.r-lib.org/reference/test_package.html)
+  to
+  [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html),
+  without paying for an install per mutant.
+- Otherwise, if `inst/tinytest/` exists, mutator loads the mutant
+  in-process with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
+  and runs `tinytest::run_test_dir("inst/tinytest")`, also without an
+  install per mutant.
+- Otherwise, if `tests/` exists, mutator falls back to
+  `tools::testInstalledPackage(..., types = "tests")` after installing
+  each mutant with `--install-tests`.
+
+Both in-process strategies use
+[`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html),
+which in some cases does not load a package the way an installed copy
+would (see [pkgload issue
+\#340](https://github.com/r-lib/pkgload/issues/340)). A tinytest package
+affected by this can be run against an installed copy with
+`strategy = "tinytest-installed"` (`R CMD INSTALL` plus
+[`tinytest::test_package()`](https://rdrr.io/pkg/tinytest/man/test_package.html)),
+which is slower but matches an installed package and still supports
+coverage-guided selection. Pass `strategy` to
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+to override auto-detection:
+
+``` r
+
+mutate_package("path/to/pkg", strategy = "tinytest-installed")
+```
 
 ## Timeouts and contention in parallel mode
 
@@ -57,11 +96,12 @@ Set `cran = FALSE` to run the **full** suite instead
 mutate_package("path/to/pkg", cran = FALSE)
 ```
 
-This applies to both test strategies (the `testthat` strategy and the
-installed-tests fallback). Note that it only affects tests the package
-*explicitly* guards with `skip_on_cran()` / `skip_if_offline()`; a
-package whose network test has no such guard will still run that test in
-either mode.
+This applies to every test strategy (`testthat`, `tinytest`,
+`tinytest-installed`, and the installed-tests fallback; the tinytest
+strategies map it to `run_test_dir(at_home = )`). Note that it only
+affects tests the package *explicitly* guards with `skip_on_cran()` /
+`skip_if_offline()` (or `at_home()` for tinytest); a package whose
+network test has no such guard will still run that test in either mode.
 
 ## Fail-fast (stop at the first failing test)
 
@@ -84,8 +124,10 @@ This applies to the `testthat` strategy: it sets
 reporter, which aborts the run at the first failing `test_that()` block.
 `SURVIVED` mutants are unaffected, as they have no failure to
 short-circuit on, so baseline timing and timeout calibration are
-unchanged. The installed-tests fallback already stops at the first
-failing test *file* regardless of this flag.
+unchanged. The `tinytest` strategies run the full set of selected test
+files (a mutant is still `KILLED` on the first failing file), and the
+installed-tests fallback already stops at the first failing test *file*
+regardless of this flag.
 
 ## Parallel execution and isolation (`isolate`)
 
@@ -94,14 +136,14 @@ directories of the original package and only the mutated `R/` file is
 materialised, so all parallel workers point at the same physical `src/`,
 `tests/`, etc. This is fast, and two design choices keep it correct:
 
-- **Compiled code is built once, not per mutant.** For the `testthat`
-  strategy,
+- **Compiled code is built once, not per mutant.** For the in-process
+  strategies (`testthat` and `tinytest`),
   [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
   reuses the baseline’s compiled `src/` since C code is never mutated.
-  The `installed`strategy compiles once into a *template* library and
-  installs each mutant with `--no-libs`, which never writes into `src/`.
-  This prevents parallel workers from fighting over the same compiled
-  objects.
+  The `installed` and `tinytest-installed` strategies compile once into
+  a *template* library and install each mutant with `--no-libs`, which
+  never writes into `src/`. This prevents parallel workers from fighting
+  over the same compiled objects.
 - **Snapshot references are not shared.** For `testthat` packages with
   `_snaps` directories, mutator gives each mutant its own snapshot copy
   while symlinking the rest of `tests/`, so filtered or parallel runs
@@ -227,11 +269,15 @@ only the test files that cover its mutated line, and skips running tests
 altogether for mutants on uncovered lines (reported `SURVIVED`
 immediately).
 
-Coverage guidance applies to the `testthat` strategy only. When the
-resolved strategy is the installed-tests fallback, mutator cannot
-attribute coverage to test files, so it emits a warning and runs the
-full suite for every mutant. Pass `coverage_guided = FALSE` to disable
-the optimisation (and that warning).
+Coverage guidance applies to the `testthat`, `tinytest`, and
+`tinytest-installed` strategies. covr builds the coverage-to-tests map
+against an instrumented, installed copy of the package; per test file,
+it maps each covered source line to the test files that reach it (for
+tinytest, by running each `inst/tinytest` file individually). When the
+resolved strategy is the generic installed-tests fallback, mutator
+cannot attribute coverage to test files, so it emits a warning and runs
+the full suite for every mutant. Pass `coverage_guided = FALSE` to
+disable the optimisation (and that warning).
 
 ``` r
 
