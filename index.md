@@ -156,13 +156,13 @@ name: mutation-testing
 
 jobs:
   mutation:
-    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.2.0
     with:
       target-margin: "0.10" # sample to +/-10 percentage points
       fail-under: "75" # fail CI below a 75% mutation score
 ```
 
-Pin to a released tag such as `@v0.1.1`; the workflow is versioned with
+Pin to a released tag such as `@v0.2.0`; the workflow is versioned with
 the mutator package, so the tag matches the package version. Set
 `deploy-badge: true` (with `contents: write` permission) to publish a
 shields.io badge. See the [Continuous integration

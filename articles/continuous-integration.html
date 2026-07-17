@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">mutator</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,10 +93,10 @@ repository:</p>
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a></span>
 <span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="fu">jobs</span><span class="kw">:</span></span>
 <span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="at">  </span><span class="fu">mutation</span><span class="kw">:</span></span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.2.0</span></span>
 <span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="at">    </span><span class="fu">with</span><span class="kw">:</span></span>
 <span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="at">      </span><span class="fu">target-margin</span><span class="kw">:</span><span class="at"> </span><span class="st">"0.10"</span></span></code></pre></div>
-<p>Pin to a released tag such as <code>@v0.1.1</code>. The reusable
+<p>Pin to a released tag such as <code>@v0.2.0</code>. The reusable
 workflow lives in the mutator package repository and is versioned with
 the package, so the tag you pin matches a mutator release. Bump the tag
 in your caller when you want to move to a newer release. You can also
@@ -220,7 +220,7 @@ below the threshold the job exits non-zero, which blocks the pull
 request:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">jobs</span><span class="kw">:</span></span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="at">  </span><span class="fu">mutation</span><span class="kw">:</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.2.0</span></span>
 <span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="at">    </span><span class="fu">with</span><span class="kw">:</span></span>
 <span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="at">      </span><span class="fu">fail-under</span><span class="kw">:</span><span class="at"> </span><span class="st">"75"</span></span>
 <span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="at">      </span><span class="fu">target-margin</span><span class="kw">:</span><span class="at"> </span><span class="st">"0.05"</span></span></code></pre></div>
@@ -253,7 +253,7 @@ deploys it to <code>gh-pages</code> (or <code>badge-branch</code>):</p>
 <span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="at">  </span><span class="fu">mutation</span><span class="kw">:</span></span>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="at">    </span><span class="fu">permissions</span><span class="kw">:</span></span>
 <span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">      </span><span class="fu">contents</span><span class="kw">:</span><span class="at"> write</span></span>
-<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">    </span><span class="fu">uses</span><span class="kw">:</span><span class="at"> PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.2.0</span></span>
 <span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="at">    </span><span class="fu">with</span><span class="kw">:</span></span>
 <span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="at">      </span><span class="fu">deploy-badge</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
 <p>Reference the badge in your README, replacing

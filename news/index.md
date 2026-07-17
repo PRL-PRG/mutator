@@ -1,5 +1,33 @@
 # Changelog
 
+## mutator 0.2.0
+
+- Added first-class `tinytest` support. A package with an
+  `inst/tinytest` directory is now auto-detected and its mutants are run
+  in-process with
+  [`pkgload::load_all()`](https://pkgload.r-lib.org/reference/load_all.html)
+  and
+  [`tinytest::run_test_dir()`](https://rdrr.io/pkg/tinytest/man/run_test_dir.html),
+  without an install per mutant, including coverage-guided test
+  selection.
+- Added a `strategy` argument to
+  [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+  to override test-framework auto-detection. Accepted values are
+  `"auto"` (the default), `"testthat"`, `"tinytest"`,
+  `"tinytest-installed"`, and `"installed"`.
+- Added a `tinytest-installed` strategy that installs each mutant and
+  runs
+  [`tinytest::test_package()`](https://rdrr.io/pkg/tinytest/man/test_package.html).
+  It is a fallback for packages whose in-process load diverges from an
+  installed copy and unlike the generic installed-tests fallback it
+  still supports coverage-guided selection.
+- Reworked the README and configuration vignette, documenting how the
+  test strategy is selected and when to override it.
+- Fixed the `per_file` coverage backend to forward the package’s
+  `tests/testthat.R` harness arguments (notably any `filter`) to
+  [`testthat::test_dir()`](https://testthat.r-lib.org/reference/test_dir.html),
+  matching the `record_tests` backend.
+
 ## mutator 0.1.1
 
 - Fixed coverage-guided baseline runs for packages with native code by

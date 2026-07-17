@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">mutator</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,14 @@
       <small>Source: <a href="https://github.com/PRL-PRG/mutator/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.0" id="mutator-020">mutator 0.2.0<a class="anchor" aria-label="anchor" href="#mutator-020"></a></h2>
+<ul><li>Added first-class <code>tinytest</code> support. A package with an <code>inst/tinytest</code> directory is now auto-detected and its mutants are run in-process with <code><a href="https://pkgload.r-lib.org/reference/load_all.html" class="external-link">pkgload::load_all()</a></code> and <code><a href="https://rdrr.io/pkg/tinytest/man/run_test_dir.html" class="external-link">tinytest::run_test_dir()</a></code>, without an install per mutant, including coverage-guided test selection.</li>
+<li>Added a <code>strategy</code> argument to <code><a href="../reference/mutate_package.html">mutate_package()</a></code> to override test-framework auto-detection. Accepted values are <code>"auto"</code> (the default), <code>"testthat"</code>, <code>"tinytest"</code>, <code>"tinytest-installed"</code>, and <code>"installed"</code>.</li>
+<li>Added a <code>tinytest-installed</code> strategy that installs each mutant and runs <code><a href="https://rdrr.io/pkg/tinytest/man/test_package.html" class="external-link">tinytest::test_package()</a></code>. It is a fallback for packages whose in-process load diverges from an installed copy and unlike the generic installed-tests fallback it still supports coverage-guided selection.</li>
+<li>Reworked the README and configuration vignette, documenting how the test strategy is selected and when to override it.</li>
+<li>Fixed the <code>per_file</code> coverage backend to forward the package’s <code>tests/testthat.R</code> harness arguments (notably any <code>filter</code>) to <code><a href="https://testthat.r-lib.org/reference/test_dir.html" class="external-link">testthat::test_dir()</a></code>, matching the <code>record_tests</code> backend.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.1" id="mutator-011">mutator 0.1.1<a class="anchor" aria-label="anchor" href="#mutator-011"></a></h2>
 <ul><li>Fixed coverage-guided baseline runs for packages with native code by compiling native sources before mutant execution.</li>
