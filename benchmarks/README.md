@@ -144,9 +144,11 @@ high relative to mutator/muttest even after validity filtering.
 ### Test frameworks beyond testthat
 
 `test_framework()` (`lib/common.R`) detects three harness types and the kill oracle
-(`test_command()`) adapts; mutator auto-selects its **installed** strategy for any
-non-testthat package (coverage-guided is testthat-only), and **muttest is
-auto-skipped** (it is hard-wired to `testthat::test_dir`):
+(`test_command()`) adapts; `bench_mutator.R` maps testthat to the `testthat`
+strategy and tinytest to the `tinytest` strategy (both in-process, both
+coverage-guided), and uses the `installed` fallback for raw `tests/*.R` layouts
+(no coverage guidance). **muttest is auto-skipped** (it is hard-wired to
+`testthat::test_dir`):
 
 - **testthat** (`tests/testthat/`): `load_all` + `test_dir(stop_on_failure)`.
 - **tinytest** (`inst/tinytest/`): `load_all` + `tinytest::run_test_dir`.
@@ -332,9 +334,9 @@ Takeaways:
   mutants are the open question flagged below. R.methodsS3's raw smoke-style tests
   (mostly run-without-error, few value assertions) are weak, which also depresses
   mutator more than universalmutator's crash-prone mutants.
-- **Both non-testthat harnesses work** for mutator (installed strategy) and
-  universalmutator (tinytest / rtests oracles), demonstrating the tools generalize
-  beyond testthat.
+- **Both non-testthat harnesses work** for mutator (tinytest strategy for
+  lumberjack, installed strategy for R.methodsS3's rtests) and universalmutator
+  (tinytest / rtests oracles), demonstrating the tools generalize beyond testthat.
 
 ### muttest native vs. errors-as-kills (the kill-definition effect)
 
@@ -364,9 +366,12 @@ muttest's native score would badly misrepresent its detection ability.
 | R.methodsS3 | 325s | n/a | n/a | 3439s² |
 
 - **mutator is fastest** (117–325s), parallel + coverage-guided *test selection*
-  (runs only the tests covering each mutant) on testthat packages. On non-testthat
-  packages it uses the *installed* strategy (reinstalls per mutant), hence the
-  higher 323–325s.
+  (runs only the tests covering each mutant). The recorded lumberjack numbers
+  predate first-class tinytest support: they were measured under the *installed*
+  strategy without coverage guidance, hence the higher 323s. tinytest now runs
+  in-process (`load_all`) with coverage guidance like testthat; only the raw
+  `tests/*.R` layout (R.methodsS3) still uses the *installed* strategy (reinstalls
+  per mutant). Re-run to refresh the tinytest rows.
 - **muttest** is 2–8× slower (parallel workers, but full suite per mutant).
 - **universalmutator is 5–18× slower than mutator**, sequential, fresh R process
   per mutant.
