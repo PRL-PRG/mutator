@@ -65,6 +65,22 @@ normalise_mutation_result <- function(result, fixture_dir) {
   list(outcome = "OK", summary = summary, mutants = paste(mutants, collapse = "\n"))
 }
 
+# Strategy for a fixture's main run and native invariance variant.
+# Override if set, else pick by layout: testthat, tinytest, installed.
+system_fixture_native_strategy <- function(package) {
+  if (package %in% names(SYSTEM_FIXTURE_STRATEGY)) {
+    return(unname(SYSTEM_FIXTURE_STRATEGY[[package]]))
+  }
+  fixture_dir <- file.path(SYSTEM_ROOT, "packages", "system", package)
+  if (dir.exists(file.path(fixture_dir, "tests", "testthat"))) {
+    return("testthat")
+  }
+  if (dir.exists(file.path(fixture_dir, "inst", "tinytest"))) {
+    return("tinytest")
+  }
+  "installed"
+}
+
 run_system_fixture_result <- function(package, options = list()) {
   fixture_dir <- file.path(SYSTEM_ROOT, "packages", "system", package)
   profile <- system_profile()
@@ -75,6 +91,7 @@ run_system_fixture_result <- function(package, options = list()) {
     max_mutants = profile$max_mutants,
     timeout_seconds = SYSTEM_TIMEOUT_SECONDS,
     coverage_guided = FALSE,
+    strategy = system_fixture_native_strategy(package),
     max_show = 0
   ), options)
   suppressMessages(tryCatch(
@@ -99,9 +116,9 @@ system_result_metrics <- function(result) {
 }
 
 system_invariance_variants <- function(package) {
-  fixture_dir <- file.path(SYSTEM_ROOT, "packages", "system", package)
-  is_testthat <- dir.exists(file.path(fixture_dir, "tests", "testthat"))
-  explicit_strategy <- if (is_testthat) "testthat" else "installed"
+  native <- system_fixture_native_strategy(package)
+  is_testthat <- identical(native, "testthat")
+  is_tinytest <- native %in% c("tinytest", "tinytest-installed")
   invariant_sample <- min(
     system_profile()$max_mutants,
     SYSTEM_INVARIANCE_MAX_MUTANTS
@@ -113,10 +130,20 @@ system_invariance_variants <- function(package) {
       cores = 1,
       fail_fast = FALSE,
       isolate = TRUE,
-      strategy = explicit_strategy,
+      strategy = native,
       coverage_guided = FALSE
     )
   )
+
+  # Cross-strategy equivalence: the installed fallback must reach the same
+  # verdicts as the framework-native strategy (testthat or tinytest).
+  if (is_tinytest || is_testthat) {
+    variants$installed_strategy <- list(
+      max_mutants = invariant_sample,
+      strategy = "installed",
+      coverage_guided = FALSE
+    )
+  }
 
   if (is_testthat) {
     variants$coverage_record_tests <- list(

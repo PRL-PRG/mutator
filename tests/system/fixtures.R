@@ -23,6 +23,13 @@ SYSTEM_PROFILES <- list(
   )
 )
 
+# Strategy override for a fixture's main run (default: auto by layout).
+# nanotime needs an installed copy: its S4 seq() method is not dispatched under
+# pkgload::load_all() (see pkgload-s4-seq-dispatch-bug.md).
+SYSTEM_FIXTURE_STRATEGY <- c(
+  nanotime = "tinytest-installed"
+)
+
 SYSTEM_SEED <- 20260713L
 SYSTEM_TIMEOUT_SECONDS <- 120
 # Option invariance is about execution semantics, not sample size. Keep this
