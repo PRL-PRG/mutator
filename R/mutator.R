@@ -227,11 +227,14 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   package's own `tests/testthat.R` harness runs them, i.e. with the same
 #'   arguments (notably any `filter`) that the harness passes to
 #'   `testthat::test_check()`, via `testthat::test_dir()`.
+#'   \item Otherwise, if `inst/tinytest/` exists, the mutant is loaded in-process
+#'   with `pkgload::load_all()` (no installation) and its tests are run with
+#'   `tinytest::run_test_dir("inst/tinytest")`.
 #'   \item Otherwise, if `tests/` exists, mutator installs the mutant package
 #'   with `--install-tests` and runs `tools::testInstalledPackage()`.
 #' }
-#' Pass `strategy` to override this (for example to run a `testthat` package
-#' through the slower installed-tests path for comparison).
+#' Pass `strategy` to override this (for example to run a `testthat` or `tinytest`
+#' package through the slower installed-tests path for comparison).
 #'
 #' @param pkg_dir Path to the package directory.
 #' @param cores Number of parallel workers used for mutant test execution.
@@ -265,25 +268,36 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   at the first failing test rather than running the whole suite. A mutant is
 #'   `KILLED` as soon as one test detects it, so the remainder of the suite is
 #'   wasted work. Set to `FALSE` to run the full suite for
-#'   every mutant. Applies to the `testthat` strategy; the installed-tests
+#'   every mutant. Applies to the `testthat` strategy; the `tinytest` strategy
+#'   always runs the full set of selected test files, and the installed-tests
 #'   fallback already stops at the first failing test file regardless of this
 #'   flag.
 #' @param isolate Logical; if `FALSE` (the default), each mutant's package copy
 #'   symlinks the unchanged directories of the original package (only the mutated
 #'   `R/` file is materialised), which is fast but makes those directories shared
 #'   writable state across the parallel workers. If `TRUE`, the `src/` and
-#'   `tests/` directories are deep-copied into every mutant copy instead. 
+#'   `tests/` directories (or `src/` and `inst/` under the `tinytest` strategy)
+#'   are deep-copied into every mutant copy instead.
 #'   Use `isolate = TRUE` when a package
 #'   has **non-hermetic tests** that write files into `tests/` (or `src/`) and
 #'   parallel runs therefore produce spurious `KILLED`/`HANG` verdicts; it gives
 #'   each worker its own copy at the cost of extra disk. Note that running with
 #'   `cores = 1` avoids such contention without the copy cost.
 #' @param strategy Test strategy to use. `"auto"` (the default) picks the
-#'   `testthat` strategy when `tests/testthat/` exists and the installed-tests
-#'   strategy otherwise. `"testthat"` forces the in-process `testthat::test_dir()`
-#'   path (requires `tests/testthat/`). `"installed"` forces the
-#'   `R CMD INSTALL --install-tests` + `tools::testInstalledPackage()` path
-#'   (requires `tests/`). 
+#'   `testthat` strategy when `tests/testthat/` exists, the `tinytest` strategy
+#'   when `inst/tinytest/` exists, and the installed-tests strategy otherwise.
+#'   `"testthat"` forces the in-process `testthat::test_dir()` path (requires
+#'   `tests/testthat/`). `"tinytest"` forces the in-process
+#'   `tinytest::run_test_dir()` path (requires `inst/tinytest/`). Both in-process
+#'   strategies load the package with `pkgload::load_all()`, which does not
+#'   dispatch S4 methods defined on `...`-dispatching base generics such as
+#'   `seq()`; a package that relies on those will fail the baseline, and the error
+#'   points to `"tinytest-installed"`. `"tinytest-installed"` runs the tinytest
+#'   suite against an installed copy (`R CMD INSTALL` + `tinytest::test_package()`,
+#'   requires `inst/tinytest/`): slower than dev-mode but matches an installed
+#'   package (correct S4 dispatch) and still supports coverage guidance.
+#'   `"installed"` forces the `R CMD INSTALL --install-tests` +
+#'   `tools::testInstalledPackage()` path (requires `tests/`).
 #' @param exclude_files Optional character vector of shell-style glob patterns
 #'   (e.g. `"import-standalone-*"`) matched against the **base names** of the
 #'   `.R` files in `R/`. Matching files are skipped entirely before any mutants
@@ -298,25 +312,26 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' @param coverage_guided Logical; if `TRUE`, only the tests that actually
 #'   exercise a mutant's mutated line(s) are run for that mutant, instead of the
 #'   whole suite. Coverage is measured once on the unmutated package with
-#'   \pkg{covr} (`options(covr.record_tests = TRUE)`). A mutant on
-#'   a line no test covers cannot be killed, so it is reported `SURVIVED` without
-#'   running any test. Selection is at the test-*file* level (testthat filters by
-#'   file); under the assumption that the suite deterministically exercises the code,
-#'   it should not change a mutant's verdict, only which tests run. Defaults to
-#'   `TRUE`. Coverage guidance is only available under the `testthat` strategy;
-#'   when the resolved strategy is the installed-tests fallback, mutator emits a
-#'   warning and runs the full suite for every mutant. Pass `FALSE` to disable
-#'   it (and silence that warning).
+#'   \pkg{covr}. A mutant on a line no test covers cannot be killed, so it is
+#'   reported `SURVIVED` without running any test. Selection is at the test-*file*
+#'   level; under the assumption that the suite deterministically exercises the
+#'   code, it should not change a mutant's verdict, only which tests run. Defaults
+#'   to `TRUE`. Coverage guidance is available under the `testthat`, `tinytest`,
+#'   and `tinytest-installed` strategies; when the resolved strategy is the generic
+#'   installed-tests fallback, mutator emits a warning and runs the full suite for
+#'   every mutant. Pass `FALSE` to disable it (and silence that warning).
 #' @param coverage_backend How `coverage_guided` attributes coverage to tests
-#'   (ignored when `coverage_guided = FALSE`). `"record_tests"` (the default) uses
-#'   covr's `record_tests` in a single run; it relies only on covr's public output
-#'   but, because covr credits a covered line to the deepest test-directory frame,
-#'   code reached through a `helper-*.R`/`setup-*.R` wrapper is attributed to the
-#'   helper rather than the originating `test-*.R` file, and such mutants
-#'   conservatively run the whole suite. `"per_file"` instruments the package once
-#'   and runs the suite a single time through a reporter that snapshots coverage
-#'   per test file, giving exact file-level attribution (no helper fallback) at
-#'   roughly the same cost; it depends on covr internals, so it is opt-in.
+#'   under the `testthat` strategy (ignored when `coverage_guided = FALSE` and for
+#'   the tinytest strategies, which have a single per-file driver). `"record_tests"`
+#'   (the default) uses covr's `record_tests` in a single run; it relies only on
+#'   covr's public output but, because covr credits a covered line to the deepest
+#'   test-directory frame, code reached through a `helper-*.R`/`setup-*.R` wrapper
+#'   is attributed to the helper rather than the originating `test-*.R` file, and
+#'   such mutants conservatively run the whole suite. `"per_file"` instruments the
+#'   package once and runs the suite a single time through a reporter that snapshots
+#'   coverage per test file, giving exact file-level attribution (no helper
+#'   fallback) at roughly the same cost; it depends on covr internals, so it is
+#'   opt-in.
 #' @param target_margin Optional desired half-width of the confidence interval on
 #'   the mutation score, as a proportion (e.g. `0.05` for +/-5 percentage points).
 #'   When set, the number of mutants to sample is derived from it using worst-case
@@ -375,7 +390,10 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            max_line_deletions = 0, cran = TRUE,
                            fail_fast = TRUE, isolate = FALSE,
                            exclude_files = NULL,
-                           strategy = c("auto", "testthat", "installed"),
+                           strategy = c(
+                             "auto", "testthat", "tinytest",
+                             "tinytest-installed", "installed"
+                           ),
                            coverage_guided = TRUE,
                            coverage_backend = c("record_tests", "per_file"),
                            target_margin = NULL, confidence = 0.95,
@@ -491,7 +509,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     coverage_guided = coverage_guided,
     coverage_map = cov_map,
     pkg_dir = pkg_dir,
-    harness_args = harness_test_args
+    harness_args = harness_test_args,
+    filter_from_tokens = test_framework(test_strategy)$filter_from_tokens
   )
 
   equivalence <- analyze_package_mutant_equivalence(

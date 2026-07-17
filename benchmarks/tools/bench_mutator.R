@@ -1,9 +1,16 @@
 # bench_mutator.R -- run mutator on one package and return a standard metric row.
 #
 # Best settings (documented in README): parallel cores, coverage-guided selection
-# with the per_file backend, CRAN-mode tests, equivalence detection OFF (measured
-# separately). mutator caps the *tested* set to `budget` via random sampling and
-# reports an exact score (no CI) when nothing is sampled, else a Wilson CI.
+# (per_file backend for testthat), CRAN-mode tests, equivalence detection OFF
+# (measured separately). mutator caps the *tested* set to `budget` via random
+# sampling and reports an exact score (no CI) when nothing is sampled, else a
+# Wilson CI.
+#
+# The strategy and coverage setting follow the package's test framework: testthat
+# and tinytest run in-process (load_all) and support coverage-guided selection;
+# other layouts (raw tests/*.R) use the installed fallback, which does not. An
+# S4-heavy tinytest package that load_all cannot run would need
+# strategy = "tinytest-installed".
 #
 # Assumes the mutator package is already loaded (pkgload::load_all) by the driver.
 
@@ -13,9 +20,12 @@ bench_mutator <- function(pkg_dir, budget, mode = "default") {
   work <- copy_pkg(pkg_dir, "mutator")
   on.exit(unlink(work, recursive = TRUE, force = TRUE), add = TRUE)
 
-  # coverage_guided requires the testthat strategy; for non-testthat packages
-  # (e.g. tinytest) fall back to the auto-selected installed strategy without it.
-  is_testthat <- identical(test_framework(work), "testthat")
+  framework <- test_framework(work)
+  strategy <- switch(framework,
+    testthat = "testthat",
+    tinytest = "tinytest",
+    "installed")
+  coverage_guided <- framework %in% c("testthat", "tinytest")
 
   set.seed(SEED)
   t0 <- Sys.time()
@@ -24,7 +34,8 @@ bench_mutator <- function(pkg_dir, budget, mode = "default") {
       work,
       cores            = N_WORKERS,
       max_mutants      = budget,
-      coverage_guided  = is_testthat,
+      strategy         = strategy,
+      coverage_guided  = coverage_guided,
       coverage_backend = "per_file",
       cran             = TRUE,            # CRAN mode: skip_on_cran() active
       detectEqMutants  = FALSE,

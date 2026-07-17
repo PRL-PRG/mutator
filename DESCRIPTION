@@ -32,7 +32,8 @@ Suggests:
     cli,
     pbmcapply,
     knitr,
-    rmarkdown
+    rmarkdown,
+    tinytest
 Enhances:
     imputesrcref
 LinkingTo:

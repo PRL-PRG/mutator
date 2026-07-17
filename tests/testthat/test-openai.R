@@ -463,3 +463,16 @@ test_that("detectEqMutants runs the real equivalence workflow for underscore fil
     expect_equal(mutant$equivalence_status, "EQUIVALENT")
 })
 
+
+test_that("reset_openai_config clears programmatically set values", {
+    store <- get(".openai_config_store", envir = asNamespace("mutator"))
+    # Restore the clean (empty) default regardless of how the test exits, so it
+    # cannot leak config into other tests.
+    on.exit(reset_openai_config(), add = TRUE)
+
+    set_openai_config(model = "sentinel-model", base_url = "http://sentinel.invalid")
+    expect_true(all(c("model", "base_url") %in% ls(store)))
+
+    reset_openai_config()
+    expect_length(ls(store, all.names = TRUE), 0L)
+})

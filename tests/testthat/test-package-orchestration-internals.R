@@ -174,3 +174,101 @@ test_that("package equivalence analysis batches and aggregates worker outcomes",
   expect_match(output, "3 of 4 equivalence batch")
   expect_match(output, "worker failed")
 })
+
+test_that("test-framework descriptors declare install and coverage support", {
+  # `needs_install` drives the per-mutant install-template build; the in-process
+  # runners (testthat, tinytest) must stay FALSE. `supports_coverage_guided`
+  # gates coverage-guided selection; only the generic installed-tests fallback
+  # cannot attribute coverage to test files. Pin the exact logicals so a flipped
+  # or dropped flag (e.g. FALSE -> NA) is caught.
+  expect_identical(test_framework("testthat")$needs_install, FALSE)
+  expect_identical(test_framework("tinytest")$needs_install, FALSE)
+  expect_identical(test_framework("tinytest-installed")$needs_install, TRUE)
+  expect_identical(test_framework("installed-tests")$needs_install, TRUE)
+
+  expect_identical(test_framework("testthat")$supports_coverage_guided, TRUE)
+  expect_identical(test_framework("tinytest")$supports_coverage_guided, TRUE)
+  expect_identical(test_framework("tinytest-installed")$supports_coverage_guided, TRUE)
+  expect_identical(test_framework("installed-tests")$supports_coverage_guided, FALSE)
+
+  expect_error(test_framework("nope"), "Unknown test strategy")
+})
+
+test_that("build_mutant_test_plan routes mutants by coverage", {
+  cov_map <- list(by_file = list(
+    "calc.R" = list(
+      list(first = 10L, last = 10L, tests = "alpha", ambiguous = FALSE)
+    )
+  ))
+  mutants <- list(
+    covered = list(loc = list(file_path = "R/calc.R", start_line = 10L, end_line = 10L)),
+    uncovered = list(loc = list(file_path = "R/missing.R", start_line = 1L, end_line = 1L)),
+    no_file = list(loc = list(file_path = NA_character_, start_line = NA_integer_, end_line = NA_integer_))
+  )
+
+  plan <- build_mutant_test_plan(
+    mutants,
+    coverage_guided = TRUE,
+    coverage_map = cov_map,
+    pkg_dir = tempfile(),
+    harness_args = list(),
+    filter_from_tokens = coverage_filter_regex
+  )
+
+  # An uncovered line can never be killed, so it is marked survived without running.
+  expect_identical(plan$uncovered$action, "survived")
+  # A mutant with no attributable file runs the whole suite (no test filter).
+  expect_identical(plan$no_file$action, "run")
+  expect_null(plan$no_file$test_filter)
+  # A covered mutant runs only the covering test file(s).
+  expect_identical(plan$covered$action, "run")
+  expect_false(is.null(plan$covered$test_filter))
+  expect_match("alpha", plan$covered$test_filter)
+})
+
+test_that("build_mutant_test_plan is a no-op without coverage guidance", {
+  mutants <- list(m = list(loc = list(file_path = "R/a.R", start_line = 1L, end_line = 1L)))
+
+  expect_identical(
+    build_mutant_test_plan(mutants, coverage_guided = FALSE, coverage_map = NULL,
+      pkg_dir = ".", harness_args = list()),
+    list()
+  )
+  expect_identical(
+    build_mutant_test_plan(mutants, coverage_guided = TRUE, coverage_map = NULL,
+      pkg_dir = ".", harness_args = list()),
+    list()
+  )
+})
+
+test_that("run_one_package_mutant maps outcomes, timeouts, and pre-decided plans", {
+  ctx <- list()
+  dirs <- list(m = tempfile())
+  run <- function(plan = list()) {
+    run_one_package_mutant("m", dirs, test_plan = plan, test_context = ctx,
+      timeout_seconds = 5)
+  }
+
+  testthat::local_mocked_bindings(
+    run_package_tests = function(...) TRUE, .package = "mutator")
+  expect_identical(run(), "SURVIVED")
+
+  testthat::local_mocked_bindings(
+    run_package_tests = function(...) FALSE, .package = "mutator")
+  expect_identical(run(), "KILLED")
+
+  # A non-timeout error kills the mutant; only elapsed/cpu-limit errors are HANGs.
+  testthat::local_mocked_bindings(
+    run_package_tests = function(...) stop("boom"), .package = "mutator")
+  expect_identical(run(), "KILLED")
+
+  testthat::local_mocked_bindings(
+    run_package_tests = function(...) stop("reached elapsed time limit"),
+    .package = "mutator")
+  expect_identical(run(), "HANG")
+
+  # A plan already resolved to "survived" (uncovered/equivalent) never runs tests.
+  testthat::local_mocked_bindings(
+    run_package_tests = function(...) stop("should not run"), .package = "mutator")
+  expect_identical(run(list(m = list(action = "survived"))), "SURVIVED")
+})

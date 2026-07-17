@@ -1,7 +1,8 @@
 # Internal planning and execution helpers for package mutants.
 
 build_mutant_test_plan <- function(mutants, coverage_guided, coverage_map,
-                                   pkg_dir, harness_args) {
+                                   pkg_dir, harness_args,
+                                   filter_from_tokens = coverage_filter_regex) {
   plan <- list()
   if (!isTRUE(coverage_guided) || is.null(coverage_map)) {
     return(plan)
@@ -40,7 +41,7 @@ build_mutant_test_plan <- function(mutants, coverage_guided, coverage_map,
         intersect(selected, harness_tokens)
       }
       plan[[id]] <- if (length(tokens) > 0) {
-        list(action = "run", test_filter = coverage_filter_regex(tokens))
+        list(action = "run", test_filter = filter_from_tokens(tokens))
       } else {
         list(action = "run", test_filter = NULL)
       }
@@ -303,9 +304,15 @@ execute_package_mutants <- function(mutants, test_plan, test_context,
           run_one = run_one,
           run_one_package_mutant = run_one_package_mutant,
           run_package_tests = run_package_tests,
+          run_dev_tests_subprocess = run_dev_tests_subprocess,
           run_testthat_package_tests = run_testthat_package_tests,
+          run_tinytest_package_tests = run_tinytest_package_tests,
           package_test_result = package_test_result,
+          install_and_run_mutant = install_and_run_mutant,
           run_installed_pkg_tests = run_installed_pkg_tests,
+          run_tinytest_installed_package_tests = run_tinytest_installed_package_tests,
+          test_framework = test_framework,
+          test_framework_registry = test_framework_registry,
           pkg_dir_list = pkg_dir_list,
           test_plan = test_plan,
           test_context = test_context,

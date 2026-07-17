@@ -162,6 +162,67 @@ test_that("build_coverage_map_per_file handles failures and aggregates captured 
     expect_equal(recs[[2]]$tests, "alpha")
 })
 
+test_that("build_coverage_map_tinytest handles failures and aggregates captured traces", {
+    skip_if_not_installed("tinytest")
+    build_coverage_map_tinytest <- resolve_mutator_fn("build_coverage_map_tinytest")
+
+    pkg <- tempfile("ttcovpkg_")
+    dir.create(file.path(pkg, "inst", "tinytest"), recursive = TRUE)
+    on.exit(unlink(pkg, recursive = TRUE), add = TRUE)
+
+    extract_out <- function(code) {
+        line <- grep("^out <- ", code, value = TRUE)
+        sub('^out <- "([^"]+)"$', "\\1", line)
+    }
+
+    calls <- 0L
+    testthat::local_mocked_bindings(
+        package_coverage = function(pkg_dir, type, code) {
+            calls <<- calls + 1L
+            expect_equal(type, "none")
+            joined <- paste(code, collapse = "\n")
+            expect_match(joined, "tinytest::run_test_file")
+            expect_silent(parse(text = joined))
+            out <- extract_out(code)
+            if (calls == 1L) {
+                saveRDS(list(captured = list(), nfail = 0L, err = "boom"), out)
+            } else if (calls == 2L) {
+                saveRDS(list(captured = list(), nfail = 3L, err = NA_character_), out)
+            } else {
+                saveRDS(list(
+                    captured = list(
+                        "test_alpha.R" = list(list(file = "calc.R", first = 2L, last = 2L)),
+                        "test-beta.R" = list(list(file = "calc.R", first = 2L, last = 2L))
+                    ),
+                    nfail = 0L,
+                    err = NA_character_
+                ), out)
+            }
+            structure(list(), class = "coverage")
+        },
+        .package = "covr"
+    )
+
+    expect_error(build_coverage_map_tinytest(pkg), "boom")
+    expect_error(build_coverage_map_tinytest(pkg), "3 failing test")
+
+    res <- build_coverage_map_tinytest(pkg, cran = FALSE)
+    recs <- res$by_file$calc.R
+    expect_length(recs, 1L)
+    expect_equal(sort(recs[[1]]$tests), c("alpha", "beta"))
+    expect_false(recs[[1]]$ambiguous)
+})
+
+test_that("coverage_pattern_regex matches tinytest file names for its tokens", {
+    coverage_pattern_regex <- resolve_mutator_fn("coverage_pattern_regex")
+
+    pat <- coverage_pattern_regex(c("cellwise", "run"))
+    expect_true(grepl(pat, "test_cellwise.R"))
+    expect_true(grepl(pat, "test-run.R"))
+    expect_false(grepl(pat, "test_other.R"))
+    expect_false(grepl(pat, "helper_cellwise.R"))
+})
+
 test_that("coverage-guided selection chooses the smallest sound test set", {
     select_test_files <- resolve_mutator_fn("select_test_files")
     coverage_filter_regex <- resolve_mutator_fn("coverage_filter_regex")
@@ -204,4 +265,18 @@ test_that("coverage-guided selection chooses the smallest sound test set", {
     writeLines("test_that('b', {})", file.path(pkg, "tests", "testthat", "test.beta.R"))
     writeLines("helper <- TRUE", file.path(pkg, "tests", "testthat", "helper.R"))
     expect_equal(sort(list_test_tokens(pkg)), c(".beta", "alpha"))
+})
+
+test_that("tinytest per-file collector wires CRAN mode into NOT_CRAN and at_home", {
+    tinytest_perfile_collect_code <- resolve_mutator_fn("tinytest_perfile_collect_code")
+
+    # CRAN mode: guarded tests are skipped, so NOT_CRAN is "false" and at_home FALSE.
+    cran_code <- tinytest_perfile_collect_code("inst/tinytest", "/tmp/out.rds", cran = TRUE)
+    expect_true(any(grepl('Sys.setenv(NOT_CRAN = "false")', cran_code, fixed = TRUE)))
+    expect_true(any(grepl("at_home <- FALSE", cran_code, fixed = TRUE)))
+
+    # Full suite: NOT_CRAN is "true" and at_home TRUE (the tinytest analogue).
+    home_code <- tinytest_perfile_collect_code("inst/tinytest", "/tmp/out.rds", cran = FALSE)
+    expect_true(any(grepl('Sys.setenv(NOT_CRAN = "true")', home_code, fixed = TRUE)))
+    expect_true(any(grepl("at_home <- TRUE", home_code, fixed = TRUE)))
 })
