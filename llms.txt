@@ -93,6 +93,13 @@ install.packages("mutator")
 # install.packages("remotes")
 remotes::install_github("PRL-PRG/mutator")
 
+# Or install pre-built binaries of the development version from R-universe
+# (https://prl-prg.r-universe.dev)
+install.packages("mutator", repos = c(
+  "https://prl-prg.r-universe.dev",
+  "https://cloud.r-project.org"
+))
+
 # Or install from local source, in an R console
 # install.packages("devtools")
 setwd("path/to/mutator")
