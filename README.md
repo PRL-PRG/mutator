@@ -53,7 +53,7 @@ For a broader introduction to the tool, see the [useR! 2026 talk on mutator](htt
 - **AST-Based Mutation**: Uses Abstract Syntax Tree analysis for intelligent code mutations
 - **Parallel Test Execution**: Runs tests in parallel for improved performance
 - **Coverage-guided Test Selection**: Runs only the tests that cover mutated lines, also for improved performance
-- **Configurable Test Harness**: Supports both `testthat` and non-`testthat` test layouts
+- **Configurable Test Harness**: First-class `testthat` and `tinytest` support, plus a generic installed-tests fallback for other layouts
 - **Timeout Management**: Automatically calibrates timeouts for mutant test runs to prevent hangs
 - **Annotations and Exclusions**: Allows developers to exclude specific files or code sections from mutation testing
 - **Equivalent Mutant Detection**: Identify mutants that are functionally equivalent to the original code (currently, using LLMs)
@@ -150,9 +150,10 @@ open it with `vignette("continuous-integration", package = "mutator")`.
 mutator selects a package test strategy automatically:
 
 - If `tests/testthat/` exists, mutator loads the mutant in-process with `pkgload::load_all()` and mirrors the package's own `tests/testthat.R` harness by forwarding extractable arguments (notably any `filter`) from `testthat::test_check()` to `testthat::test_dir()`, without paying for an install per mutant.
+- Otherwise, if `inst/tinytest/` exists, mutator loads the mutant in-process with `pkgload::load_all()` and runs `tinytest::run_test_dir("inst/tinytest")`, also without an install per mutant.
 - Otherwise, if `tests/` exists, mutator falls back to `tools::testInstalledPackage(..., types = "tests")` after installing each mutant with `--install-tests`.
 
-The fallback path supports non-`testthat` layouts (for example `tinytest`-driven packages that run through `tests/` scripts). 
+Both in-process strategies use `pkgload::load_all()`, which does not dispatch S4 methods defined on `...`-dispatching base generics such as `seq()`. A tinytest package that relies on those can be run against an installed copy with `strategy = "tinytest-installed"` (`R CMD INSTALL` + `tinytest::test_package()`), which is slower but matches an installed package and still supports coverage-guided selection. Pass `strategy` to `mutate_package()` to override auto-detection.
 
 ## Configuration
 
@@ -174,8 +175,9 @@ in the **[Configuration vignette](https://prl-prg.github.io/mutator/articles/con
 - **Excluding code from mutation**: `exclude_files`, in-source
   `# mutator:ignore-*` directives, covr `# nocov` annotations, and `.covrignore`.
 - **Coverage-guided test selection** (`coverage_guided`, `coverage_backend`):
-  on by default, runs only the tests that cover each mutated line (testthat
-  strategy; warns and runs the full suite otherwise).
+  on by default, runs only the tests that cover each mutated line (testthat and
+  tinytest strategies; warns and runs the full suite under the generic
+  installed-tests fallback).
 - **Precise mutant locations**: the optional `imputesrcref` package for
   narrower operator-mutant source ranges.
 - **Equivalent mutant detection** (`detectEqMutants`): configuring the

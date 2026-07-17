@@ -18,7 +18,7 @@ mutate_package(
   fail_fast = TRUE,
   isolate = FALSE,
   exclude_files = NULL,
-  strategy = c("auto", "testthat", "installed"),
+  strategy = c("auto", "testthat", "tinytest", "tinytest-installed", "installed"),
   coverage_guided = TRUE,
   coverage_backend = c("record_tests", "per_file"),
   target_margin = NULL,
@@ -69,7 +69,8 @@ as \code{devtools::test()} does.}
 at the first failing test rather than running the whole suite. A mutant is
 \code{KILLED} as soon as one test detects it, so the remainder of the suite is
 wasted work. Set to \code{FALSE} to run the full suite for
-every mutant. Applies to the \code{testthat} strategy; the installed-tests
+every mutant. Applies to the \code{testthat} strategy; the \code{tinytest} strategy
+always runs the full set of selected test files, and the installed-tests
 fallback already stops at the first failing test file regardless of this
 flag.}
 
@@ -77,7 +78,8 @@ flag.}
 symlinks the unchanged directories of the original package (only the mutated
 \verb{R/} file is materialised), which is fast but makes those directories shared
 writable state across the parallel workers. If \code{TRUE}, the \verb{src/} and
-\verb{tests/} directories are deep-copied into every mutant copy instead.
+\verb{tests/} directories (or \verb{src/} and \verb{inst/} under the \code{tinytest} strategy)
+are deep-copied into every mutant copy instead.
 Use \code{isolate = TRUE} when a package
 has \strong{non-hermetic tests} that write files into \verb{tests/} (or \verb{src/}) and
 parallel runs therefore produce spurious \code{KILLED}/\code{HANG} verdicts; it gives
@@ -97,35 +99,45 @@ operator mutants as a group (line-deletion mutants are excluded
 line-precisely).}
 
 \item{strategy}{Test strategy to use. \code{"auto"} (the default) picks the
-\code{testthat} strategy when \verb{tests/testthat/} exists and the installed-tests
-strategy otherwise. \code{"testthat"} forces the in-process \code{testthat::test_dir()}
-path (requires \verb{tests/testthat/}). \code{"installed"} forces the
-\verb{R CMD INSTALL --install-tests} + \code{tools::testInstalledPackage()} path
-(requires \verb{tests/}).}
+\code{testthat} strategy when \verb{tests/testthat/} exists, the \code{tinytest} strategy
+when \verb{inst/tinytest/} exists, and the installed-tests strategy otherwise.
+\code{"testthat"} forces the in-process \code{testthat::test_dir()} path (requires
+\verb{tests/testthat/}). \code{"tinytest"} forces the in-process
+\code{tinytest::run_test_dir()} path (requires \verb{inst/tinytest/}). Both in-process
+strategies load the package with \code{pkgload::load_all()}, which does not
+dispatch S4 methods defined on \code{...}-dispatching base generics such as
+\code{seq()}; a package that relies on those will fail the baseline, and the error
+points to \code{"tinytest-installed"}. \code{"tinytest-installed"} runs the tinytest
+suite against an installed copy (\verb{R CMD INSTALL} + \code{tinytest::test_package()},
+requires \verb{inst/tinytest/}): slower than dev-mode but matches an installed
+package (correct S4 dispatch) and still supports coverage guidance.
+\code{"installed"} forces the \verb{R CMD INSTALL --install-tests} +
+\code{tools::testInstalledPackage()} path (requires \verb{tests/}).}
 
 \item{coverage_guided}{Logical; if \code{TRUE}, only the tests that actually
 exercise a mutant's mutated line(s) are run for that mutant, instead of the
 whole suite. Coverage is measured once on the unmutated package with
-\pkg{covr} (\code{options(covr.record_tests = TRUE)}). A mutant on
-a line no test covers cannot be killed, so it is reported \code{SURVIVED} without
-running any test. Selection is at the test-\emph{file} level (testthat filters by
-file); under the assumption that the suite deterministically exercises the code,
-it should not change a mutant's verdict, only which tests run. Defaults to
-\code{TRUE}. Coverage guidance is only available under the \code{testthat} strategy;
-when the resolved strategy is the installed-tests fallback, mutator emits a
-warning and runs the full suite for every mutant. Pass \code{FALSE} to disable
-it (and silence that warning).}
+\pkg{covr}. A mutant on a line no test covers cannot be killed, so it is
+reported \code{SURVIVED} without running any test. Selection is at the test-\emph{file}
+level; under the assumption that the suite deterministically exercises the
+code, it should not change a mutant's verdict, only which tests run. Defaults
+to \code{TRUE}. Coverage guidance is available under the \code{testthat}, \code{tinytest},
+and \code{tinytest-installed} strategies; when the resolved strategy is the generic
+installed-tests fallback, mutator emits a warning and runs the full suite for
+every mutant. Pass \code{FALSE} to disable it (and silence that warning).}
 
 \item{coverage_backend}{How \code{coverage_guided} attributes coverage to tests
-(ignored when \code{coverage_guided = FALSE}). \code{"record_tests"} (the default) uses
-covr's \code{record_tests} in a single run; it relies only on covr's public output
-but, because covr credits a covered line to the deepest test-directory frame,
-code reached through a \verb{helper-*.R}/\verb{setup-*.R} wrapper is attributed to the
-helper rather than the originating \verb{test-*.R} file, and such mutants
-conservatively run the whole suite. \code{"per_file"} instruments the package once
-and runs the suite a single time through a reporter that snapshots coverage
-per test file, giving exact file-level attribution (no helper fallback) at
-roughly the same cost; it depends on covr internals, so it is opt-in.}
+under the \code{testthat} strategy (ignored when \code{coverage_guided = FALSE} and for
+the tinytest strategies, which have a single per-file driver). \code{"record_tests"}
+(the default) uses covr's \code{record_tests} in a single run; it relies only on
+covr's public output but, because covr credits a covered line to the deepest
+test-directory frame, code reached through a \verb{helper-*.R}/\verb{setup-*.R} wrapper
+is attributed to the helper rather than the originating \verb{test-*.R} file, and
+such mutants conservatively run the whole suite. \code{"per_file"} instruments the
+package once and runs the suite a single time through a reporter that snapshots
+coverage per test file, giving exact file-level attribution (no helper
+fallback) at roughly the same cost; it depends on covr internals, so it is
+opt-in.}
 
 \item{target_margin}{Optional desired half-width of the confidence interval on
 the mutation score, as a proportion (e.g. \code{0.05} for +/-5 percentage points).
@@ -172,11 +184,14 @@ Test strategy is, by default, detected automatically:
 package's own \code{tests/testthat.R} harness runs them, i.e. with the same
 arguments (notably any \code{filter}) that the harness passes to
 \code{testthat::test_check()}, via \code{testthat::test_dir()}.
+\item Otherwise, if \verb{inst/tinytest/} exists, the mutant is loaded in-process
+with \code{pkgload::load_all()} (no installation) and its tests are run with
+\code{tinytest::run_test_dir("inst/tinytest")}.
 \item Otherwise, if \verb{tests/} exists, mutator installs the mutant package
 with \code{--install-tests} and runs \code{tools::testInstalledPackage()}.
 }
-Pass \code{strategy} to override this (for example to run a \code{testthat} package
-through the slower installed-tests path for comparison).
+Pass \code{strategy} to override this (for example to run a \code{testthat} or \code{tinytest}
+package through the slower installed-tests path for comparison).
 }
 \examples{
 \donttest{

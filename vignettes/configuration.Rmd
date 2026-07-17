@@ -60,10 +60,12 @@ which is what happens by default when running `devtools::test()`):
 mutate_package("path/to/pkg", cran = FALSE)
 ```
 
-This applies to both test strategies (the `testthat` strategy and the
-installed-tests fallback). Note that it only affects tests the package
-_explicitly_ guards with `skip_on_cran()` / `skip_if_offline()`; a package whose
-network test has no such guard will still run that test in either mode.
+This applies to every test strategy (`testthat`, `tinytest`,
+`tinytest-installed`, and the installed-tests fallback; the tinytest strategies
+map it to `run_test_dir(at_home = )`). Note that it only affects tests the package
+_explicitly_ guards with `skip_on_cran()` / `skip_if_offline()` (or `at_home()`
+for tinytest); a package whose network test has no such guard will still run that
+test in either mode.
 
 ## Fail-fast (stop at the first failing test)
 
@@ -83,8 +85,9 @@ This applies to the `testthat` strategy: it sets `TESTTHAT_MAX_FAILS = 1` in the
 test subprocess and uses the progress reporter, which aborts the run at the first
 failing `test_that()` block. `SURVIVED` mutants are unaffected, as they have no
 failure to short-circuit on, so baseline timing and timeout calibration are
-unchanged. The installed-tests fallback already stops at the first failing test
-_file_ regardless of this flag.
+unchanged. The `tinytest` strategies run the full set of selected test files (a
+mutant is still `KILLED` on the first failing file), and the installed-tests
+fallback already stops at the first failing test _file_ regardless of this flag.
 
 ## Parallel execution and isolation (`isolate`)
 
@@ -93,10 +96,11 @@ original package and only the mutated `R/` file is materialised, so all parallel
 workers point at the same physical `src/`, `tests/`, etc. This is fast, and two
 design choices keep it correct:
 
-- **Compiled code is built once, not per mutant.** For the `testthat` strategy,
-   `pkgload::load_all()` reuses the baseline's compiled `src/` since C code is
-   never mutated.  The `installed`strategy compiles once into a _template_ library and
-  installs each mutant with `--no-libs`, which never writes into `src/`. This prevents
+- **Compiled code is built once, not per mutant.** For the in-process strategies
+   (`testthat` and `tinytest`), `pkgload::load_all()` reuses the baseline's
+   compiled `src/` since C code is never mutated. The `installed` and
+   `tinytest-installed` strategies compile once into a _template_ library and
+  install each mutant with `--no-libs`, which never writes into `src/`. This prevents
   parallel workers from fighting over the same compiled objects.
 - **Snapshot references are not shared.** For `testthat` packages with `_snaps`
   directories, mutator gives each mutant its own snapshot copy while symlinking
@@ -203,10 +207,14 @@ that **no test exercises** can never be killed. With `coverage_guided = TRUE`
 files that cover its mutated line, and skips running tests altogether for mutants
 on uncovered lines (reported `SURVIVED` immediately).
 
-Coverage guidance applies to the `testthat` strategy only. When the resolved
-strategy is the installed-tests fallback, mutator cannot attribute coverage to
-test files, so it emits a warning and runs the full suite for every mutant. Pass
-`coverage_guided = FALSE` to disable the optimisation (and that warning).
+Coverage guidance applies to the `testthat`, `tinytest`, and `tinytest-installed`
+strategies. covr builds the coverage-to-tests map against an instrumented,
+installed copy of the package; per test file, it maps each covered source line to
+the test files that reach it (for tinytest, by running each `inst/tinytest` file
+individually). When the resolved strategy is the generic installed-tests fallback,
+mutator cannot attribute coverage to test files, so it emits a warning and runs
+the full suite for every mutant. Pass `coverage_guided = FALSE` to disable the
+optimisation (and that warning).
 
 ```r
 # On by default; pass FALSE to run the full suite for every mutant.

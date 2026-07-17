@@ -312,25 +312,26 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #' @param coverage_guided Logical; if `TRUE`, only the tests that actually
 #'   exercise a mutant's mutated line(s) are run for that mutant, instead of the
 #'   whole suite. Coverage is measured once on the unmutated package with
-#'   \pkg{covr} (`options(covr.record_tests = TRUE)`). A mutant on
-#'   a line no test covers cannot be killed, so it is reported `SURVIVED` without
-#'   running any test. Selection is at the test-*file* level (testthat filters by
-#'   file); under the assumption that the suite deterministically exercises the code,
-#'   it should not change a mutant's verdict, only which tests run. Defaults to
-#'   `TRUE`. Coverage guidance is only available under the `testthat` strategy;
-#'   when the resolved strategy is the installed-tests fallback, mutator emits a
-#'   warning and runs the full suite for every mutant. Pass `FALSE` to disable
-#'   it (and silence that warning).
+#'   \pkg{covr}. A mutant on a line no test covers cannot be killed, so it is
+#'   reported `SURVIVED` without running any test. Selection is at the test-*file*
+#'   level; under the assumption that the suite deterministically exercises the
+#'   code, it should not change a mutant's verdict, only which tests run. Defaults
+#'   to `TRUE`. Coverage guidance is available under the `testthat`, `tinytest`,
+#'   and `tinytest-installed` strategies; when the resolved strategy is the generic
+#'   installed-tests fallback, mutator emits a warning and runs the full suite for
+#'   every mutant. Pass `FALSE` to disable it (and silence that warning).
 #' @param coverage_backend How `coverage_guided` attributes coverage to tests
-#'   (ignored when `coverage_guided = FALSE`). `"record_tests"` (the default) uses
-#'   covr's `record_tests` in a single run; it relies only on covr's public output
-#'   but, because covr credits a covered line to the deepest test-directory frame,
-#'   code reached through a `helper-*.R`/`setup-*.R` wrapper is attributed to the
-#'   helper rather than the originating `test-*.R` file, and such mutants
-#'   conservatively run the whole suite. `"per_file"` instruments the package once
-#'   and runs the suite a single time through a reporter that snapshots coverage
-#'   per test file, giving exact file-level attribution (no helper fallback) at
-#'   roughly the same cost; it depends on covr internals, so it is opt-in.
+#'   under the `testthat` strategy (ignored when `coverage_guided = FALSE` and for
+#'   the tinytest strategies, which have a single per-file driver). `"record_tests"`
+#'   (the default) uses covr's `record_tests` in a single run; it relies only on
+#'   covr's public output but, because covr credits a covered line to the deepest
+#'   test-directory frame, code reached through a `helper-*.R`/`setup-*.R` wrapper
+#'   is attributed to the helper rather than the originating `test-*.R` file, and
+#'   such mutants conservatively run the whole suite. `"per_file"` instruments the
+#'   package once and runs the suite a single time through a reporter that snapshots
+#'   coverage per test file, giving exact file-level attribution (no helper
+#'   fallback) at roughly the same cost; it depends on covr internals, so it is
+#'   opt-in.
 #' @param target_margin Optional desired half-width of the confidence interval on
 #'   the mutation score, as a proportion (e.g. `0.05` for +/-5 percentage points).
 #'   When set, the number of mutants to sample is derived from it using worst-case
