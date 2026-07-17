@@ -311,6 +311,13 @@ run_package_baseline <- function(pkg_dir, context, coverage_guided,
         " In fallback mode, mutator installs the package with '--install-tests' and runs ",
         "tools::testInstalledPackage(..., types = 'tests')."
       )
+    } else if (identical(context$strategy, "tinytest")) {
+      paste0(
+        " The tinytest strategy loads the package with pkgload::load_all(); if the failure ",
+        "stems from that (e.g. S4 methods on '...'-dispatching base generics such as seq() ",
+        "that load_all() does not dispatch), try strategy = \"tinytest-installed\", which ",
+        "runs the tests against an installed copy."
+      )
     } else {
       ""
     }
@@ -421,14 +428,21 @@ determine_mutant_timeout <- function(explicit_timeout, baseline_seconds,
   timeout
 }
 
-# Install a mutant package into a throwaway library and run its installed tests
-# in a subprocess with a hard wall-clock timeout. Extracted from mutate_package()
-# so the install/restore/test-failure/timeout branches can be unit-tested
-# directly. Returns list(passed, failure): `failure` is a message to surface
-# (NULL on success); a timeout raises an error whose message the caller
-# recognises as a HANG rather than a KILLED verdict.
-run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
-                                    template_lib, template_has_libs, cran) {
+# Install a mutant package into a throwaway library and run its tests in a
+# subprocess with a hard wall-clock timeout. The install/restore/timeout
+# machinery is shared by every install-based strategy; the framework-specific
+# part is `make_runner_lines()`, which returns the R code the subprocess runs
+# (it must `quit(status = ...)` -- 0 for a passing suite, non-zero otherwise).
+# `exec_error_prefix` and `fail_message` shape the returned `failure` string for
+# the execution-error and tests-failed branches. `test_filter`, when supplied, is
+# forwarded to `make_runner_lines()` for per-file selection (coverage guidance).
+# Returns list(passed, failure): `failure` is a message to surface (NULL on
+# success); a timeout raises an error whose message the caller recognises as a
+# HANG rather than a KILLED verdict.
+install_and_run_mutant <- function(pkg_path, timeout_seconds, template_lib,
+                                   template_has_libs, cran, make_runner_lines,
+                                   exec_error_prefix, fail_message,
+                                   test_filter = NULL) {
   failure <- NULL
 
   # Hard wall-clock limit for the install/test subprocesses. setTimeLimit()
@@ -506,7 +520,7 @@ run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
       "Installation failed for package '", pkg_name,
       "'. Ensure runtime/test dependencies are installed and package sources are valid."
     )
-    message("Install error while running fallback tests for package: ", pkg_name)
+    message("Install error while installing mutant package: ", pkg_name)
     if (length(install_output) > 0) {
       message(paste(utils::tail(install_output, 10), collapse = "\n"))
     }
@@ -556,21 +570,13 @@ run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
       fallback_libs <- paste(c(temp_lib, .libPaths()), collapse = .Platform$path.sep)
       Sys.setenv(R_LIBS = fallback_libs)
 
-      # Run the installed-package tests in a separate process so a hard
-      # wall-clock timeout can be enforced: tools::testInstalledPackage() spawns
-      # its own test subprocesses, which setTimeLimit() cannot reach.
+      # Run the tests in a separate process so a hard wall-clock timeout can be
+      # enforced (some runners spawn their own subprocesses, which setTimeLimit()
+      # cannot reach). The framework-specific runner code comes from the caller.
       runner <- tempfile("mutator_test_runner_", fileext = ".R")
       on.exit(unlink(runner), add = TRUE)
       writeLines(
-        c(
-          sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(if (cran) "false" else "true")),
-          sprintf(
-            "status <- tools::testInstalledPackage(pkg = %s, lib.loc = %s, outDir = %s, types = \"tests\")",
-            deparse(pkg_name), deparse(temp_lib), deparse(temp_out)
-          ),
-          "if (!is.numeric(status)) status <- 1L",
-          "quit(save = \"no\", status = as.integer(status))"
-        ),
+        make_runner_lines(pkg_name, temp_lib, temp_out, cran, test_filter),
         runner
       )
 
@@ -589,8 +595,8 @@ run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
   )
 
   if (inherits(test_code, "error")) {
-    failure <- paste0("Installed-package test execution failed: ", test_code$message)
-    message("Fallback test execution error: ", test_code$message)
+    failure <- paste0(exec_error_prefix, test_code$message)
+    message("Test execution error: ", test_code$message)
     return(list(passed = FALSE, failure = failure))
   }
 
@@ -602,13 +608,91 @@ run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
 
   passed <- identical(test_code, 0L)
   if (!passed) {
-    failure <- paste0(
-      "Installed package tests failed for '", pkg_name,
-      "'. Check files under tests/ and verify dependencies required by tests are available."
-    )
+    failure <- fail_message(pkg_name)
   }
 
   list(passed = passed, failure = failure)
+}
+
+# Generic installed-tests runner: install the mutant, then run
+# tools::testInstalledPackage(..., types = "tests"). This is the framework-
+# agnostic fallback used for any tests/ layout. Kept as a thin wrapper over
+# install_and_run_mutant() so its behaviour (and error strings) are unchanged and
+# its branches remain unit-testable directly.
+run_installed_pkg_tests <- function(pkg_path, timeout_seconds,
+                                    template_lib, template_has_libs, cran) {
+  install_and_run_mutant(
+    pkg_path = pkg_path,
+    timeout_seconds = timeout_seconds,
+    template_lib = template_lib,
+    template_has_libs = template_has_libs,
+    cran = cran,
+    make_runner_lines = function(pkg_name, temp_lib, temp_out, cran, test_filter) {
+      c(
+        sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(if (cran) "false" else "true")),
+        sprintf(
+          "status <- tools::testInstalledPackage(pkg = %s, lib.loc = %s, outDir = %s, types = \"tests\")",
+          deparse(pkg_name), deparse(temp_lib), deparse(temp_out)
+        ),
+        "if (!is.numeric(status)) status <- 1L",
+        "quit(save = \"no\", status = as.integer(status))"
+      )
+    },
+    exec_error_prefix = "Installed-package test execution failed: ",
+    fail_message = function(pkg_name) {
+      paste0(
+        "Installed package tests failed for '", pkg_name,
+        "'. Check files under tests/ and verify dependencies required by tests are available."
+      )
+    }
+  )
+}
+
+# Install-based tinytest runner: install the mutant, then run
+# tinytest::test_package() against the installed package. Used as the fallback
+# when the fast dev-mode (load_all) tinytest runner diverges from an installed
+# package -- notably S4 methods on ...-dispatching base generics such as seq(),
+# which pkgload::load_all() does not dispatch (see run_tinytest_package_tests).
+# `test_filter`, when supplied, is a run_test_dir() `pattern` selecting a subset
+# of test files (for coverage-guided selection). test_package() errors on a
+# failing suite in a non-interactive session, so the subprocess exit status
+# reflects pass/fail.
+run_tinytest_installed_package_tests <- function(pkg_path, timeout_seconds,
+                                                 template_lib, template_has_libs,
+                                                 cran, test_filter = NULL) {
+  install_and_run_mutant(
+    pkg_path = pkg_path,
+    timeout_seconds = timeout_seconds,
+    template_lib = template_lib,
+    template_has_libs = template_has_libs,
+    cran = cran,
+    test_filter = test_filter,
+    make_runner_lines = function(pkg_name, temp_lib, temp_out, cran, test_filter) {
+      pattern_arg <- if (is.null(test_filter)) {
+        ""
+      } else {
+        sprintf(", pattern = %s", deparse(test_filter))
+      }
+      c(
+        sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(if (cran) "false" else "true")),
+        "ok <- tryCatch({",
+        sprintf(
+          "  tinytest::test_package(%s, lib.loc = %s, at_home = %s%s)",
+          deparse(pkg_name), deparse(temp_lib), deparse(!isTRUE(cran)), pattern_arg
+        ),
+        "  TRUE",
+        "}, error = function(e) FALSE)",
+        "quit(save = \"no\", status = if (isTRUE(ok)) 0L else 1L)"
+      )
+    },
+    exec_error_prefix = "Installed tinytest test execution failed: ",
+    fail_message = function(pkg_name) {
+      paste0(
+        "Installed tinytest tests failed for '", pkg_name,
+        "'. Check files under inst/tinytest/ and verify dependencies required by tests are available."
+      )
+    }
+  )
 }
 
 

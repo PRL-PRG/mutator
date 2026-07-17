@@ -69,6 +69,33 @@ test_framework_registry <- function() {
       supports_coverage_guided = FALSE,
       needs_install = FALSE
     ),
+    # Install-based tinytest runner. Never auto-detected: it is reached only as a
+    # fallback when the dev-mode tinytest runner (load_all) diverges from an
+    # installed package (e.g. S4 dispatch on ...-generics like seq()); see
+    # establish_baseline(). It installs the mutant and runs
+    # tinytest::test_package(), so S4 dispatch matches an installed package, and
+    # (unlike the generic installed-tests fallback) it can still select test
+    # files by pattern for coverage guidance.
+    `tinytest-installed` = list(
+      id = "tinytest-installed",
+      label = "tinytest (installed)",
+      detect = function(pkg_dir) FALSE,
+      available = function(pkg_dir) dir.exists(file.path(pkg_dir, "inst", "tinytest")),
+      unavailable_message = "the tinytest-installed strategy requires an 'inst/tinytest' directory.",
+      run = function(context, pkg_path, timeout_seconds, test_filter) {
+        result <- run_tinytest_installed_package_tests(
+          pkg_path,
+          timeout_seconds = timeout_seconds,
+          template_lib = context$template_lib,
+          template_has_libs = context$template_has_libs,
+          cran = context$cran,
+          test_filter = test_filter
+        )
+        package_test_result(result$passed, result$failure)
+      },
+      supports_coverage_guided = FALSE,
+      needs_install = TRUE
+    ),
     # Generic fallback: any package with a tests/ directory. Chosen by
     # auto-detection only when no more specific framework matched (registry
     # order), and validated for an explicit strategy = "installed".
@@ -109,6 +136,7 @@ user_strategy_id <- function(strategy) {
   ids <- c(
     testthat = "testthat",
     tinytest = "tinytest",
+    `tinytest-installed` = "tinytest-installed",
     installed = "installed-tests"
   )
   ids[[strategy]]

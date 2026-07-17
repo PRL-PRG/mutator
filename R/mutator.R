@@ -288,9 +288,16 @@ mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
 #'   when `inst/tinytest/` exists, and the installed-tests strategy otherwise.
 #'   `"testthat"` forces the in-process `testthat::test_dir()` path (requires
 #'   `tests/testthat/`). `"tinytest"` forces the in-process
-#'   `tinytest::run_test_dir()` path (requires `inst/tinytest/`). `"installed"`
-#'   forces the `R CMD INSTALL --install-tests` + `tools::testInstalledPackage()`
-#'   path (requires `tests/`).
+#'   `tinytest::run_test_dir()` path (requires `inst/tinytest/`). Both in-process
+#'   strategies load the package with `pkgload::load_all()`, which does not
+#'   dispatch S4 methods defined on `...`-dispatching base generics such as
+#'   `seq()`; a package that relies on those will fail the baseline, and the error
+#'   points to `"tinytest-installed"`. `"tinytest-installed"` runs the tinytest
+#'   suite against an installed copy (`R CMD INSTALL` + `tinytest::test_package()`,
+#'   requires `inst/tinytest/`): slower than dev-mode but matches an installed
+#'   package (correct S4 dispatch) and still supports coverage guidance.
+#'   `"installed"` forces the `R CMD INSTALL --install-tests` +
+#'   `tools::testInstalledPackage()` path (requires `tests/`).
 #' @param exclude_files Optional character vector of shell-style glob patterns
 #'   (e.g. `"import-standalone-*"`) matched against the **base names** of the
 #'   `.R` files in `R/`. Matching files are skipped entirely before any mutants
@@ -382,7 +389,10 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            max_line_deletions = 0, cran = TRUE,
                            fail_fast = TRUE, isolate = FALSE,
                            exclude_files = NULL,
-                           strategy = c("auto", "testthat", "tinytest", "installed"),
+                           strategy = c(
+                             "auto", "testthat", "tinytest",
+                             "tinytest-installed", "installed"
+                           ),
                            coverage_guided = TRUE,
                            coverage_backend = c("record_tests", "per_file"),
                            target_margin = NULL, confidence = 0.95,
