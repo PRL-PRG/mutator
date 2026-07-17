@@ -1,11 +1,12 @@
-# Internal package-test strategy and execution helpers.
+# Internal package-test strategy and execution helpers. The set of supported
+# frameworks lives in the descriptor registry (see test-frameworks.R); the
+# helpers here consult it for detection, resolution, and dispatch.
 
 detect_package_test_strategy <- function(pkg_path) {
-  if (dir.exists(file.path(pkg_path, "tests", "testthat"))) {
-    return("testthat")
-  }
-  if (dir.exists(file.path(pkg_path, "tests"))) {
-    return("installed-tests")
+  for (framework in test_framework_registry()) {
+    if (isTRUE(framework$detect(pkg_path))) {
+      return(framework$id)
+    }
   }
   stop(
     "No supported tests found. Expected either 'tests/testthat' or a 'tests/' directory.",
@@ -14,22 +15,18 @@ detect_package_test_strategy <- function(pkg_path) {
 }
 
 resolve_package_test_strategy <- function(pkg_dir, strategy) {
-  switch(
-    strategy,
-    auto = detect_package_test_strategy(pkg_dir),
-    testthat = {
-      if (!dir.exists(file.path(pkg_dir, "tests", "testthat"))) {
-        stop("strategy = \"testthat\" requires a 'tests/testthat' directory.", call. = FALSE)
-      }
-      "testthat"
-    },
-    installed = {
-      if (!dir.exists(file.path(pkg_dir, "tests"))) {
-        stop("strategy = \"installed\" requires a 'tests' directory.", call. = FALSE)
-      }
-      "installed-tests"
-    }
-  )
+  if (identical(strategy, "auto")) {
+    return(detect_package_test_strategy(pkg_dir))
+  }
+  id <- user_strategy_id(strategy)
+  if (is.null(id)) {
+    stop(sprintf("Unknown test strategy '%s'.", strategy), call. = FALSE)
+  }
+  framework <- test_framework(id)
+  if (!isTRUE(framework$available(pkg_dir))) {
+    stop(framework$unavailable_message, call. = FALSE)
+  }
+  id
 }
 
 package_test_result <- function(passed, failure = NULL) {
@@ -45,7 +42,8 @@ prepare_package_test_context <- function(pkg_dir, strategy, cran, fail_fast,
     list()
   }
 
-  if (isTRUE(coverage_guided) && !identical(test_strategy, "testthat")) {
+  framework <- test_framework(test_strategy)
+  if (isTRUE(coverage_guided) && !isTRUE(framework$supports_coverage_guided)) {
     warning(sprintf(
       paste0(
         "coverage-guided optimisation requires the testthat strategy, but the ",
@@ -57,7 +55,7 @@ prepare_package_test_context <- function(pkg_dir, strategy, cran, fail_fast,
     coverage_guided <- FALSE
   }
 
-  template <- if (identical(test_strategy, "installed-tests")) {
+  template <- if (isTRUE(framework$needs_install)) {
     build_installed_template(pkg_dir)
   } else {
     list(lib = NULL, pkg_name = NULL, has_libs = FALSE)
@@ -83,13 +81,15 @@ cleanup_package_test_context <- function(context) {
   invisible(NULL)
 }
 
-run_testthat_package_tests <- function(pkg_path, timeout_seconds, harness_args,
-                                       cran, fail_fast, full_log,
-                                       test_filter = NULL) {
-  effective_args <- harness_args
-  if (!is.null(test_filter)) {
-    effective_args$filter <- test_filter
-  }
+# Generic dev-mode runner shared by the in-process test strategies (testthat,
+# tinytest). Runs `body` in a fresh callr subprocess with a hard wall-clock
+# timeout; `body` must load the (mutant) package and return the number of failing
+# tests (0 = suite passed), and `args` is the named list forwarded to it.
+# `framework_label` only shapes the messages. Returns a package_test_result(); a
+# timeout raises an error whose message the caller recognises as HANG rather than
+# KILLED.
+run_dev_tests_subprocess <- function(pkg_path, timeout_seconds, full_log, body, args,
+                                     framework_label = "test") {
   run_timeout <- if (is.finite(timeout_seconds) && timeout_seconds > 0) {
     timeout_seconds
   } else {
@@ -101,39 +101,10 @@ run_testthat_package_tests <- function(pkg_path, timeout_seconds, harness_args,
     -1L
   }
 
-  out_file <- tempfile("mutator_testthat_out_")
+  out_file <- tempfile("mutator_devtest_out_")
   on.exit(unlink(out_file), add = TRUE)
   proc <- tryCatch(
-    callr::r_bg(
-      function(pkg_path, not_cran, fail_fast, harness_args) {
-        # nocov start
-        Sys.setenv(NOT_CRAN = not_cran)
-        if (fail_fast) {
-          Sys.setenv(TESTTHAT_MAX_FAILS = "1")
-        } else {
-          Sys.unsetenv("TESTTHAT_MAX_FAILS")
-        }
-        setwd(pkg_path)
-        suppressMessages(pkgload::load_all(".", quiet = TRUE))
-        reporter_file <- tempfile("mutator_reporter_")
-        reporter <- testthat::ProgressReporter$new(file = reporter_file)
-        on.exit(unlink(reporter_file), add = TRUE)
-        results <- do.call(
-          testthat::test_dir,
-          c(list("tests/testthat", reporter = reporter), harness_args)
-        )
-        sum(results$failed)
-        # nocov end
-      },
-      args = list(
-        pkg_path = pkg_path,
-        not_cran = if (cran) "false" else "true",
-        fail_fast = fail_fast,
-        harness_args = effective_args
-      ),
-      stdout = out_file,
-      stderr = "2>&1"
-    ),
+    callr::r_bg(body, args = args, stdout = out_file, stderr = "2>&1"),
     error = function(e) e
   )
 
@@ -156,12 +127,15 @@ run_testthat_package_tests <- function(pkg_path, timeout_seconds, harness_args,
     }
   }
   if (timed_out) {
-    stop("reached elapsed time limit: testthat run exceeded the mutant timeout")
+    stop(sprintf(
+      "reached elapsed time limit: %s run exceeded the mutant timeout",
+      framework_label
+    ))
   }
 
   result <- tryCatch(proc$get_result(), error = function(e) e)
   if (inherits(result, "error")) {
-    failure <- paste0("testthat run failed: ", conditionMessage(result))
+    failure <- paste0(framework_label, " run failed: ", conditionMessage(result))
     if (full_log) {
       message("Test error: ", conditionMessage(result))
     }
@@ -169,37 +143,59 @@ run_testthat_package_tests <- function(pkg_path, timeout_seconds, harness_args,
   }
 
   failure <- if (result > 0) {
-    sprintf("testthat reported %d failing test(s).", result)
+    sprintf("%s reported %d failing test(s).", framework_label, result)
   } else {
     NULL
   }
   package_test_result(result == 0, failure)
 }
 
+run_testthat_package_tests <- function(pkg_path, timeout_seconds, harness_args,
+                                       cran, fail_fast, full_log,
+                                       test_filter = NULL) {
+  effective_args <- harness_args
+  if (!is.null(test_filter)) {
+    effective_args$filter <- test_filter
+  }
+
+  run_dev_tests_subprocess(
+    pkg_path = pkg_path,
+    timeout_seconds = timeout_seconds,
+    full_log = full_log,
+    body = function(pkg_path, not_cran, fail_fast, harness_args) {
+      # nocov start
+      Sys.setenv(NOT_CRAN = not_cran)
+      if (fail_fast) {
+        Sys.setenv(TESTTHAT_MAX_FAILS = "1")
+      } else {
+        Sys.unsetenv("TESTTHAT_MAX_FAILS")
+      }
+      setwd(pkg_path)
+      suppressMessages(pkgload::load_all(".", quiet = TRUE))
+      reporter_file <- tempfile("mutator_reporter_")
+      reporter <- testthat::ProgressReporter$new(file = reporter_file)
+      on.exit(unlink(reporter_file), add = TRUE)
+      results <- do.call(
+        testthat::test_dir,
+        c(list("tests/testthat", reporter = reporter), harness_args)
+      )
+      sum(results$failed)
+      # nocov end
+    },
+    args = list(
+      pkg_path = pkg_path,
+      not_cran = if (cran) "false" else "true",
+      fail_fast = fail_fast,
+      harness_args = effective_args
+    ),
+    framework_label = "testthat"
+  )
+}
+
 run_package_tests <- function(context, pkg_path, timeout_seconds = NA_real_,
                               test_filter = NULL) {
-  if (identical(context$strategy, "testthat")) {
-    return(run_testthat_package_tests(
-      pkg_path = pkg_path,
-      timeout_seconds = timeout_seconds,
-      harness_args = context$harness_args,
-      cran = context$cran,
-      fail_fast = context$fail_fast,
-      full_log = context$full_log,
-      test_filter = test_filter
-    ))
-  }
-  if (identical(context$strategy, "installed-tests")) {
-    result <- run_installed_pkg_tests(
-      pkg_path,
-      timeout_seconds = timeout_seconds,
-      template_lib = context$template_lib,
-      template_has_libs = context$template_has_libs,
-      cran = context$cran
-    )
-    return(package_test_result(result$passed, result$failure))
-  }
-  stop(sprintf("Unknown test strategy '%s'.", context$strategy), call. = FALSE)
+  framework <- test_framework(context$strategy)
+  framework$run(context, pkg_path, timeout_seconds, test_filter)
 }
 
 package_has_native_sources <- function(pkg_dir) {
