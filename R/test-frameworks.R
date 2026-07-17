@@ -45,6 +45,10 @@ test_framework_registry <- function() {
         )
       },
       supports_coverage_guided = TRUE,
+      build_coverage_map = function(pkg_dir, backend, cran) {
+        build_coverage_test_map(pkg_dir, backend = backend, cran = cran)
+      },
+      filter_from_tokens = coverage_filter_regex,
       needs_install = FALSE
     ),
     # tinytest runs in-process like testthat: pkgload::load_all() then
@@ -66,7 +70,11 @@ test_framework_registry <- function() {
           test_filter = test_filter
         )
       },
-      supports_coverage_guided = FALSE,
+      supports_coverage_guided = TRUE,
+      build_coverage_map = function(pkg_dir, backend, cran) {
+        build_coverage_map_tinytest(pkg_dir, backend = backend, cran = cran)
+      },
+      filter_from_tokens = coverage_pattern_regex,
       needs_install = FALSE
     ),
     # Install-based tinytest runner. Never auto-detected: it is reached only as a
@@ -93,7 +101,11 @@ test_framework_registry <- function() {
         )
         package_test_result(result$passed, result$failure)
       },
-      supports_coverage_guided = FALSE,
+      supports_coverage_guided = TRUE,
+      build_coverage_map = function(pkg_dir, backend, cran) {
+        build_coverage_map_tinytest(pkg_dir, backend = backend, cran = cran)
+      },
+      filter_from_tokens = coverage_pattern_regex,
       needs_install = TRUE
     ),
     # Generic fallback: any package with a tests/ directory. Chosen by

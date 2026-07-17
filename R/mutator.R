@@ -508,7 +508,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     coverage_guided = coverage_guided,
     coverage_map = cov_map,
     pkg_dir = pkg_dir,
-    harness_args = harness_test_args
+    harness_args = harness_test_args,
+    filter_from_tokens = test_framework(test_strategy)$filter_from_tokens
   )
 
   equivalence <- analyze_package_mutant_equivalence(

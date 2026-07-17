@@ -188,16 +188,24 @@ test_that("strategy = 'tinytest-installed' handles S4 packages dev-mode cannot",
   expect_gt(result$summary$tested, 0)
 })
 
-test_that("coverage_guided warns and falls back under the tinytest strategy", {
+test_that("coverage-guided selection matches the full suite under tinytest", {
   skip_if_not_installed("tinytest")
+  skip_if_not_installed("covr")
   skip_if_not_installed("pkgload")
   skip_if_not_installed("furrr")
   skip_if_not_installed("future")
   pkg <- make_tinytest_pkg("ttCov")
   on.exit(unlink(dirname(pkg), recursive = TRUE), add = TRUE)
 
-  expect_warning(
-    mutate_package(pkg, cores = 1, coverage_guided = TRUE),
-    "coverage-guided optimisation requires the testthat strategy"
+  set.seed(1)
+  guided <- mutate_package(pkg, cores = 1, coverage_guided = TRUE)
+  set.seed(1)
+  full <- mutate_package(pkg, cores = 1, coverage_guided = FALSE)
+
+  expect_gt(guided$summary$tested, 0)
+  # Coverage guidance must reach the same verdict on every mutant as the full run.
+  expect_identical(
+    guided$test_results[names(full$test_results)],
+    full$test_results
   )
 })

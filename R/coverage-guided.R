@@ -80,22 +80,13 @@ build_coverage_map_record_tests <- function(pkg_dir, cran = TRUE) {
   list(by_file = by_file)
 }
 
-# R code (a character vector of commands) run inside covr's instrumented session
-# by the per_file backend. It runs the suite ONCE through a testthat reporter that,
-# per test file, zeroes covr's trace counters on start_file and snapshots the
-# non-zero ones on end_file so each covered line is attributed to exactly the
-# test file that was running, with no helper/setup files misattributed. Counters are reset by
-# zeroing `$value` (covr's own clear_counters() *removes* entries, which breaks
-# counting). Failures are summed so the run also serves as the baseline check.
-perfile_collect_code <- function(testdir, out, not_cran, pkgname,
-                                 harness_args = list()) {
-  harness_args_expr <- paste(
-    deparse(harness_args, width.cutoff = 500L),
-    collapse = " "
-  )
+# Codegen for the covr counter reset/snapshot helpers used by the per-file
+# coverage drivers (testthat per_file and tinytest). Defines `reset()` (zero every
+# trace counter; covr's own clear_counters() *removes* entries, which breaks
+# counting) and `snap()` (collect the non-zero traces as list(file, first, last)).
+# Emitted inside a `local({ ... })` so `ns`, `CT`, `reset`, `snap` stay scoped.
+covr_perfile_counter_helpers <- function() {
   c(
-    sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(not_cran)),
-    "local({",
     "  ns <- asNamespace('covr'); CT <- get('.counters', ns)",
     "  reset <- function() for (k in ls(CT)) { e <- CT[[k]]; if (is.list(e)) { e$value <- 0L; CT[[k]] <- e } }",
     "  snap <- function() {",
@@ -109,7 +100,51 @@ perfile_collect_code <- function(testdir, out, not_cran, pkgname,
     "      recs[[length(recs) + 1L]] <- list(file = fn, first = as.integer(sr[[1L]]), last = as.integer(sr[[3L]]))",
     "    }",
     "    recs",
-    "  }",
+    "  }"
+  )
+}
+
+# Invert a per-test-file coverage capture (named by test file, each a list of
+# list(file, first, last) traces) into the by_file record structure consumed by
+# select_test_files(). Attribution is exact, so `ambiguous` is always FALSE; each
+# (file, first, last) trace accumulates the set of test tokens whose run covered it.
+invert_perfile_capture <- function(captured) {
+  tok <- function(f) sub("\\.[rR]$", "", sub("^test[-_]?", "", f))
+  agg <- list()
+  for (f in names(captured)) {
+    token <- tok(f)
+    for (h in captured[[f]]) {
+      key <- paste(h$file, h$first, h$last, sep = "\r")
+      if (is.null(agg[[key]])) {
+        agg[[key]] <- list(file = h$file, first = h$first, last = h$last, tests = character())
+      }
+      agg[[key]]$tests <- c(agg[[key]]$tests, token)
+    }
+  }
+  by_file <- list()
+  for (k in agg) {
+    rec <- list(first = k$first, last = k$last, tests = unique(k$tests), ambiguous = FALSE)
+    by_file[[k$file]] <- c(by_file[[k$file]], list(rec))
+  }
+  list(by_file = by_file)
+}
+
+# R code (a character vector of commands) run inside covr's instrumented session
+# by the per_file backend. It runs the suite ONCE through a testthat reporter that,
+# per test file, zeroes covr's trace counters on start_file and snapshots the
+# non-zero ones on end_file so each covered line is attributed to exactly the
+# test file that was running, with no helper/setup files misattributed.
+# Failures are summed so the run also serves as the baseline check.
+perfile_collect_code <- function(testdir, out, not_cran, pkgname,
+                                 harness_args = list()) {
+  harness_args_expr <- paste(
+    deparse(harness_args, width.cutoff = 500L),
+    collapse = " "
+  )
+  c(
+    sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(not_cran)),
+    "local({",
+    covr_perfile_counter_helpers(),
     "  Rep <- R6::R6Class('MutatorPerFileCov', inherit = testthat::Reporter, public = list(",
     "    cov_cur = NA_character_, cov_captured = list(),",
     "    start_file = function(filename, ...) { self$cov_cur <- as.character(filename); reset() },",
@@ -161,27 +196,71 @@ build_coverage_map_per_file <- function(pkg_dir, cran = TRUE) {
       call. = FALSE)
   }
 
-  # Invert per-file capture into the by_file record structure. Attribution is
-  # exact, so ambiguous is always FALSE; each (file, first, last) trace accumulates
-  # the set of test tokens whose run covered it.
-  tok <- function(f) sub("\\.[rR]$", "", sub("^test[-_]?", "", f))
-  agg <- list()
-  for (f in names(res$captured)) {
-    token <- tok(f)
-    for (h in res$captured[[f]]) {
-      key <- paste(h$file, h$first, h$last, sep = "\r")
-      if (is.null(agg[[key]])) {
-        agg[[key]] <- list(file = h$file, first = h$first, last = h$last, tests = character())
-      }
-      agg[[key]]$tests <- c(agg[[key]]$tests, token)
-    }
+  invert_perfile_capture(res$captured)
+}
+
+# R code run inside covr's instrumented session to attribute coverage per tinytest
+# file. tinytest has no reporter hooks, so we drive its files one at a time:
+# reset covr's counters, run one inst/tinytest file, snapshot the non-zero traces.
+# `at_home` is the tinytest analog of NOT_CRAN. Failures are summed as the baseline
+# check. The instrumented package is installed by covr, so S4 dispatch is correct
+# even for packages the dev-mode (load_all) runner cannot handle.
+tinytest_perfile_collect_code <- function(testdir, out, cran) {
+  c(
+    sprintf("Sys.setenv(NOT_CRAN = %s)", deparse(if (isTRUE(cran)) "false" else "true")),
+    sprintf("testdir <- %s", deparse(testdir)),
+    sprintf("out <- %s", deparse(out)),
+    sprintf("at_home <- %s", deparse(!isTRUE(cran))),
+    "local({",
+    covr_perfile_counter_helpers(),
+    "  files <- dir(testdir, pattern = '^test.*\\\\.[rR]$')",
+    "  captured <- list(); nfail <- 0L",
+    "  oldwd <- getwd(); setwd(testdir); on.exit(setwd(oldwd))",
+    "  err <- tryCatch({",
+    "    for (f in files) {",
+    "      reset()",
+    "      res <- tinytest::run_test_file(f, at_home = at_home, verbose = 0)",
+    "      nfail <- nfail + sum(!vapply(res, isTRUE, logical(1)))",
+    "      captured[[f]] <- snap()",
+    "    }",
+    "    NA_character_",
+    "  }, error = function(e) conditionMessage(e))",
+    "  saveRDS(list(captured = captured, nfail = nfail, err = err), out)",
+    "})"
+  )
+}
+
+# tinytest coverage map: instrument the package once with covr, then run each
+# inst/tinytest file individually under tinytest_perfile_collect_code() to
+# attribute coverage per test file (exact, no "ambiguous" fallback). `backend` is
+# accepted for a uniform framework signature but ignored (tinytest has a single
+# driver). Returns the same by_file structure the testthat backends produce.
+build_coverage_map_tinytest <- function(pkg_dir, backend = NULL, cran = TRUE) {
+  if (!requireNamespace("tinytest", quietly = TRUE)) {
+    stop("Package 'tinytest' is required for coverage-guided tinytest runs.", call. = FALSE)
   }
-  by_file <- list()
-  for (k in agg) {
-    rec <- list(first = k$first, last = k$last, tests = unique(k$tests), ambiguous = FALSE)
-    by_file[[k$file]] <- c(by_file[[k$file]], list(rec))
+  testdir <- normalizePath(file.path(pkg_dir, "inst", "tinytest"), mustWork = TRUE)
+  out <- tempfile("mutator_tinytest_cov_", fileext = ".rds")
+  on.exit(unlink(out), add = TRUE)
+  code <- tinytest_perfile_collect_code(testdir = testdir, out = out, cran = cran)
+  old <- options(covr_no_exclusions)
+  on.exit(options(old), add = TRUE)
+  covr::package_coverage(pkg_dir, type = "none", code = code)
+
+  if (!file.exists(out)) {
+    stop("tinytest coverage run produced no result (the instrumented test run did not complete).",
+      call. = FALSE)
   }
-  list(by_file = by_file)
+  res <- readRDS(out)
+  if (!is.na(res$err)) {
+    stop(sprintf("tinytest coverage run failed: %s", res$err), call. = FALSE)
+  }
+  if (isTRUE(res$nfail > 0)) {
+    stop(sprintf("baseline test suite failed (%d failing test(s)) during tinytest coverage.", res$nfail),
+      call. = FALSE)
+  }
+
+  invert_perfile_capture(res$captured)
 }
 
 # Decide which test files to run for a mutant at [start_line, end_line] of source
@@ -239,6 +318,16 @@ select_test_files <- function(cov_map, src_basename, start_line, end_line) {
 coverage_filter_regex <- function(tokens) {
   escaped <- gsub("(\\W)", "\\\\\\1", tokens, perl = TRUE)
   paste0("^(", paste(escaped, collapse = "|"), ")$")
+}
+
+# Build a run_test_dir()/test_package() `pattern` regex selecting the tinytest
+# files for `tokens` (file basenames with the test-/test_ prefix and extension
+# stripped; see invert_perfile_capture). testthat filters on the stripped token
+# while tinytest matches the whole file name, so the pattern re-adds the prefix
+# and extension.
+coverage_pattern_regex <- function(tokens) {
+  escaped <- gsub("(\\W)", "\\\\\\1", tokens, perl = TRUE)
+  paste0("^test[-_]?(", paste(escaped, collapse = "|"), ")\\.[rR]$")
 }
 
 # Filter tokens of every test file under tests/testthat/ (used to intersect a

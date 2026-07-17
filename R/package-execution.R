@@ -1,7 +1,8 @@
 # Internal planning and execution helpers for package mutants.
 
 build_mutant_test_plan <- function(mutants, coverage_guided, coverage_map,
-                                   pkg_dir, harness_args) {
+                                   pkg_dir, harness_args,
+                                   filter_from_tokens = coverage_filter_regex) {
   plan <- list()
   if (!isTRUE(coverage_guided) || is.null(coverage_map)) {
     return(plan)
@@ -40,7 +41,7 @@ build_mutant_test_plan <- function(mutants, coverage_guided, coverage_map,
         intersect(selected, harness_tokens)
       }
       plan[[id]] <- if (length(tokens) > 0) {
-        list(action = "run", test_filter = coverage_filter_regex(tokens))
+        list(action = "run", test_filter = filter_from_tokens(tokens))
       } else {
         list(action = "run", test_filter = NULL)
       }

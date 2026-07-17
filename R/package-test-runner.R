@@ -284,17 +284,39 @@ prepare_testthat_native_code <- function(pkg_dir) {
 run_package_baseline <- function(pkg_dir, context, coverage_guided,
                                  coverage_backend) {
   coverage_map <- NULL
+  framework <- test_framework(context$strategy)
   elapsed <- system.time({
     if (isTRUE(coverage_guided)) {
-      coverage_map <- build_coverage_test_map(
+      # The coverage map is built against a covr-instrumented *installed* copy, so
+      # it would not surface a dev-mode (load_all) divergence such as S4 dispatch
+      # on '...'-generics. For the dev-mode tinytest strategy, probe a full dev run
+      # first so such a package fails loudly here rather than silently mis-verdicting
+      # every mutant. (testthat keeps its existing behaviour.)
+      if (identical(context$strategy, "tinytest")) {
+        probe <- run_package_tests(context, pkg_dir)
+        if (!isTRUE(probe)) {
+          failure <- attr(probe, "failure")
+          stop(sprintf(
+            paste0(
+              "tinytest dev-mode baseline failed (%s). If this is a load_all S4 ",
+              "dispatch issue, use strategy = \"tinytest-installed\"."
+            ),
+            if (is.null(failure)) "no additional details" else failure
+          ), call. = FALSE)
+        }
+      }
+      coverage_map <- framework$build_coverage_map(
         pkg_dir,
         backend = coverage_backend,
         cran = context$cran
       )
       # covr builds an instrumented temporary copy and therefore does not leave
-      # compiled objects in the source package. Mutant copies share src/, so
-      # compile it once before parallel workers can race over the same outputs.
-      prepare_testthat_native_code(pkg_dir)
+      # compiled objects in the source package. Dev-mode mutant copies share src/,
+      # so compile it once before parallel workers can race over the same outputs.
+      # Install-based strategies compile per mutant, so this is unnecessary there.
+      if (!isTRUE(framework$needs_install)) {
+        prepare_testthat_native_code(pkg_dir)
+      }
       passed <- TRUE
     } else {
       passed <- run_package_tests(context, pkg_dir)
