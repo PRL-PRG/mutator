@@ -15,11 +15,39 @@ knitr::opts_chunk$set(
 ```
 
 This vignette documents the options that control how `mutate_package()` runs:
-how mutant timeouts are calibrated, which tests are selected, how parallel
-workers are isolated, how to exclude code from mutation, and how the optional
-coverage-guided, precise-location, and equivalent-mutant-detection features
-behave. See `?mutate_package` for the full argument and return-value
-documentation.
+which test strategy is used, how mutant timeouts are calibrated, which tests are
+selected, how parallel workers are isolated, how to exclude code from mutation,
+and how the optional coverage-guided, precise-location, and
+equivalent-mutant-detection features behave. See `?mutate_package` for the full
+argument and return-value documentation.
+
+## Mutation testing modes (`strategy`)
+
+mutator selects a package test strategy automatically:
+
+- If `tests/testthat/` exists, mutator loads the mutant in-process with
+  `pkgload::load_all()` and mirrors the package's own `tests/testthat.R` harness
+  by forwarding extractable arguments (notably any `filter`) from
+  `testthat::test_check()` to `testthat::test_dir()`, without paying for an
+  install per mutant.
+- Otherwise, if `inst/tinytest/` exists, mutator loads the mutant in-process with
+  `pkgload::load_all()` and runs `tinytest::run_test_dir("inst/tinytest")`, also
+  without an install per mutant.
+- Otherwise, if `tests/` exists, mutator falls back to
+  `tools::testInstalledPackage(..., types = "tests")` after installing each
+  mutant with `--install-tests`.
+
+Both in-process strategies use `pkgload::load_all()`, which in some cases does
+not load a package the way an installed copy would (see [pkgload issue
+#340](https://github.com/r-lib/pkgload/issues/340)). A tinytest package affected
+by this can be run against an installed copy with `strategy =
+"tinytest-installed"` (`R CMD INSTALL` plus `tinytest::test_package()`), which is
+slower but matches an installed package and still supports coverage-guided
+selection. Pass `strategy` to `mutate_package()` to override auto-detection:
+
+```r
+mutate_package("path/to/pkg", strategy = "tinytest-installed")
+```
 
 ## Timeouts and contention in parallel mode
 

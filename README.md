@@ -46,7 +46,6 @@ If your test suite does not catch this change, it indicates that your tests may 
 
 For a broader introduction to the tool, see the [useR! 2026 talk on mutator](https://www.pdonatbouillud.com/talk/beyond-code-coverage-mutation-testing-in-r-with-mutator/).
 
-
 ## Features
 
 - **Comprehensive Mutation Testing**: Applies various mutation operators to R source code
@@ -104,7 +103,7 @@ result <- mutate_package("path/to/your/package", mutation_dir = tempdir())
 ```
 
 `mutator`, in addition to show you the number of generated mutants, the surviving ones, and the
-mutation score, returns an invisible list with four components, a list of the generated mutants, 
+mutation score, returns an invisible list with four components, a list of the generated mutants,
 a list of mutant outcomes, a list of phase durations, and a summary of the mutation testing run.
 
 Mutant outcomes are reported as:
@@ -134,8 +133,8 @@ jobs:
   mutation:
     uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.1.1
     with:
-      target-margin: "0.10"   # sample to +/-10 percentage points
-      fail-under: "75"        # fail CI below a 75% mutation score
+      target-margin: "0.10" # sample to +/-10 percentage points
+      fail-under: "75" # fail CI below a 75% mutation score
 ```
 
 Pin to a released tag such as `@v0.1.1`; the workflow is versioned with the
@@ -145,16 +144,6 @@ mutator package, so the tag matches the package version. Set `deploy-badge: true
 for every input, threshold guidance, and badge setup. From an installed copy,
 open it with `vignette("continuous-integration", package = "mutator")`.
 
-## Mutation testing modes
-
-mutator selects a package test strategy automatically:
-
-- If `tests/testthat/` exists, mutator loads the mutant in-process with `pkgload::load_all()` and mirrors the package's own `tests/testthat.R` harness by forwarding extractable arguments (notably any `filter`) from `testthat::test_check()` to `testthat::test_dir()`, without paying for an install per mutant.
-- Otherwise, if `inst/tinytest/` exists, mutator loads the mutant in-process with `pkgload::load_all()` and runs `tinytest::run_test_dir("inst/tinytest")`, also without an install per mutant.
-- Otherwise, if `tests/` exists, mutator falls back to `tools::testInstalledPackage(..., types = "tests")` after installing each mutant with `--install-tests`.
-
-Both in-process strategies use `pkgload::load_all()`, which does not dispatch S4 methods defined on `...`-dispatching base generics such as `seq()`. A tinytest package that relies on those can be run against an installed copy with `strategy = "tinytest-installed"` (`R CMD INSTALL` + `tinytest::test_package()`), which is slower but matches an installed package and still supports coverage-guided selection. Pass `strategy` to `mutate_package()` to override auto-detection.
-
 ## Configuration
 
 `mutate_package()` exposes a number of options to control how mutants are run,
@@ -163,6 +152,9 @@ in the **[Configuration vignette](https://prl-prg.github.io/mutator/articles/con
 (from an installed copy, open it with
 `vignette("configuration", package = "mutator")`):
 
+- **Test strategy selection** (`strategy`): how mutator auto-detects a package's
+  test harness (`testthat`, `tinytest`, or the generic installed-tests fallback)
+  and when to override it with `tinytest-installed`.
 - **Timeouts and the contended baseline**: how the per-mutant `HANG` timeout is
   self-calibrated from a parallelism-aware baseline, and `timeout_seconds` to
   override it.
@@ -187,16 +179,15 @@ in the **[Configuration vignette](https://prl-prg.github.io/mutator/articles/con
 
 mutator currently generates these mutation families:
 
-| Family | Mutations |
-| ------ | --------- |
-| Arithmetic operators | `+` ↔ `-`, `*` ↔ `/` |
-| Comparison operators | `==` ↔ `!=`, `<` ↔ `>`, `<=` ↔ `>=` |
-| Logical operators | `&` ↔ `\|`, `&&` ↔ `\|\|`, removes `!`, and negates `if` / `while` conditions |
-| Assignment and call values | Replaces assignment right-hand sides and ordinary function calls with `42` |
-| Scalar constants | Replaces numeric zero with `42`, numeric non-zero values with `0`, constants with a typed `NA`, and constants with `NULL` |
-| Returns | Replaces non-constant direct `return()` values with `NULL`, for example `return(x)` → `return(NULL)` |
-| Deletions | Deletes statements inside `{ ... }` blocks and, as a fallback, valid source lines |
-
+| Family                     | Mutations                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Arithmetic operators       | `+` ↔ `-`, `*` ↔ `/`                                                                                                      |
+| Comparison operators       | `==` ↔ `!=`, `<` ↔ `>`, `<=` ↔ `>=`                                                                                       |
+| Logical operators          | `&` ↔ `\|`, `&&` ↔ `\|\|`, removes `!`, and negates `if` / `while` conditions                                             |
+| Assignment and call values | Replaces assignment right-hand sides and ordinary function calls with `42`                                                |
+| Scalar constants           | Replaces numeric zero with `42`, numeric non-zero values with `0`, constants with a typed `NA`, and constants with `NULL` |
+| Returns                    | Replaces non-constant direct `return()` values with `NULL`, for example `return(x)` → `return(NULL)`                      |
+| Deletions                  | Deletes statements inside `{ ... }` blocks and, as a fallback, valid source lines                                         |
 
 ## Dependencies
 
@@ -232,16 +223,16 @@ Run the full test suite with:
 devtools::test()
 ```
 
-## System tests
+### System tests
 
 `mutator` includes a set of system tests that run mutation testing on 9 packages from CRAN.
- It compares the mutants, surviving, killed, hanged mutant detections, and the mutation score
- against the expected results using snapshot testing, with a fixed seed on 10 mutants or 50 mutants
- per package depending on the release cycle.
- It also compares the results across a set of configuration options  that ought not to change the results. 
- The system tests are located in `tests/system` and are automatically run as par of the CI.
+It compares the mutants, surviving, killed, hanged mutant detections, and the mutation score
+against the expected results using snapshot testing, with a fixed seed on 10 mutants or 50 mutants
+per package depending on the release cycle.
+It also compares the results across a set of configuration options that ought not to change the results.
+The system tests are located in `tests/system` and are automatically run as par of the CI.
 
-## Mutation testing 
+### Mutation testing
 
 We practice dogfooding and run `mutator` on `mutator` test suite itself.
 This already led to numerous improvements in `mutator` speed, as waiting for the mutation
