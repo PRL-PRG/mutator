@@ -59,7 +59,15 @@ create_mutant_package_copy <- function(pkg_dir, src_file, mutated_file,
                                        test_strategy = "testthat") {
   pkg_copy <- file.path(target_root, basename(pkg_dir))
   dir.create(pkg_copy, recursive = TRUE, showWarnings = FALSE)
-  isolate_copy_dirs <- if (isTRUE(isolate)) c("src", "tests") else character(0)
+  # Under isolate, deep-copy the directories a mutant run may write to so parallel
+  # workers never share them. The tinytest strategy runs its tests from
+  # inst/tinytest, so isolate that instead of tests/ (which holds only the
+  # tinytest.R harness, unused in dev-mode).
+  isolate_copy_dirs <- if (isTRUE(isolate)) {
+    if (identical(test_strategy, "tinytest")) c("src", "inst") else c("src", "tests")
+  } else {
+    character(0)
+  }
 
   top_entries <- list.files(pkg_dir, all.files = TRUE, no.. = TRUE, full.names = TRUE)
   for (entry in top_entries) {

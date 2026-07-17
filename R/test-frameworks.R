@@ -47,6 +47,28 @@ test_framework_registry <- function() {
       supports_coverage_guided = TRUE,
       needs_install = FALSE
     ),
+    # tinytest runs in-process like testthat: pkgload::load_all() then
+    # tinytest::run_test_dir("inst/tinytest") in a callr subprocess (no install
+    # per mutant). Listed before the generic fallback because a tinytest package
+    # also has a tests/ directory (its tests/tinytest.R harness).
+    tinytest = list(
+      id = "tinytest",
+      label = "tinytest",
+      detect = function(pkg_dir) dir.exists(file.path(pkg_dir, "inst", "tinytest")),
+      available = function(pkg_dir) dir.exists(file.path(pkg_dir, "inst", "tinytest")),
+      unavailable_message = "strategy = \"tinytest\" requires an 'inst/tinytest' directory.",
+      run = function(context, pkg_path, timeout_seconds, test_filter) {
+        run_tinytest_package_tests(
+          pkg_path = pkg_path,
+          timeout_seconds = timeout_seconds,
+          cran = context$cran,
+          full_log = context$full_log,
+          test_filter = test_filter
+        )
+      },
+      supports_coverage_guided = FALSE,
+      needs_install = FALSE
+    ),
     # Generic fallback: any package with a tests/ directory. Chosen by
     # auto-detection only when no more specific framework matched (registry
     # order), and validated for an explicit strategy = "installed".
@@ -86,6 +108,7 @@ test_framework <- function(id) {
 user_strategy_id <- function(strategy) {
   ids <- c(
     testthat = "testthat",
+    tinytest = "tinytest",
     installed = "installed-tests"
   )
   ids[[strategy]]

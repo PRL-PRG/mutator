@@ -9,7 +9,7 @@ detect_package_test_strategy <- function(pkg_path) {
     }
   }
   stop(
-    "No supported tests found. Expected either 'tests/testthat' or a 'tests/' directory.",
+    "No supported tests found. Expected 'tests/testthat', 'inst/tinytest', or a 'tests/' directory.",
     call. = FALSE
   )
 }
@@ -189,6 +189,46 @@ run_testthat_package_tests <- function(pkg_path, timeout_seconds, harness_args,
       harness_args = effective_args
     ),
     framework_label = "testthat"
+  )
+}
+
+# tinytest dev-mode runner: load the (mutant) package and run its tests under
+# inst/tinytest in a fresh subprocess. `test_filter`, when supplied, is a
+# run_test_dir() `pattern` selecting a subset of test files (coverage-guided
+# selection; NULL runs them all). `at_home = !cran` is the tinytest analog of
+# NOT_CRAN: at-home-only tests run outside CRAN mode. Returns a
+# package_test_result() via the shared subprocess helper.
+run_tinytest_package_tests <- function(pkg_path, timeout_seconds, cran, full_log,
+                                       test_filter = NULL) {
+  run_dev_tests_subprocess(
+    pkg_path = pkg_path,
+    timeout_seconds = timeout_seconds,
+    full_log = full_log,
+    body = function(pkg_path, not_cran, at_home, test_filter) {
+      # nocov start
+      if (!requireNamespace("tinytest", quietly = TRUE)) {
+        stop("The 'tinytest' package is required to run this package's tests.")
+      }
+      Sys.setenv(NOT_CRAN = not_cran)
+      setwd(pkg_path)
+      suppressMessages(pkgload::load_all(".", quiet = TRUE))
+      pattern <- if (is.null(test_filter)) "^test.*\\.[rR]$" else test_filter
+      results <- tinytest::run_test_dir(
+        "inst/tinytest",
+        pattern = pattern,
+        at_home = at_home,
+        verbose = 0
+      )
+      sum(!vapply(results, isTRUE, logical(1)))
+      # nocov end
+    },
+    args = list(
+      pkg_path = pkg_path,
+      not_cran = if (cran) "false" else "true",
+      at_home = !isTRUE(cran),
+      test_filter = test_filter
+    ),
+    framework_label = "tinytest"
   )
 }
 
