@@ -106,6 +106,8 @@ test_that("coverage_guided does not corrupt the package's testthat snapshots", {
   # and the test session's namespace stays unpolluted.
   callr::r(function(pkg_dir) {
     Sys.setenv(NOT_CRAN = "true")
+    oldwd <- getwd()
+    on.exit(setwd(oldwd), add = TRUE)
     setwd(pkg_dir)
     suppressMessages(pkgload::load_all(".", quiet = TRUE))
     suppressMessages(testthat::test_dir("tests/testthat", reporter = "silent",

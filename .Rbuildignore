@@ -7,7 +7,9 @@ packages
 ^\.agents$
 ^\.codex$
 ^cran-comments\.md$
+^cran-answer\.txt$
 ^CRAN-SUBMISSION$
+^covr$
 ^revdep$
 ^.*\.Rcheck$
 ^.*\.tar\.gz$

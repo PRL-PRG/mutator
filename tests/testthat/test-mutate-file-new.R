@@ -27,6 +27,14 @@ test_that("mutate_file creates mutations", {
   }
 })
 
+test_that("mutate_file requires an explicit output directory", {
+  temp_file <- tempfile(fileext = ".R")
+  on.exit(unlink(temp_file), add = TRUE)
+  writeLines("identity <- function(x) x", temp_file)
+
+  expect_error(mutate_file(temp_file), "out_dir.*missing")
+})
+
 test_that("mutate_file handles empty files", {
   # Create an empty R script
   temp_file <- tempfile(fileext = ".R")

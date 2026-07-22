@@ -4,17 +4,14 @@
 \alias{mutate_file}
 \title{Generate Mutants for a Single R File}
 \usage{
-mutate_file(
-  src_file,
-  out_dir = "mutations",
-  max_mutants = NULL,
-  max_line_deletions = 5
-)
+mutate_file(src_file, out_dir, max_mutants = NULL, max_line_deletions = 5)
 }
 \arguments{
 \item{src_file}{Path to an R source file.}
 
-\item{out_dir}{Directory where mutant files are written.}
+\item{out_dir}{Directory where mutant files are written. This argument is
+required so that the function never writes to the current working directory
+unless the caller explicitly requests it.}
 
 \item{max_mutants}{Optional cap on the number of returned mutants. If set,
 a random subset of generated mutants is returned.}

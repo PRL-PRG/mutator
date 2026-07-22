@@ -170,6 +170,8 @@ run_testthat_package_tests <- function(pkg_path, timeout_seconds, harness_args,
       } else {
         Sys.unsetenv("TESTTHAT_MAX_FAILS")
       }
+      oldwd <- getwd()
+      on.exit(setwd(oldwd), add = TRUE)
       setwd(pkg_path)
       suppressMessages(pkgload::load_all(".", quiet = TRUE))
       reporter_file <- tempfile("mutator_reporter_")
@@ -210,6 +212,8 @@ run_tinytest_package_tests <- function(pkg_path, timeout_seconds, cran, full_log
         stop("The 'tinytest' package is required to run this package's tests.")
       }
       Sys.setenv(NOT_CRAN = not_cran)
+      oldwd <- getwd()
+      on.exit(setwd(oldwd), add = TRUE)
       setwd(pkg_path)
       suppressMessages(pkgload::load_all(".", quiet = TRUE))
       pattern <- if (is.null(test_filter)) "^test.*\\.[rR]$" else test_filter

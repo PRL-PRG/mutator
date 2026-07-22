@@ -1,3 +1,13 @@
+# mutator 0.2.1
+
+This release addresses feedback received from CRAN during the review of the
+initial submission:
+
+- Removed the default output directory from `mutate_file()`, so callers must
+  explicitly choose where mutant files are written.
+- Restored the caller's working directory immediately with `on.exit()` in all
+  package test-runner and coverage code paths that temporarily change it.
+
 # mutator 0.2.0
 
 - Added first-class `tinytest` support. A package with an `inst/tinytest`

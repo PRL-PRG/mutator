@@ -1,6 +1,6 @@
 # Utility: delete individual lines to create "string-deletion" mutants
 delete_line_mutants <- function(src_file,
-                                out_dir = "mutations",
+                                out_dir,
                                 file_base = NULL,
                                 max_del = 5,
                                 start_idx = 1,
@@ -73,7 +73,9 @@ delete_line_mutants <- function(src_file,
 #' from the C++ mutation engine with fallback line-deletion mutants.
 #'
 #' @param src_file Path to an R source file.
-#' @param out_dir Directory where mutant files are written.
+#' @param out_dir Directory where mutant files are written. This argument is
+#'   required so that the function never writes to the current working directory
+#'   unless the caller explicitly requests it.
 #' @param max_mutants Optional cap on the number of returned mutants. If set,
 #'   a random subset of generated mutants is returned.
 #' @param max_line_deletions Maximum number of line-deletion mutants generated
@@ -96,7 +98,7 @@ delete_line_mutants <- function(src_file,
 #' length(mutants)
 #'
 #' @export
-mutate_file <- function(src_file, out_dir = "mutations", max_mutants = NULL,
+mutate_file <- function(src_file, out_dir, max_mutants = NULL,
                         max_line_deletions = 5) {
   max_mutants <- normalize_max_mutants(max_mutants)
   max_line_deletions <- normalize_max_mutants(max_line_deletions, "max_line_deletions")

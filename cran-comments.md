@@ -2,7 +2,17 @@
 
 0 errors | 0 warnings | 1 note
 
-* This is a new submission.
+* This is a resubmission of a new package. We removed the default output path from
+  `mutate_file()`, so callers must explicitly select where generated files are
+  written. All examples and tests write only within the session temporary
+  directory. We also updated every working-directory change to register its
+  restoration immediately with `on.exit()`.
+
+* Since the original 0.1.0 submission, the package has also gained first-class
+  tinytest support, explicit test-strategy selection, and new or expanded
+  vignettes covering package mutation, configuration, and continuous
+  integration. These changes and the accompanying fixes are detailed in
+  `NEWS.md`.
 
 * The note "Suggests or Enhances not in mainstream repositories: imputesrcref"
   is expected. 'imputesrcref' is an optional enhancement available only from
