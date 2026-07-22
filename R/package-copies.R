@@ -1,15 +1,19 @@
 # Internal helpers for constructing lightweight package copies for mutants.
 
+# Sys.junction() is a Windows-only base function; declare it as a known global so
+# codetools does not flag the OS-guarded reference in link_or_copy() on other
+# platforms.
+utils::globalVariables("Sys.junction")
+
 link_or_copy <- function(from, to, recursive = FALSE, link = NULL) {
   from <- normalizePath(from, mustWork = TRUE)
   is_dir <- dir.exists(from)
   # Pick the linker when the caller has not. On Windows a directory symlink is a
   # reparse point unlink() cannot remove; a junction (privilege-free) is removed
-  # cleanly. Sys.junction is Windows-only, so fetch it by name to avoid an
-  # R CMD check note elsewhere.
+  # cleanly. Sys.junction is Windows-only (declared as a global above).
   if (is.null(link)) {
     link <- if (is_dir && identical(.Platform$OS.type, "windows")) {
-      get("Sys.junction", envir = baseenv(), mode = "function")
+      Sys.junction
     } else {
       file.symlink
     }
