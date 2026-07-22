@@ -299,9 +299,9 @@ result <- mutate_package(pkg, cores = 1, max_mutants = 1, timeout_seconds = 10)
 #>   R/add.R:1   '+' -> '-'
 #>     > 1 | add <- function(x, y) x + y
 #> Timing (seconds):
-#>   Baseline run:          1.0
+#>   Baseline run:          1.1
 #>   Mutant generation:     0.0
-#>   Test execution:        0.9
+#>   Test execution:        1.0
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
