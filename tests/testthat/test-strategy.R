@@ -202,8 +202,11 @@ License: MIT", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
 
   writeLines("stop('baseline fallback failure')", file.path(pkg_dir, "tests", "test-fail.R"))
 
+  # The baseline failure is what this test asserts; the incidental
+  # coverage-guided warning (covered by its own test) is silenced so it does not
+  # surface as a testthat WARN.
   expect_error(
-    mutate_package(pkg_dir, cores = 1),
+    suppressWarnings(mutate_package(pkg_dir, cores = 1)),
     "strategy 'installed-tests'"
   )
 })

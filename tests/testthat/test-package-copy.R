@@ -141,6 +141,43 @@ test_that("link_or_copy copies directories when symlinks are unavailable", {
   )
 })
 
+test_that("removing a linked package copy leaves the source tree intact", {
+  # Safety net for the directory-linking of create_mutant_package_copy: tearing
+  # down a mutant copy (as session cleanup does) must never follow a link into
+  # the source and delete the originals. This matters most on Windows, where
+  # inst/ is a Sys.junction; it runs on every platform so the junction path is
+  # actually exercised on Windows CI.
+  temp_dir <- tempfile()
+  dir.create(temp_dir)
+  on.exit(unlink(temp_dir, recursive = TRUE), add = TRUE)
+
+  pkg_dir <- file.path(temp_dir, "srcPkg")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "extra"), recursive = TRUE)
+  writeLines("Package: srcPkg\nVersion: 0.1.0\nLicense: MIT",
+    file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("f <- function() TRUE", file.path(pkg_dir, "R", "f.R"))
+  writeLines("keep me", file.path(pkg_dir, "inst", "extra", "data.txt"))
+
+  mutated_file <- tempfile(fileext = ".R")
+  writeLines("f <- function() FALSE", mutated_file)
+  mutant_pkg <- mutator:::create_mutant_package_copy(
+    pkg_dir = pkg_dir,
+    src_file = file.path(pkg_dir, "R", "f.R"),
+    mutated_file = mutated_file,
+    target_root = tempfile("mut_")
+  )
+
+  # Tear the copy down the way callr/session cleanup would.
+  unlink(dirname(mutant_pkg), recursive = TRUE, force = TRUE)
+
+  # Anything reached through a link must survive the teardown.
+  keep <- file.path(pkg_dir, "inst", "extra", "data.txt")
+  expect_true(file.exists(keep))
+  expect_identical(readLines(keep), "keep me")
+  expect_true(file.exists(file.path(pkg_dir, "R", "f.R")))
+})
+
 test_that("create_mutant_package_copy deep-copies tests/ when isolate = TRUE", {
   skip_on_os("windows")
 

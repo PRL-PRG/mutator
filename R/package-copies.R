@@ -1,13 +1,25 @@
 # Internal helpers for constructing lightweight package copies for mutants.
 
-link_or_copy <- function(from, to, recursive = FALSE, link = file.symlink) {
+link_or_copy <- function(from, to, recursive = FALSE, link = NULL) {
   from <- normalizePath(from, mustWork = TRUE)
+  is_dir <- dir.exists(from)
+  # Pick the linker when the caller has not. On Windows a directory symlink is a
+  # reparse point unlink() cannot remove; a junction (privilege-free) is removed
+  # cleanly. Sys.junction is Windows-only, so fetch it by name to avoid an
+  # R CMD check note elsewhere.
+  if (is.null(link)) {
+    link <- if (is_dir && identical(.Platform$OS.type, "windows")) {
+      get("Sys.junction", envir = baseenv(), mode = "function")
+    } else {
+      file.symlink
+    }
+  }
   linked <- tryCatch(
     link(from, to),
     warning = function(w) FALSE,
     error = function(e) FALSE
   )
-  target_exists <- if (dir.exists(from)) dir.exists(to) else file.exists(to)
+  target_exists <- if (is_dir) dir.exists(to) else file.exists(to)
   link_works <- isTRUE(linked) && target_exists
   if (link_works) {
     return(invisible(TRUE))
