@@ -1,6 +1,4 @@
-## R CMD check results
-
-0 errors | 0 warnings | 1 note
+## Resubmission
 
 * This is a resubmission of a new package. We removed the default output path from
   `mutate_file()`, so callers must explicitly select where generated files are
@@ -13,6 +11,10 @@
   vignettes covering package mutation, configuration, and continuous
   integration. These changes and the accompanying fixes are detailed in
   `NEWS.md`.
+
+## R CMD check results
+
+0 errors | 0 warnings | 1 note
 
 * The note "Suggests or Enhances not in mainstream repositories: imputesrcref"
   is expected. 'imputesrcref' is an optional enhancement available only from
