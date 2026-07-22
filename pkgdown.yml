@@ -5,7 +5,7 @@ articles:
   configuration: configuration.html
   continuous-integration: continuous-integration.html
   mutating-testing-package: mutating-testing-package.html
-last_built: 2026-07-21T14:06Z
+last_built: 2026-07-22T10:48Z
 urls:
   reference: https://prl-prg.github.io/mutator/reference
   article: https://prl-prg.github.io/mutator/articles

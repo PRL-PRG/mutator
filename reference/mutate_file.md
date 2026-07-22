@@ -7,12 +7,7 @@ mutants.
 ## Usage
 
 ``` r
-mutate_file(
-  src_file,
-  out_dir = "mutations",
-  max_mutants = NULL,
-  max_line_deletions = 5
-)
+mutate_file(src_file, out_dir, max_mutants = NULL, max_line_deletions = 5)
 ```
 
 ## Arguments
@@ -23,7 +18,9 @@ mutate_file(
 
 - out_dir:
 
-  Directory where mutant files are written.
+  Directory where mutant files are written. This argument is required so
+  that the function never writes to the current working directory unless
+  the caller explicitly requests it.
 
 - max_mutants:
 
@@ -60,7 +57,7 @@ A list of mutants. Each element contains:
 src <- tempfile(fileext = ".R")
 writeLines("add <- function(x, y) x + y", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"), max_mutants = 1)
-#> Generated 1 AST-based mutants for file19ea601c82eb.R
+#> Generated 1 AST-based mutants for file18f442f7d090.R
 length(mutants)
 #> [1] 1
 ```
