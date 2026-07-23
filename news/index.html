@@ -43,6 +43,8 @@
 <p>This release addresses feedback received from CRAN during the review of the initial submission:</p>
 <ul><li>Removed the default output directory from <code><a href="../reference/mutate_file.html">mutate_file()</a></code>, so callers must explicitly choose where mutant files are written.</li>
 <li>Restored the caller’s working directory immediately with <code><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit()</a></code> in all package test-runner and coverage code paths that temporarily change it.</li>
+</ul><p>It also improves Windows support:</p>
+<ul><li>Mutant package copies now link directories with junctions (<code>Sys.junction()</code>) rather than symbolic links on Windows, which <code><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink()</a></code> cannot remove; this avoids leftover reparse points and the accompanying <code>R CMD check</code> warnings.</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="mutator-020">mutator 0.2.0<a class="anchor" aria-label="anchor" href="#mutator-020"></a></h2>

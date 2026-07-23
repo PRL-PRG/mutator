@@ -12,6 +12,14 @@ the initial submission:
   [`on.exit()`](https://rdrr.io/r/base/on.exit.html) in all package
   test-runner and coverage code paths that temporarily change it.
 
+It also improves Windows support:
+
+- Mutant package copies now link directories with junctions
+  (`Sys.junction()`) rather than symbolic links on Windows, which
+  [`unlink()`](https://rdrr.io/r/base/unlink.html) cannot remove; this
+  avoids leftover reparse points and the accompanying `R CMD check`
+  warnings.
+
 ## mutator 0.2.0
 
 - Added first-class `tinytest` support. A package with an
