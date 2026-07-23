@@ -8,6 +8,12 @@ initial submission:
 - Restored the caller's working directory immediately with `on.exit()` in all
   package test-runner and coverage code paths that temporarily change it.
 
+It also improves Windows support:
+
+- Mutant package copies now link directories with junctions (`Sys.junction()`)
+  rather than symbolic links on Windows, which `unlink()` cannot remove; this
+  avoids leftover reparse points and the accompanying `R CMD check` warnings.
+
 # mutator 0.2.0
 
 - Added first-class `tinytest` support. A package with an `inst/tinytest`
