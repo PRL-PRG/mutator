@@ -99,7 +99,7 @@ result <- mutate_package(
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        2.1
+#>   Test execution:        2.3
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
@@ -186,7 +186,7 @@ improved_result <- mutate_package(
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        2.1
+#>   Test execution:        2.2
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
