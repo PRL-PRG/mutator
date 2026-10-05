@@ -1,6 +1,7 @@
 // ASTHandler.cpp
 
 #include <algorithm>
+#include <climits>
 #include <map>
 #include <iostream>
 #include <Rversion.h>
@@ -18,6 +19,9 @@ static struct CachedSyms
     SEXP s_minus = Rf_install("-");
     SEXP s_mul = Rf_install("*");
     SEXP s_div = Rf_install("/");
+    SEXP s_pow = Rf_install("^");
+    SEXP s_mod = Rf_install("%%");
+    SEXP s_intdiv = Rf_install("%/%");
     SEXP s_eq = Rf_install("==");
     SEXP s_neq = Rf_install("!=");
     SEXP s_lt = Rf_install("<");
@@ -184,6 +188,31 @@ static SEXP makeNAOfType(int type)
     default:
         return R_NilValue;
     }
+}
+
+// `const_off_by_one`: n -> n + delta, keeping the type. NULL if not applicable.
+static SEXP makeOffByOne(SEXP x, int delta)
+{
+    if (TYPEOF(x) == INTSXP && Rf_length(x) == 1)
+    {
+        int v = INTEGER(x)[0];
+        if (v == NA_INTEGER || (delta > 0 && v == INT_MAX) || (delta < 0 && v == INT_MIN + 1))
+            return R_NilValue;
+        return Rf_ScalarInteger(v + delta);
+    }
+    if (TYPEOF(x) == REALSXP && Rf_length(x) == 1)
+    {
+        double v = REAL(x)[0];
+        if (!R_FINITE(v))
+            return R_NilValue;
+        return Rf_ScalarReal(v + delta);
+    }
+    return R_NilValue;
+}
+
+static bool isLogicalConstant(SEXP x, int value)
+{
+    return TYPEOF(x) == LGLSXP && Rf_length(x) == 1 && LOGICAL(x)[0] == value;
 }
 
 static SEXP makeNotCall(SEXP expr)
@@ -382,6 +411,14 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                 }
             }
 
+            for (int delta : {1, -1})
+            {
+                SEXP shifted = makeOffByOne(expr, delta);
+                if (shifted != R_NilValue)
+                    addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
+                                       expr, shifted, _file_path, "const_off_by_one");
+            }
+
             addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
                                expr, R_NilValue, _file_path, "const_null");
         }
@@ -421,7 +458,16 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         {SYM.s_and, {SYM.s_or, "logic_swap"}},
         {SYM.s_or, {SYM.s_and, "logic_swap"}},
         {SYM.s_land, {SYM.s_lor, "logic_swap"}},
-        {SYM.s_lor, {SYM.s_land, "logic_swap"}}};
+        {SYM.s_lor, {SYM.s_land, "logic_swap"}},
+        {SYM.s_lt, {SYM.s_le, "rel_boundary"}},
+        {SYM.s_le, {SYM.s_lt, "rel_boundary"}},
+        {SYM.s_gt, {SYM.s_ge, "rel_boundary"}},
+        {SYM.s_ge, {SYM.s_gt, "rel_boundary"}},
+        {SYM.s_pow, {SYM.s_mul, "arith_extra"}},
+        {SYM.s_mod, {SYM.s_intdiv, "arith_extra"}},
+        {SYM.s_intdiv, {SYM.s_mod, "arith_extra"}},
+        {SYM.s_break, {SYM.s_next, "loop_ctrl"}},
+        {SYM.s_next, {SYM.s_break, "loop_ctrl"}}};
 
     auto range = swaps.equal_range(fun);
     for (auto it = range.first; it != range.second; ++it)
@@ -436,6 +482,36 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         SEXP arg = CADR(expr);
         addNodeReplacement(ops, path, node_start_line, node_start_col,
                            node_end_line, node_end_col, expr, arg, _file_path, "not_remove");
+    }
+
+    // Unary minus: -x -> x
+    if (isSymbol(fun, SYM.s_minus) && CDR(expr) != R_NilValue && CDDR(expr) == R_NilValue)
+    {
+        addNodeReplacement(ops, path, node_start_line, node_start_col,
+                           node_end_line, node_end_col, expr, CADR(expr), _file_path, "arith_extra");
+    }
+
+    // a && b -> a, a && b -> b
+    if ((isSymbol(fun, SYM.s_land) || isSymbol(fun, SYM.s_lor)) &&
+        CDR(expr) != R_NilValue && CDDR(expr) != R_NilValue)
+    {
+        for (SEXP operand : {CADR(expr), CADDR(expr)})
+            addNodeReplacement(ops, path, node_start_line, node_start_col,
+                               node_end_line, node_end_col, expr, operand, _file_path, "and_or_operand");
+    }
+
+    if (isSymbol(fun, SYM.s_if) && CDR(expr) != R_NilValue)
+    {
+        SEXP condition = CADR(expr);
+        std::vector<int> condition_path = path;
+        condition_path.push_back(0);
+        for (int value : {TRUE, FALSE})
+        {
+            if (!isLogicalConstant(condition, value))
+                addNodeReplacement(ops, condition_path, node_start_line, node_start_col,
+                                   node_end_line, node_end_col, condition,
+                                   Rf_ScalarLogical(value), _file_path, "cond_force");
+        }
     }
 
     if ((isSymbol(fun, SYM.s_if) || isSymbol(fun, SYM.s_while)) && CDR(expr) != R_NilValue)

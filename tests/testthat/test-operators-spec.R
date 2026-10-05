@@ -34,7 +34,7 @@ test_that("NULL falls back to the option, then to the default group", {
   on.exit(options(old), add = TRUE)
   expect_identical(resolve(NULL), reg$id[reg$default])
   options(mutator.operators = "relational")
-  expect_identical(resolve(NULL), "rel_swap")
+  expect_identical(resolve(NULL), c("rel_swap", "rel_boundary"))
   expect_identical(resolve("arith_swap"), "arith_swap")
 })
 
@@ -61,7 +61,7 @@ test_that("only selected operators produce mutants", {
   expect_setequal(unique(gen_ids(code, "rel_swap")), "rel_swap")
   expect_false("rel_swap" %in% gen_ids(code, "-rel_swap"))
   expect_setequal(unique(gen_ids(code, c("arithmetic", "relational"))),
-                  c("arith_swap", "rel_swap"))
+                  c("arith_swap", "rel_swap", "rel_boundary"))
 })
 
 test_that("value_42 is off by default and works when selected", {
