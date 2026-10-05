@@ -1,24 +1,10 @@
 // ASTHandler.cpp
 
 #include <map>
-#include <functional>
 #include <iostream>
 #include <Rversion.h>
 #include "ASTHandler.h"
-#include "PlusOperator.h"
-#include "MinusOperator.h"
-#include "DivideOperator.h"
-#include "MultiplyOperator.h"
-#include "EqualOperator.h"
-#include "NotEqualOperator.h"
-#include "LessThanOperator.h"
-#include "MoreThanOperator.h"
-#include "LessThanOrEqualOperator.h"
-#include "MoreThanOrEqualOperator.h"
-#include "AndOperator.h"
-#include "OrOperator.h"
-#include "LogicalOrOperator.h"
-#include "LogicalAndOperator.h"
+#include "SymbolSwapOperator.h"
 #include "DeleteOperator.h"
 #include "NodeReplacementOperator.h"
 
@@ -426,47 +412,33 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
 
     SEXP fun = CAR(expr);
 
-    /* operator map – keys are the cached symbols */
     struct SwapEntry
     {
-        std::function<std::unique_ptr<Operator>()> make;
+        SEXP to;
         const char *id;
     };
-    static const std::map<SEXP, SwapEntry> op_map = {
-        {SYM.s_plus, {[]
-         { return std::make_unique<PlusOperator>(); }, "arith_swap"}},
-        {SYM.s_minus, {[]
-         { return std::make_unique<MinusOperator>(); }, "arith_swap"}},
-        {SYM.s_mul, {[]
-         { return std::make_unique<MultiplyOperator>(); }, "arith_swap"}},
-        {SYM.s_div, {[]
-         { return std::make_unique<DivideOperator>(); }, "arith_swap"}},
-        {SYM.s_eq, {[]
-         { return std::make_unique<EqualOperator>(); }, "rel_swap"}},
-        {SYM.s_neq, {[]
-         { return std::make_unique<NotEqualOperator>(); }, "rel_swap"}},
-        {SYM.s_lt, {[]
-         { return std::make_unique<LessThanOperator>(); }, "rel_swap"}},
-        {SYM.s_gt, {[]
-         { return std::make_unique<MoreThanOperator>(); }, "rel_swap"}},
-        {SYM.s_le, {[]
-         { return std::make_unique<LessThanOrEqualOperator>(); }, "rel_swap"}},
-        {SYM.s_ge, {[]
-         { return std::make_unique<MoreThanOrEqualOperator>(); }, "rel_swap"}},
-        {SYM.s_and, {[]
-         { return std::make_unique<AndOperator>(); }, "logic_swap"}},
-        {SYM.s_or, {[]
-         { return std::make_unique<OrOperator>(); }, "logic_swap"}},
-        {SYM.s_land, {[]
-         { return std::make_unique<LogicalAndOperator>(); }, "logic_swap"}},
-        {SYM.s_lor, {[]
-         { return std::make_unique<LogicalOrOperator>(); }, "logic_swap"}}};
+    static const std::multimap<SEXP, SwapEntry> swaps = {
+        {SYM.s_plus, {SYM.s_minus, "arith_swap"}},
+        {SYM.s_minus, {SYM.s_plus, "arith_swap"}},
+        {SYM.s_mul, {SYM.s_div, "arith_swap"}},
+        {SYM.s_div, {SYM.s_mul, "arith_swap"}},
+        {SYM.s_eq, {SYM.s_neq, "rel_swap"}},
+        {SYM.s_neq, {SYM.s_eq, "rel_swap"}},
+        {SYM.s_lt, {SYM.s_gt, "rel_swap"}},
+        {SYM.s_gt, {SYM.s_lt, "rel_swap"}},
+        {SYM.s_le, {SYM.s_ge, "rel_swap"}},
+        {SYM.s_ge, {SYM.s_le, "rel_swap"}},
+        {SYM.s_and, {SYM.s_or, "logic_swap"}},
+        {SYM.s_or, {SYM.s_and, "logic_swap"}},
+        {SYM.s_land, {SYM.s_lor, "logic_swap"}},
+        {SYM.s_lor, {SYM.s_land, "logic_swap"}}};
 
-    if (auto it = op_map.find(fun); it != op_map.end())
+    auto range = swaps.equal_range(fun);
+    for (auto it = range.first; it != range.second; ++it)
     {
-        auto op = it->second.make();
-        ops.push_back({path, std::move(op), node_start_line, node_start_col,
-                       node_end_line, node_end_col, fun, _file_path, it->second.id});
+        ops.push_back({path, std::make_unique<SymbolSwapOperator>(fun, it->second.to),
+                       node_start_line, node_start_col, node_end_line, node_end_col,
+                       fun, _file_path, it->second.id});
     }
 
     if (isSymbol(fun, SYM.s_not) && CDR(expr) != R_NilValue)

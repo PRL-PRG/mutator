@@ -3,7 +3,7 @@
 #include <Rinternals.h>
 #include "ASTHandler.h"
 #include "Mutator.h"
-#include "PlusOperator.h"
+#include "SymbolSwapOperator.h"
 #include "DeleteOperator.h"
 
 static SEXP makeSrcref()
@@ -55,7 +55,7 @@ context("Mutator C++ tests")
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
 
-        ops.push_back(OperatorPos({0}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_install("+")));
+        ops.push_back(OperatorPos({0}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_install("+")));
         Mutator mutator;
         auto result = mutator.applyMutation(expr, ops, 9);
 
@@ -68,7 +68,7 @@ context("Mutator C++ tests")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_install("+")));
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_install("+")));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);
@@ -84,9 +84,9 @@ context("Mutator C++ tests")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5,
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5,
                                   Rf_install("+"), "", "arith_swap"));
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5,
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5,
                                   Rf_install("+")));
 
         Mutator mutator;
@@ -202,7 +202,7 @@ context("Mutator C++ tests")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
-        ops.push_back(OperatorPos({2}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_install("+")));
+        ops.push_back(OperatorPos({2}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_install("+")));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);
@@ -216,7 +216,7 @@ context("Mutator C++ tests")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_mkChar("+")));
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_mkChar("+")));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);
@@ -241,7 +241,7 @@ context("Mutator C++ tests")
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
         SEXP original_symbol = PROTECT(Rf_mkString("+"));
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, original_symbol));
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, original_symbol));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);

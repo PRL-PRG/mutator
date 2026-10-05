@@ -2,7 +2,7 @@
 #include "Mutator.h"
 #include "DeleteOperator.h"
 #include "NodeReplacementOperator.h"
-#include "ReplacementOperator.h"
+#include "SymbolSwapOperator.h"
 
 static SEXP asStringOrNA(SEXP x)
 {
@@ -167,7 +167,7 @@ std::pair<SEXP, bool> Mutator::applyFlipMutation(SEXP expr, const std::vector<Op
     }
 
     // perform the operator‑specific flip
-    const auto *repl = dynamic_cast<const ReplacementOperator *>(pos.op.get());
+    const auto *repl = dynamic_cast<const SymbolSwapOperator *>(pos.op.get());
     if (repl == nullptr)
     {
         UNPROTECT(1);
