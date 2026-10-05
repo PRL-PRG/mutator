@@ -23,7 +23,8 @@ mutate_package(
   coverage_backend = c("record_tests", "per_file"),
   target_margin = NULL,
   confidence = 0.95,
-  max_show = 50L
+  max_show = 50L,
+  operators = NULL
 )
 }
 \arguments{
@@ -154,6 +155,12 @@ Wilson confidence interval reported on a sampled mutation score. Default 0.95.}
 \item{max_show}{Maximum number of surviving mutants to print to the console;
 the remainder are summarised as "... and N more" but always remain in the
 returned \code{package_mutants}. Use \code{Inf} to print every survivor. Default 50.}
+
+\item{operators}{Mutation operators to apply: a character vector of
+operator ids and families, read left to right, where a \code{-} prefix removes
+(e.g. \code{c("default", "-na_type_swap")}). \code{NULL} uses the option
+\code{mutator.operators}, or \code{"default"} if it is unset. See
+\code{\link[=mutation_operators]{mutation_operators()}}.}
 }
 \value{
 An invisible list with four components:

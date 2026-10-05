@@ -4,7 +4,13 @@
 \alias{mutate_file}
 \title{Generate Mutants for a Single R File}
 \usage{
-mutate_file(src_file, out_dir, max_mutants = NULL, max_line_deletions = 5)
+mutate_file(
+  src_file,
+  out_dir,
+  max_mutants = NULL,
+  max_line_deletions = 5,
+  operators = NULL
+)
 }
 \arguments{
 \item{src_file}{Path to an R source file.}
@@ -20,6 +26,12 @@ a random subset of generated mutants is returned.}
 per file (a random subset of deletable lines). These complement the
 AST-based statement deletions by also covering top-level / non-block lines.
 Use \code{0} to disable line-deletion mutants entirely. Defaults to \code{5}.}
+
+\item{operators}{Mutation operators to apply: a character vector of
+operator ids and families, read left to right, where a \code{-} prefix removes
+(e.g. \code{c("default", "-na_type_swap")}). \code{NULL} uses the option
+\code{mutator.operators}, or \code{"default"} if it is unset. See
+\code{\link[=mutation_operators]{mutation_operators()}}.}
 }
 \value{
 A list of mutants. Each element contains:

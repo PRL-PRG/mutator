@@ -1,5 +1,6 @@
 // ASTHandler.cpp
 
+#include <algorithm>
 #include <map>
 #include <iostream>
 #include <Rversion.h>
@@ -54,14 +55,12 @@ static bool isCallTo(SEXP x, SEXP sym)
     return TYPEOF(x) == LANGSXP && isSymbol(CAR(x), sym);
 }
 
-// # nocov start (only reached from the disabled value-replacement family)
 static bool isAssignmentSymbol(SEXP fun)
 {
     return isSymbol(fun, SYM.s_assign) ||
            isSymbol(fun, SYM.s_eq_assign) ||
            isSymbol(fun, SYM.s_super_assign);
 }
-// # nocov end
 
 static bool isScalarConstant(SEXP x)
 {
@@ -83,12 +82,10 @@ static bool isMutableScalarConstant(SEXP x)
     return x != R_NilValue && isScalarConstant(x);
 }
 
-// # nocov start (only reached from the disabled value-replacement family)
 static bool isNumericScalarConstant(SEXP x)
 {
     return (TYPEOF(x) == INTSXP || TYPEOF(x) == REALSXP) && Rf_length(x) == 1;
 }
-// # nocov end
 
 static bool isNAConstant(SEXP x)
 {
@@ -111,7 +108,6 @@ static bool isNAConstant(SEXP x)
     }
 }
 
-// # nocov start (kEnableValueReplacements is disabled; see below)
 static bool isFortyTwo(SEXP x)
 {
     if (!isNumericScalarConstant(x))
@@ -120,20 +116,10 @@ static bool isFortyTwo(SEXP x)
         return INTEGER(x)[0] != NA_INTEGER && INTEGER(x)[0] == 42;
     return !ISNA(REAL(x)[0]) && !ISNAN(REAL(x)[0]) && REAL(x)[0] == 42.0;
 }
-// # nocov end
 
-// The constant-value replacements, namely numeric `0 -> 42` and `nonzero -> 0`
-// (makeScalarValueReplacement), plus assignment-RHS `-> 42` and ordinary-call
-// `-> 42`, generate many low-signal / near-equivalent mutants and many trivial
-// type-error kills, so they are disabled for now. The code is kept intact; flip
-// this to `true` to re-enable the whole family.
-static constexpr bool kEnableValueReplacements = false;
-
+// `value_42`: 0 -> 42, nonzero -> 0. Off by default (many trivial type-error kills).
 static SEXP makeScalarValueReplacement(SEXP x)
 {
-    if (!kEnableValueReplacements)
-        return R_NilValue;
-
     if (!isNumericScalarConstant(x))
         return R_NilValue;
 
@@ -175,12 +161,10 @@ static SEXP makeNAReplacement(SEXP x)
     }
 }
 
-// # nocov start (only reached from the disabled value-replacement family)
 static SEXP makeFortyTwo()
 {
     return Rf_ScalarReal(42.0);
 }
-// # nocov end
 
 // A length-1 NA of the requested R type: NA (logical), NA_integer_, NA_real_,
 // NA_character_. Used to swap an NA constant for a differently-typed NA, probing
@@ -210,7 +194,6 @@ static SEXP makeNotCall(SEXP expr)
     return call;
 }
 
-// # nocov start (only reached from the disabled value-replacement family)
 static bool isOrdinaryFunctionCall(SEXP expr)
 {
     if (TYPEOF(expr) != LANGSXP || TYPEOF(CAR(expr)) != SYMSXP)
@@ -246,7 +229,6 @@ static bool isOrdinaryFunctionCall(SEXP expr)
              isSymbol(fun, SYM.s_lbrace) ||
              isSymbol(fun, SYM.s_lparen));
 }
-// # nocov end
 
 static void addNodeReplacement(std::vector<OperatorPos> &ops,
                                const std::vector<int> &path,
@@ -348,6 +330,14 @@ std::vector<OperatorPos> ASTHandler::gatherOperators(SEXP expr, SEXP src_ref,
     std::vector<OperatorPos> ops;
     std::vector<int> path;
     gatherOperatorsRecursive(expr, path, ops);
+
+    if (_filter_operators)
+    {
+        ops.erase(std::remove_if(ops.begin(), ops.end(),
+                                 [this](const OperatorPos &op)
+                                 { return _enabled_operators.count(op.operator_id) == 0; }),
+                  ops.end());
+    }
     return ops;
 }
 
@@ -461,7 +451,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         }
     }
 
-    if (kEnableValueReplacements && isAssignmentSymbol(fun) && CDR(expr) != R_NilValue && CDDR(expr) != R_NilValue)
+    if (isAssignmentSymbol(fun) && CDR(expr) != R_NilValue && CDDR(expr) != R_NilValue)
     {
         SEXP rhs = CADDR(expr);
         if (!isFortyTwo(rhs))
@@ -485,7 +475,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         }
     }
 
-    if (kEnableValueReplacements && isOrdinaryFunctionCall(expr))
+    if (isOrdinaryFunctionCall(expr))
     {
         addNodeReplacement(ops, path, node_start_line, node_start_col,
                            node_end_line, node_end_col, expr, makeFortyTwo(), _file_path, "value_42");

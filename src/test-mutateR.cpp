@@ -2,7 +2,7 @@
 #include <R.h>
 #include <Rinternals.h>
 
-extern "C" SEXP C_mutate_file(SEXP exprs);
+extern "C" SEXP C_mutate_file(SEXP exprs, SEXP operators);
 
 context("mutateR C++ entrypoints")
 {
@@ -26,7 +26,7 @@ context("mutateR C++ entrypoints")
         SET_VECTOR_ELT(srcref, 0, single_sr);
         Rf_setAttrib(exprs, Rf_install("srcref"), srcref);
 
-        SEXP result = PROTECT(C_mutate_file(exprs));
+        SEXP result = PROTECT(C_mutate_file(exprs, R_NilValue));
         expect_true(TYPEOF(result) == VECSXP);
 
         UNPROTECT(5);

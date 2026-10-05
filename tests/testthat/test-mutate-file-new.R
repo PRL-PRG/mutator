@@ -119,7 +119,7 @@ test_that("C_mutate_file falls back to coarse range without synthetic child anch
     collapse = "\n"
   ), keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
   infos <- lapply(mutants, attr, which = "mutation_info")
 
   plus_info <- NULL
@@ -140,7 +140,7 @@ test_that("C_mutate_file falls back to coarse range without synthetic child anch
 test_that("C_mutate_file generates all operator mutants for a single expression", {
   exprs <- parse(text = "(1 + 2) * 3 - 4", keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
   infos <- lapply(mutants, attr, which = "mutation_info")
 
   symbols <- vapply(
@@ -166,7 +166,7 @@ test_that("C_mutate_file generates all operator mutants for a single expression"
 test_that("C_mutate_file generates typed-NA and NULL constant mutants", {
   exprs <- parse(text = "x <- f(0, 3L, \"a\", TRUE)", keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
   code <- vapply(mutants, function(m) {
     paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
   }, character(1))
@@ -186,7 +186,7 @@ test_that("C_mutate_file generates typed-NA and NULL constant mutants", {
 test_that("C_mutate_file restores logical negation mutants", {
   exprs <- parse(text = "f <- function(x) { if (x) y <- !x }", keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
   code <- vapply(mutants, function(m) {
     paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
   }, character(1))
@@ -198,7 +198,7 @@ test_that("C_mutate_file restores logical negation mutants", {
 test_that("C_mutate_file replaces only non-constant direct return values with NULL", {
   exprs <- parse(text = "f <- function(x) { return(x); return(1); return(\"a\") }", keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
   code <- vapply(mutants, function(m) {
     paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
   }, character(1))
@@ -210,7 +210,7 @@ test_that("C_mutate_file replaces only non-constant direct return values with NU
 test_that("C_mutate_file swaps NA constants between typed NAs", {
   exprs <- parse(text = "f <- function() g(NA, NA_real_)", keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
   code <- vapply(mutants, function(m) {
     paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
   }, character(1))
@@ -227,7 +227,7 @@ test_that("C_mutate_file keeps accumulated mutants alive across expressions", {
   code <- paste(sprintf("x%d <- %d + %d", 1:80, 1:80, 1:80), collapse = "\n")
   exprs <- parse(text = code, keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
 
   # Per expression: `+` -> `-`, and two mutations for each of the two numeric
   # constants (typed NA, NULL). The assignment-RHS `-> 42` and value-flip
@@ -241,12 +241,12 @@ test_that("C_mutate_single accepts a logical flag through .Call", {
   exprs <- parse(text = "1 + 2", keep.source = TRUE)
   srcref <- attr(exprs, "srcref")[[1]]
 
-  mutants <- .Call("C_mutate_single", exprs, srcref, FALSE, PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_single", exprs, srcref, FALSE, NULL, PACKAGE = "mutator")
 
   expect_type(mutants, "list")
   expect_true(length(mutants) >= 1)
   expect_error(
-    .Call("C_mutate_single", exprs, srcref, NA, PACKAGE = "mutator"),
+    .Call("C_mutate_single", exprs, srcref, NA, NULL, PACKAGE = "mutator"),
     "is_inside_block"
   )
 })

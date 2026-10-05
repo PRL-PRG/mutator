@@ -52,7 +52,7 @@ test_that("delete_line_mutants returns empty list when no valid lines", {
 
 test_that("C_mutate_file validates input types and srcref", {
     expect_error(
-        .Call("C_mutate_file", 1L, PACKAGE = "mutator"),
+        .Call("C_mutate_file", 1L, mutator:::resolve_operators(), PACKAGE = "mutator"),
         "EXPRSXP"
     )
 
@@ -60,7 +60,7 @@ test_that("C_mutate_file validates input types and srcref", {
     attr(exprs, "srcref") <- list(1:3)
 
     expect_error(
-        .Call("C_mutate_file", exprs, PACKAGE = "mutator"),
+        .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator"),
         "length 4"
     )
 })
