@@ -270,7 +270,8 @@ static void addNodeReplacement(std::vector<OperatorPos> &ops,
                                int end_col,
                                SEXP original,
                                SEXP replacement,
-                               const std::string &file_path)
+                               const std::string &file_path,
+                               const char *operator_id)
 {
     SEXP protected_replacement = PROTECT(replacement);
     ops.push_back({path,
@@ -280,7 +281,8 @@ static void addNodeReplacement(std::vector<OperatorPos> &ops,
                    end_line,
                    end_col,
                    original,
-                   file_path});
+                   file_path,
+                   operator_id});
     UNPROTECT(1);
 }
 
@@ -374,7 +376,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             if (scalar_replacement != R_NilValue)
             {
                 addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
-                                   expr, scalar_replacement, _file_path);
+                                   expr, scalar_replacement, _file_path, "value_42");
             }
 
             if (!isNAConstant(expr))
@@ -383,7 +385,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                 if (na_replacement != R_NilValue)
                 {
                     addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
-                                       expr, na_replacement, _file_path);
+                                       expr, na_replacement, _file_path, "na_replace");
                 }
             }
             else
@@ -399,13 +401,13 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                     if (na_swap != R_NilValue)
                     {
                         addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
-                                           expr, na_swap, _file_path);
+                                           expr, na_swap, _file_path, "na_type_swap");
                     }
                 }
             }
 
             addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
-                               expr, R_NilValue, _file_path);
+                               expr, R_NilValue, _file_path, "const_null");
         }
         return;
     }
@@ -425,48 +427,53 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
     SEXP fun = CAR(expr);
 
     /* operator map – keys are the cached symbols */
-    static const std::map<SEXP, std::function<std::unique_ptr<Operator>()>> op_map = {
-        {SYM.s_plus, []
-         { return std::make_unique<PlusOperator>(); }},
-        {SYM.s_minus, []
-         { return std::make_unique<MinusOperator>(); }},
-        {SYM.s_mul, []
-         { return std::make_unique<MultiplyOperator>(); }},
-        {SYM.s_div, []
-         { return std::make_unique<DivideOperator>(); }},
-        {SYM.s_eq, []
-         { return std::make_unique<EqualOperator>(); }},
-        {SYM.s_neq, []
-         { return std::make_unique<NotEqualOperator>(); }},
-        {SYM.s_lt, []
-         { return std::make_unique<LessThanOperator>(); }},
-        {SYM.s_gt, []
-         { return std::make_unique<MoreThanOperator>(); }},
-        {SYM.s_le, []
-         { return std::make_unique<LessThanOrEqualOperator>(); }},
-        {SYM.s_ge, []
-         { return std::make_unique<MoreThanOrEqualOperator>(); }},
-        {SYM.s_and, []
-         { return std::make_unique<AndOperator>(); }},
-        {SYM.s_or, []
-         { return std::make_unique<OrOperator>(); }},
-        {SYM.s_land, []
-         { return std::make_unique<LogicalAndOperator>(); }},
-        {SYM.s_lor, []
-         { return std::make_unique<LogicalOrOperator>(); }}};
+    struct SwapEntry
+    {
+        std::function<std::unique_ptr<Operator>()> make;
+        const char *id;
+    };
+    static const std::map<SEXP, SwapEntry> op_map = {
+        {SYM.s_plus, {[]
+         { return std::make_unique<PlusOperator>(); }, "arith_swap"}},
+        {SYM.s_minus, {[]
+         { return std::make_unique<MinusOperator>(); }, "arith_swap"}},
+        {SYM.s_mul, {[]
+         { return std::make_unique<MultiplyOperator>(); }, "arith_swap"}},
+        {SYM.s_div, {[]
+         { return std::make_unique<DivideOperator>(); }, "arith_swap"}},
+        {SYM.s_eq, {[]
+         { return std::make_unique<EqualOperator>(); }, "rel_swap"}},
+        {SYM.s_neq, {[]
+         { return std::make_unique<NotEqualOperator>(); }, "rel_swap"}},
+        {SYM.s_lt, {[]
+         { return std::make_unique<LessThanOperator>(); }, "rel_swap"}},
+        {SYM.s_gt, {[]
+         { return std::make_unique<MoreThanOperator>(); }, "rel_swap"}},
+        {SYM.s_le, {[]
+         { return std::make_unique<LessThanOrEqualOperator>(); }, "rel_swap"}},
+        {SYM.s_ge, {[]
+         { return std::make_unique<MoreThanOrEqualOperator>(); }, "rel_swap"}},
+        {SYM.s_and, {[]
+         { return std::make_unique<AndOperator>(); }, "logic_swap"}},
+        {SYM.s_or, {[]
+         { return std::make_unique<OrOperator>(); }, "logic_swap"}},
+        {SYM.s_land, {[]
+         { return std::make_unique<LogicalAndOperator>(); }, "logic_swap"}},
+        {SYM.s_lor, {[]
+         { return std::make_unique<LogicalOrOperator>(); }, "logic_swap"}}};
 
     if (auto it = op_map.find(fun); it != op_map.end())
     {
-        auto op = it->second();
+        auto op = it->second.make();
         ops.push_back({path, std::move(op), node_start_line, node_start_col,
-                       node_end_line, node_end_col, fun, _file_path});
+                       node_end_line, node_end_col, fun, _file_path, it->second.id});
     }
 
     if (isSymbol(fun, SYM.s_not) && CDR(expr) != R_NilValue)
     {
         SEXP arg = CADR(expr);
         addNodeReplacement(ops, path, node_start_line, node_start_col,
-                           node_end_line, node_end_col, expr, arg, _file_path);
+                           node_end_line, node_end_col, expr, arg, _file_path, "not_remove");
     }
 
     if ((isSymbol(fun, SYM.s_if) || isSymbol(fun, SYM.s_while)) && CDR(expr) != R_NilValue)
@@ -478,7 +485,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             condition_path.push_back(0);
             addNodeReplacement(ops, condition_path, node_start_line, node_start_col,
                                node_end_line, node_end_col, condition,
-                               makeNotCall(condition), _file_path);
+                               makeNotCall(condition), _file_path, "cond_negate");
         }
     }
 
@@ -490,7 +497,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             std::vector<int> rhs_path = path;
             rhs_path.push_back(1);
             addNodeReplacement(ops, rhs_path, node_start_line, node_start_col,
-                               node_end_line, node_end_col, rhs, makeFortyTwo(), _file_path);
+                               node_end_line, node_end_col, rhs, makeFortyTwo(), _file_path, "value_42");
         }
     }
 
@@ -502,14 +509,14 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             std::vector<int> return_value_path = path;
             return_value_path.push_back(0);
             addNodeReplacement(ops, return_value_path, node_start_line, node_start_col,
-                               node_end_line, node_end_col, value, R_NilValue, _file_path);
+                               node_end_line, node_end_col, value, R_NilValue, _file_path, "return_null");
         }
     }
 
     if (kEnableValueReplacements && isOrdinaryFunctionCall(expr))
     {
         addNodeReplacement(ops, path, node_start_line, node_start_col,
-                           node_end_line, node_end_col, expr, makeFortyTwo(), _file_path);
+                           node_end_line, node_end_col, expr, makeFortyTwo(), _file_path, "value_42");
     }
 
     // A `{ ... }` block exposes each of its direct children as a statement that
@@ -558,7 +565,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             SEXP del_symbol = (TYPEOF(child) == LANGSXP) ? CAR(child) : child;
             auto del = std::make_unique<DeleteOperator>(child);
             ops.push_back({child_path, std::move(del), del_start_line, del_start_col,
-                           del_end_line, del_end_col, del_symbol, _file_path});
+                           del_end_line, del_end_col, del_symbol, _file_path, "stmt_delete"});
         }
 
         if (isSymbol(fun, SYM.s_return) && idx == 0 && isScalarConstant(child))

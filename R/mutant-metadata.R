@@ -140,6 +140,7 @@ mutation_location <- function(src_file, raw_info = NULL) {
   start_col <- NA_integer_
   end_line <- NA_integer_
   end_col <- NA_integer_
+  operator_id <- NA_character_
   if (is.list(raw_info)) {
     if (!is.null(raw_info$file_path) && length(raw_info$file_path) > 0 &&
       !is.na(raw_info$file_path[1]) && nzchar(raw_info$file_path[1])) {
@@ -157,11 +158,15 @@ mutation_location <- function(src_file, raw_info = NULL) {
     if (!is.null(raw_info$end_col) && length(raw_info$end_col) > 0) {
       end_col <- as.integer(raw_info$end_col[1])
     }
+    if (!is.null(raw_info$operator_id) && length(raw_info$operator_id) > 0) {
+      operator_id <- as.character(raw_info$operator_id[1])
+    }
   }
   list(
     file_path = file_path,
     start_line = start_line, start_col = start_col,
     end_line = end_line, end_col = end_col,
-    details = mutation_detail_text(raw_info)
+    details = mutation_detail_text(raw_info),
+    operator_id = operator_id
   )
 }

@@ -41,9 +41,9 @@ static SEXP buildMutationInfo(const OperatorPos &pos, SEXP new_symbol)
 {
     int n_protect = 0;
 
-    SEXP info = PROTECT(Rf_allocVector(VECSXP, 7));
+    SEXP info = PROTECT(Rf_allocVector(VECSXP, 8));
     ++n_protect;
-    SEXP names = PROTECT(Rf_allocVector(STRSXP, 7));
+    SEXP names = PROTECT(Rf_allocVector(STRSXP, 8));
     ++n_protect;
 
     SET_STRING_ELT(names, 0, Rf_mkChar("start_line"));
@@ -53,6 +53,7 @@ static SEXP buildMutationInfo(const OperatorPos &pos, SEXP new_symbol)
     SET_STRING_ELT(names, 4, Rf_mkChar("original_symbol"));
     SET_STRING_ELT(names, 5, Rf_mkChar("new_symbol"));
     SET_STRING_ELT(names, 6, Rf_mkChar("file_path"));
+    SET_STRING_ELT(names, 7, Rf_mkChar("operator_id"));
 
     SEXP v = PROTECT(Rf_ScalarInteger(pos.start_line));
     ++n_protect;
@@ -96,6 +97,15 @@ static SEXP buildMutationInfo(const OperatorPos &pos, SEXP new_symbol)
         v = PROTECT(Rf_ScalarString(NA_STRING));
     ++n_protect;
     SET_VECTOR_ELT(info, 6, v);
+    UNPROTECT(1);
+    --n_protect;
+
+    if (!pos.operator_id.empty())
+        v = PROTECT(Rf_mkString(pos.operator_id.c_str()));
+    else
+        v = PROTECT(Rf_ScalarString(NA_STRING));
+    ++n_protect;
+    SET_VECTOR_ELT(info, 7, v);
     UNPROTECT(1);
     --n_protect;
 

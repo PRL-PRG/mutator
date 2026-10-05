@@ -60,7 +60,8 @@ delete_line_mutants <- function(src_file,
         new_symbol = NA_character_,
         file_path = normalizePath(src_file, mustWork = FALSE),
         mutation_type = "line_deletion",
-        deleted_line = as.integer(idx)
+        deleted_line = as.integer(idx),
+        operator_id = "line_delete"
       )
     )
   }
@@ -88,7 +89,9 @@ delete_line_mutants <- function(src_file,
 #'   \item{`path`}{Path to the mutant file.}
 #'   \item{`info`}{Formatted mutation metadata (file, source range, and details).}
 #'   \item{`loc`}{Machine-readable location: a list with `file_path`,
-#'   `start_line`, and `end_line` (the latter two `NA` when unavailable).}
+#'   `start_line`, and `end_line` (the latter two `NA` when unavailable), and
+#'   `operator_id`, the id of the mutation operator that produced the mutant
+#'   (e.g. `"rel_swap"`, `"stmt_delete"`).}
 #' }
 #'
 #' @examples

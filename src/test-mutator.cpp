@@ -80,6 +80,28 @@ context("Mutator C++ tests")
         UNPROTECT(2);
     }
 
+    test_that("mutation_info carries the operator id, NA when unset")
+    {
+        SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
+        std::vector<OperatorPos> ops;
+        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5,
+                                  Rf_install("+"), "", "arith_swap"));
+        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5,
+                                  Rf_install("+")));
+
+        Mutator mutator;
+        SEXP tagged = PROTECT(mutator.applyFlipMutation(expr, ops, 0).first);
+        SEXP info = Rf_getAttrib(tagged, Rf_install("mutation_info"));
+        SEXP id = VECTOR_ELT(info, 7);
+        expect_true(std::string(CHAR(STRING_ELT(Rf_getAttrib(info, R_NamesSymbol), 7))) == "operator_id");
+        expect_true(std::string(CHAR(STRING_ELT(id, 0))) == "arith_swap");
+
+        SEXP untagged = PROTECT(mutator.applyFlipMutation(expr, ops, 1).first);
+        SEXP info2 = Rf_getAttrib(untagged, Rf_install("mutation_info"));
+        expect_true(STRING_ELT(VECTOR_ELT(info2, 7), 0) == NA_STRING);
+        UNPROTECT(3);
+    }
+
     test_that("applyDeleteMutation rejects root deletion")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
