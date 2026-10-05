@@ -5,11 +5,14 @@
 
 class NodeReplacementOperator : public Operator {
 public:
-    NodeReplacementOperator(SEXP original_symbol, SEXP replacement)
-        : Operator(original_symbol), replacement(replacement)
+    // `info`, when given, is shown as the new value instead of `replacement`.
+    NodeReplacementOperator(SEXP original_symbol, SEXP replacement, SEXP info = R_NilValue)
+        : Operator(original_symbol), replacement(replacement), info(info)
     {
         if (replacement != R_NilValue)
             R_PreserveObject(replacement);
+        if (info != R_NilValue)
+            R_PreserveObject(info);
     }
 
     NodeReplacementOperator(const NodeReplacementOperator&) = delete;
@@ -19,6 +22,8 @@ public:
     {
         if (replacement != R_NilValue)
             R_ReleaseObject(replacement);
+        if (info != R_NilValue)
+            R_ReleaseObject(info);
     }
 
     std::string getType() const override {
@@ -32,6 +37,8 @@ public:
     }
 
     SEXP infoReplacement() const {
+        if (info != R_NilValue)
+            return info;
         if (replacement == R_NilValue)
             return Rf_install("NULL");
         return replacement;
@@ -39,6 +46,7 @@ public:
 
 private:
     SEXP replacement;
+    SEXP info;
 };
 
 #endif

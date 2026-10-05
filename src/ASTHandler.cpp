@@ -45,6 +45,8 @@ static struct CachedSyms
     SEXP s_assign = Rf_install("<-");
     SEXP s_eq_assign = Rf_install("=");
     SEXP s_super_assign = Rf_install("<<-");
+    SEXP s_subset2 = Rf_install("[[");
+    SEXP s_subset = Rf_install("[");
     SEXP s_srcref = Rf_install("srcref");
     SEXP s_mutinfo = Rf_install("mutation_info");
 } SYM;
@@ -215,6 +217,11 @@ static bool isLogicalConstant(SEXP x, int value)
     return TYPEOF(x) == LGLSXP && Rf_length(x) == 1 && LOGICAL(x)[0] == value;
 }
 
+static bool isNonNABool(SEXP x)
+{
+    return TYPEOF(x) == LGLSXP && Rf_length(x) == 1 && LOGICAL(x)[0] != NA_LOGICAL;
+}
+
 static SEXP makeNotCall(SEXP expr)
 {
     SEXP duplicated = PROTECT(Rf_duplicate(expr));
@@ -268,11 +275,13 @@ static void addNodeReplacement(std::vector<OperatorPos> &ops,
                                SEXP original,
                                SEXP replacement,
                                const std::string &file_path,
-                               const char *operator_id)
+                               const char *operator_id,
+                               SEXP info = R_NilValue)
 {
     SEXP protected_replacement = PROTECT(replacement);
+    PROTECT(info);
     ops.push_back({path,
-                   std::make_unique<NodeReplacementOperator>(original, protected_replacement),
+                   std::make_unique<NodeReplacementOperator>(original, protected_replacement, info),
                    start_line,
                    start_col,
                    end_line,
@@ -280,7 +289,7 @@ static void addNodeReplacement(std::vector<OperatorPos> &ops,
                    original,
                    file_path,
                    operator_id});
-    UNPROTECT(1);
+    UNPROTECT(2);
 }
 
 static SEXP getVarFromFrame(SEXP env, SEXP name)
@@ -419,6 +428,15 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                                        expr, shifted, _file_path, "const_off_by_one");
             }
 
+            if (isNonNABool(expr))
+                addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
+                                   expr, Rf_ScalarLogical(!LOGICAL(expr)[0]), _file_path, "bool_flip");
+
+            if (TYPEOF(expr) == STRSXP && STRING_ELT(expr, 0) != NA_STRING &&
+                CHAR(STRING_ELT(expr, 0))[0] != '\0')
+                addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
+                                   expr, Rf_mkString(""), _file_path, "string_empty");
+
             addNodeReplacement(ops, path, _start_line, _start_col, _end_line, _end_col,
                                expr, R_NilValue, _file_path, "const_null");
         }
@@ -467,7 +485,13 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         {SYM.s_mod, {SYM.s_intdiv, "arith_extra"}},
         {SYM.s_intdiv, {SYM.s_mod, "arith_extra"}},
         {SYM.s_break, {SYM.s_next, "loop_ctrl"}},
-        {SYM.s_next, {SYM.s_break, "loop_ctrl"}}};
+        {SYM.s_next, {SYM.s_break, "loop_ctrl"}},
+        {SYM.s_super_assign, {SYM.s_assign, "super_assign"}},
+        {SYM.s_land, {SYM.s_and, "scalar_vector_logic"}},
+        {SYM.s_lor, {SYM.s_or, "scalar_vector_logic"}},
+        {SYM.s_and, {SYM.s_land, "scalar_vector_logic"}},
+        {SYM.s_or, {SYM.s_lor, "scalar_vector_logic"}},
+        {SYM.s_subset2, {SYM.s_subset, "index_ops"}}};
 
     auto range = swaps.equal_range(fun);
     for (auto it = range.first; it != range.second; ++it)
@@ -482,6 +506,45 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         SEXP arg = CADR(expr);
         addNodeReplacement(ops, path, node_start_line, node_start_col,
                            node_end_line, node_end_col, expr, arg, _file_path, "not_remove");
+    }
+
+    // Flip TRUE/FALSE argument defaults. Formals are a pairlist that mutation
+    // paths cannot enter, so the whole formals list is replaced.
+    if (isSymbol(fun, SYM.s_function) && CDR(expr) != R_NilValue && TYPEOF(CADR(expr)) == LISTSXP)
+    {
+        SEXP formals = CADR(expr);
+        std::vector<int> formals_path = path;
+        formals_path.push_back(0);
+        int k = 0;
+        for (SEXP f = formals; f != R_NilValue; f = CDR(f), ++k)
+        {
+            if (!isNonNABool(CAR(f)))
+                continue;
+            SEXP mutated = PROTECT(Rf_duplicate(formals));
+            SEXP cell = mutated;
+            for (int j = 0; j < k; ++j)
+                cell = CDR(cell);
+            SEXP flipped = PROTECT(Rf_ScalarLogical(!LOGICAL(CAR(f))[0]));
+            SETCAR(cell, flipped);
+            addNodeReplacement(ops, formals_path, node_start_line, node_start_col,
+                               node_end_line, node_end_col, CAR(f), mutated, _file_path,
+                               "bool_flip", flipped);
+            UNPROTECT(2);
+        }
+    }
+
+    // x[i] -> x[[i]], only for a single plain index
+    if (isSymbol(fun, SYM.s_subset))
+    {
+        SEXP args = CDR(expr);
+        if (args != R_NilValue && CDR(args) != R_NilValue && CDDR(args) == R_NilValue &&
+            TAG(args) == R_NilValue && TAG(CDR(args)) == R_NilValue &&
+            CADR(args) != R_MissingArg)
+        {
+            ops.push_back({path, std::make_unique<SymbolSwapOperator>(fun, SYM.s_subset2),
+                           node_start_line, node_start_col, node_end_line, node_end_col,
+                           fun, _file_path, "index_ops"});
+        }
     }
 
     // Unary minus: -x -> x
