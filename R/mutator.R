@@ -125,8 +125,9 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
   if (isTRUE(excl$whole_file)) {
     return(list())
   }
-  exclude_lines <- if (length(excl$ranges) > 0) {
-    unique(unlist(lapply(excl$ranges, function(r) seq.int(r[1], r[2]))))
+  line_delete_ranges <- ranges_for_operator(excl$ranges, "line_delete")
+  exclude_lines <- if (length(line_delete_ranges) > 0) {
+    unique(unlist(lapply(line_delete_ranges, function(r) seq.int(r[1], r[2]))))
   } else {
     integer()
   }
@@ -175,7 +176,8 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
     # Skip mutants whose source span overlaps a `# mutator:ignore-*` region
     # before writing any file. (Operator mutants report their enclosing
     # top-level expression's bounds, so this excludes at function granularity.)
-    if (is.list(info) && is_excluded_range(info$start_line, info$end_line, excl$ranges)) {
+    op_id <- if (is.list(info) && !is.null(info$operator_id)) info$operator_id else NA_character_
+    if (is.list(info) && is_excluded_range(info$start_line, info$end_line, excl$ranges, op_id)) {
       next
     }
 
@@ -317,7 +319,9 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 #'   are generated. `NULL` (the default) mutates every file. This complements 
 #'   the in-source `# mutator:ignore-file` and
 #'   `# mutator:ignore-start` / `# mutator:ignore-end` directives, which exclude
-#'   a whole file or a line region from within the source itself. Note that for
+#'   a whole file or a line region from within the source itself, optionally
+#'   only for the operators they list (e.g.
+#'   `# mutator:ignore-start seq_idiom, constants`). Note that for
 #'   operator mutations the engine only resolves positions to the enclosing
 #'   top-level definition, so a region directive excludes that function's
 #'   operator mutants as a group (line-deletion mutants are excluded

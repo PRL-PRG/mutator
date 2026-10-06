@@ -93,7 +93,9 @@ each worker its own copy at the cost of extra disk. Note that running with
 are generated. \code{NULL} (the default) mutates every file. This complements
 the in-source \verb{# mutator:ignore-file} and
 \verb{# mutator:ignore-start} / \verb{# mutator:ignore-end} directives, which exclude
-a whole file or a line region from within the source itself. Note that for
+a whole file or a line region from within the source itself, optionally
+only for the operators they list (e.g.
+\verb{# mutator:ignore-start seq_idiom, constants}). Note that for
 operator mutations the engine only resolves positions to the enclosing
 top-level definition, so a region directive excludes that function's
 operator mutants as a group (line-deletion mutants are excluded
