@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <map>
+#include <unordered_set>
 #include <iostream>
 #include <Rversion.h>
 #include "ASTHandler.h"
@@ -47,6 +48,18 @@ static struct CachedSyms
     SEXP s_super_assign = Rf_install("<<-");
     SEXP s_subset2 = Rf_install("[[");
     SEXP s_subset = Rf_install("[");
+    SEXP s_colon = Rf_install(":");
+    SEXP s_seq_len = Rf_install("seq_len");
+    SEXP s_seq_along = Rf_install("seq_along");
+    SEXP s_length = Rf_install("length");
+    SEXP s_drop = Rf_install("drop");
+    SEXP s_expr = Rf_install("expr");
+    SEXP s_invisible = Rf_install("invisible");
+    SEXP s_stop = Rf_install("stop");
+    SEXP s_stopifnot = Rf_install("stopifnot");
+    SEXP s_trycatch = Rf_install("tryCatch");
+    SEXP s_try = Rf_install("try");
+    SEXP s_with_handlers = Rf_install("withCallingHandlers");
     SEXP s_srcref = Rf_install("srcref");
     SEXP s_mutinfo = Rf_install("mutation_info");
 } SYM;
@@ -222,6 +235,28 @@ static bool isNonNABool(SEXP x)
     return TYPEOF(x) == LGLSXP && Rf_length(x) == 1 && LOGICAL(x)[0] != NA_LOGICAL;
 }
 
+// Copy of `call` without its k-th argument (0-based).
+static SEXP dropArgument(SEXP call, int k)
+{
+    SEXP copy = PROTECT(Rf_duplicate(call));
+    SEXP prev = copy;
+    for (int j = 0; j < k; ++j)
+        prev = CDR(prev);
+    SETCDR(prev, CDDR(prev));
+    UNPROTECT(1);
+    return copy;
+}
+
+using SymbolSet = std::unordered_set<SEXP>;
+
+static SymbolSet makeSymbolSet(std::initializer_list<const char *> names)
+{
+    SymbolSet set;
+    for (const char *name : names)
+        set.insert(Rf_install(name));
+    return set;
+}
+
 static SEXP makeNotCall(SEXP expr)
 {
     SEXP duplicated = PROTECT(Rf_duplicate(expr));
@@ -367,6 +402,7 @@ std::vector<OperatorPos> ASTHandler::gatherOperators(SEXP expr, SEXP src_ref,
 
     std::vector<OperatorPos> ops;
     std::vector<int> path;
+    _parent_is_block = false;
     gatherOperatorsRecursive(expr, path, ops);
 
     if (_filter_operators)
@@ -456,6 +492,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                         node_end_col);
 
     SEXP fun = CAR(expr);
+    const bool parent_is_block = _parent_is_block;
 
     struct SwapEntry
     {
@@ -491,7 +528,39 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         {SYM.s_lor, {SYM.s_or, "scalar_vector_logic"}},
         {SYM.s_and, {SYM.s_land, "scalar_vector_logic"}},
         {SYM.s_or, {SYM.s_lor, "scalar_vector_logic"}},
-        {SYM.s_subset2, {SYM.s_subset, "index_ops"}}};
+        {SYM.s_subset2, {SYM.s_subset, "index_ops"}},
+        {Rf_install("any"), {Rf_install("all"), "fun_swap"}},
+        {Rf_install("all"), {Rf_install("any"), "fun_swap"}},
+        {Rf_install("min"), {Rf_install("max"), "fun_swap"}},
+        {Rf_install("max"), {Rf_install("min"), "fun_swap"}},
+        {Rf_install("pmin"), {Rf_install("pmax"), "fun_swap"}},
+        {Rf_install("pmax"), {Rf_install("pmin"), "fun_swap"}},
+        {Rf_install("which.min"), {Rf_install("which.max"), "fun_swap"}},
+        {Rf_install("which.max"), {Rf_install("which.min"), "fun_swap"}},
+        {Rf_install("head"), {Rf_install("tail"), "fun_swap"}},
+        {Rf_install("tail"), {Rf_install("head"), "fun_swap"}},
+        {Rf_install("nrow"), {Rf_install("ncol"), "fun_swap"}},
+        {Rf_install("ncol"), {Rf_install("nrow"), "fun_swap"}},
+        {Rf_install("isTRUE"), {Rf_install("isFALSE"), "fun_swap"}},
+        {Rf_install("isFALSE"), {Rf_install("isTRUE"), "fun_swap"}},
+        {Rf_install("sub"), {Rf_install("gsub"), "fun_swap"}},
+        {Rf_install("gsub"), {Rf_install("sub"), "fun_swap"}},
+        {Rf_install("floor"), {Rf_install("ceiling"), "fun_swap_extra"}},
+        {Rf_install("ceiling"), {Rf_install("floor"), "fun_swap_extra"}},
+        {Rf_install("rownames"), {Rf_install("colnames"), "fun_swap_extra"}},
+        {Rf_install("colnames"), {Rf_install("rownames"), "fun_swap_extra"}},
+        {Rf_install("rowSums"), {Rf_install("colSums"), "fun_swap_extra"}},
+        {Rf_install("colSums"), {Rf_install("rowSums"), "fun_swap_extra"}},
+        {Rf_install("rowMeans"), {Rf_install("colMeans"), "fun_swap_extra"}},
+        {Rf_install("colMeans"), {Rf_install("rowMeans"), "fun_swap_extra"}},
+        {Rf_install("paste"), {Rf_install("paste0"), "fun_swap_extra"}},
+        {Rf_install("paste0"), {Rf_install("paste"), "fun_swap_extra"}},
+        {Rf_install("startsWith"), {Rf_install("endsWith"), "fun_swap_extra"}},
+        {Rf_install("endsWith"), {Rf_install("startsWith"), "fun_swap_extra"}},
+        {Rf_install("union"), {Rf_install("intersect"), "fun_swap_extra"}},
+        {Rf_install("intersect"), {Rf_install("union"), "fun_swap_extra"}},
+        {Rf_install("sapply"), {Rf_install("lapply"), "fun_swap_extra"}},
+        {Rf_install("is.null"), {Rf_install("is.na"), "fun_swap_extra"}}};
 
     auto range = swaps.equal_range(fun);
     for (auto it = range.first; it != range.second; ++it)
@@ -530,6 +599,99 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                                node_end_line, node_end_col, CAR(f), mutated, _file_path,
                                "bool_flip", flipped);
             UNPROTECT(2);
+        }
+    }
+
+    // seq_len(n) -> 1:n, seq_along(x) -> 1:length(x)
+    if ((isSymbol(fun, SYM.s_seq_len) || isSymbol(fun, SYM.s_seq_along)) &&
+        CDR(expr) != R_NilValue && CDDR(expr) == R_NilValue)
+    {
+        SEXP upper = CADR(expr);
+        if (isSymbol(fun, SYM.s_seq_along))
+            upper = Rf_lang2(SYM.s_length, upper);
+        PROTECT(upper);
+        SEXP one = PROTECT(Rf_ScalarReal(1));
+        SEXP range = Rf_lang3(SYM.s_colon, one, upper);
+        UNPROTECT(2);
+        addNodeReplacement(ops, path, node_start_line, node_start_col,
+                           node_end_line, node_end_col, expr, range, _file_path, "seq_idiom");
+    }
+
+    // Drop a named argument so that its default applies.
+    {
+        int k = 0;
+        for (SEXP a = CDR(expr); a != R_NilValue; a = CDR(a), ++k)
+        {
+            SEXP tag = TAG(a);
+            if (tag == R_NilValue)
+                continue;
+            if (isSymbol(fun, SYM.s_subset) && tag == SYM.s_drop)
+            {
+                // x[i, j, drop = FALSE] -> x[i, j]; drop = TRUE is the default.
+                if (isLogicalConstant(CAR(a), FALSE))
+                    addNodeReplacement(ops, path, node_start_line, node_start_col,
+                                       node_end_line, node_end_col, expr,
+                                       dropArgument(expr, k), _file_path, "drop_idiom");
+                continue;
+            }
+            static const SymbolSet droppable = makeSymbolSet(
+                {"na.rm", "drop", "fixed", "perl", "exact", "decreasing",
+                 "simplify", "sep", "collapse", "envir", "inherits"});
+            if (droppable.count(tag))
+            {
+                SEXP shown = PROTECT(Rf_mkString("<default>"));
+                addNodeReplacement(ops, path, node_start_line, node_start_col,
+                                   node_end_line, node_end_col, tag,
+                                   dropArgument(expr, k), _file_path, "named_arg_drop", shown);
+                UNPROTECT(1);
+            }
+        }
+    }
+
+    // rev(x) -> x, as.numeric(x) -> x, ...
+    static const SymbolSet unwrappable = makeSymbolSet(
+        {"rev", "sort", "unique", "abs", "unname", "trimws", "tolower", "toupper",
+         "na.omit", "as.integer", "as.numeric", "as.double", "as.character",
+         "as.vector", "drop", "suppressWarnings", "suppressMessages", "invisible"});
+    if (unwrappable.count(fun) && CDR(expr) != R_NilValue && TAG(CDR(expr)) == R_NilValue)
+    {
+        addNodeReplacement(ops, path, node_start_line, node_start_col,
+                           node_end_line, node_end_col, expr, CADR(expr), _file_path, "call_unwrap");
+    }
+
+    // tryCatch(expr, ...) -> expr
+    if ((isSymbol(fun, SYM.s_trycatch) || isSymbol(fun, SYM.s_try) ||
+         isSymbol(fun, SYM.s_with_handlers)) &&
+        CDR(expr) != R_NilValue && (TAG(CDR(expr)) == R_NilValue || TAG(CDR(expr)) == SYM.s_expr))
+    {
+        addNodeReplacement(ops, path, node_start_line, node_start_col,
+                           node_end_line, node_end_col, expr, CADR(expr), _file_path, "error_handling");
+    }
+
+    // stop(...) -> invisible(NULL), unless stmt_delete already removes it
+    if ((isSymbol(fun, SYM.s_stop) || isSymbol(fun, SYM.s_stopifnot)) && !parent_is_block)
+    {
+        addNodeReplacement(ops, path, node_start_line, node_start_col,
+                           node_end_line, node_end_col, expr,
+                           Rf_lang2(SYM.s_invisible, R_NilValue), _file_path, "error_handling");
+    }
+
+    // max(a, b) <-> pmax(a, b), min <-> pmin, with at least two unnamed arguments
+    {
+        static const std::map<SEXP, SEXP> parallel = {
+            {Rf_install("max"), Rf_install("pmax")}, {Rf_install("pmax"), Rf_install("max")},
+            {Rf_install("min"), Rf_install("pmin")}, {Rf_install("pmin"), Rf_install("min")}};
+        auto it = parallel.find(fun);
+        if (it != parallel.end())
+        {
+            int unnamed = 0;
+            for (SEXP a = CDR(expr); a != R_NilValue; a = CDR(a))
+                if (TAG(a) == R_NilValue)
+                    ++unnamed;
+            if (unnamed >= 2)
+                ops.push_back({path, std::make_unique<SymbolSwapOperator>(fun, it->second),
+                               node_start_line, node_start_col, node_end_line, node_end_col,
+                               fun, _file_path, "scalar_vector_fun"});
         }
     }
 
@@ -672,6 +834,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         if (isSymbol(fun, SYM.s_return) && idx == 0 && isScalarConstant(child))
             continue;
 
+        _parent_is_block = this_is_block;
         gatherOperatorsRecursive(child, child_path, ops);
     }
 }
