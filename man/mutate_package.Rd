@@ -175,7 +175,9 @@ and optional equivalence flags.}
 \code{generation}, \code{test_execution}, and \code{equivalence_detection}.}
 \item{\code{summary}}{Named list with \code{generated}, \code{tested}, \code{killed}, \code{hanged},
 \code{survived}, \code{mutation_score}, \code{mutation_score_ci} (a length-2 percentage
-vector, or \code{NULL} when no sampling occurred), and \code{confidence}.}
+vector, or \code{NULL} when no sampling occurred), \code{confidence}, and
+\code{by_operator}, a data frame with one row per mutation operator and columns
+\code{operator}, \code{tested}, \code{killed}, \code{hanged}, \code{survived} and \code{mutation_score}.}
 }
 }
 \description{

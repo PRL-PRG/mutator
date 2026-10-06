@@ -374,7 +374,9 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 #'   `generation`, `test_execution`, and `equivalence_detection`.}
 #'   \item{`summary`}{Named list with `generated`, `tested`, `killed`, `hanged`,
 #'   `survived`, `mutation_score`, `mutation_score_ci` (a length-2 percentage
-#'   vector, or `NULL` when no sampling occurred), and `confidence`.}
+#'   vector, or `NULL` when no sampling occurred), `confidence`, and
+#'   `by_operator`, a data frame with one row per mutation operator and columns
+#'   `operator`, `tested`, `killed`, `hanged`, `survived` and `mutation_score`.}
 #' }
 #'
 #' @examples

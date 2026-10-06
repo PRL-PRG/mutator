@@ -94,6 +94,48 @@ package_mutation_counts <- function(package_mutants, detect_equivalence = FALSE)
   )
 }
 
+# Mutation score per operator, with operators in registry order.
+operator_mutation_scores <- function(package_mutants) {
+  ids <- vapply(package_mutants, function(m) {
+    id <- m$mutation_loc$operator_id
+    if (is.null(id) || length(id) == 0L) NA_character_ else as.character(id[1])
+  }, character(1))
+  status <- vapply(package_mutants, function(m) as.character(m$status), character(1))
+  known <- operator_registry()$id
+  ops <- c(intersect(known, ids), sort(setdiff(ids[!is.na(ids)], known)))
+  if (anyNA(ids)) ops <- c(ops, NA_character_)
+  count <- function(op, s) {
+    in_op <- if (is.na(op)) is.na(ids) else ids %in% op
+    if (is.null(s)) sum(in_op) else sum(in_op & status == s)
+  }
+  tested <- vapply(ops, count, integer(1), s = NULL, USE.NAMES = FALSE)
+  killed <- vapply(ops, count, integer(1), s = "KILLED", USE.NAMES = FALSE)
+  data.frame(
+    operator = as.character(ops),
+    tested = tested,
+    killed = killed,
+    hanged = vapply(ops, count, integer(1), s = "HANG", USE.NAMES = FALSE),
+    survived = vapply(ops, count, integer(1), s = "SURVIVED", USE.NAMES = FALSE),
+    mutation_score = if (length(ops)) 100 * killed / tested else numeric(),
+    stringsAsFactors = FALSE
+  )
+}
+
+format_operator_scores <- function(by_operator) {
+  if (is.null(by_operator) || nrow(by_operator) == 0L) {
+    return(character())
+  }
+  label <- ifelse(is.na(by_operator$operator), "<unknown>", by_operator$operator)
+  width <- max(nchar(label), nchar("Operator"))
+  c(
+    sprintf("  %-*s  %6s  %6s  %6s  %8s  %6s", width, "Operator",
+            "Tested", "Killed", "Hanged", "Survived", "Score"),
+    sprintf("  %-*s  %6d  %6d  %6d  %8d  %5.1f%%", width, label,
+            by_operator$tested, by_operator$killed, by_operator$hanged,
+            by_operator$survived, by_operator$mutation_score)
+  )
+}
+
 build_package_mutation_result <- function(mutants, execution_results,
                                           equivalence_info, total_generated,
                                           confidence, timing,
@@ -125,7 +167,8 @@ build_package_mutation_result <- function(mutants, execution_results,
       survived = counts$survived,
       mutation_score = mutation_score,
       mutation_score_ci = score_ci,
-      confidence = confidence
+      confidence = confidence,
+      by_operator = operator_mutation_scores(assembled$package_mutants)
     )
   )
 }
@@ -214,6 +257,13 @@ report_package_mutation_result <- function(result, pkg_dir,
     ))
   } else {
     message(score_line)
+  }
+  operator_lines <- format_operator_scores(result$summary$by_operator)
+  if (length(operator_lines) > 0) {
+    message("")
+    message("Mutation Score by Operator:")
+    message(paste(operator_lines, collapse = "
+"))
   }
   invisible(result)
 }
