@@ -211,6 +211,7 @@ static SEXP makeOffByOne(SEXP x, int delta)
     if (TYPEOF(x) == INTSXP && Rf_length(x) == 1)
     {
         int v = INTEGER(x)[0];
+        // NA_INTEGER is INT_MIN, so INT_MIN + 1 - 1 would be NA.
         if (v == NA_INTEGER || (delta > 0 && v == INT_MAX) || (delta < 0 && v == INT_MIN + 1))
             return R_NilValue;
         return Rf_ScalarInteger(v + delta);
@@ -402,8 +403,7 @@ std::vector<OperatorPos> ASTHandler::gatherOperators(SEXP expr, SEXP src_ref,
 
     std::vector<OperatorPos> ops;
     std::vector<int> path;
-    _parent_is_block = false;
-    gatherOperatorsRecursive(expr, path, ops);
+    gatherOperatorsRecursive(expr, path, ops, false);
 
     if (_filter_operators)
     {
@@ -416,7 +416,7 @@ std::vector<OperatorPos> ASTHandler::gatherOperators(SEXP expr, SEXP src_ref,
 }
 
 void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
-                                          std::vector<OperatorPos> &ops)
+                                          std::vector<OperatorPos> &ops, bool parent_is_block)
 {
     if (TYPEOF(expr) != LANGSXP)
     {
@@ -492,7 +492,6 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                         node_end_col);
 
     SEXP fun = CAR(expr);
-    const bool parent_is_block = _parent_is_block;
 
     struct SwapEntry
     {
@@ -629,9 +628,13 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             {
                 // x[i, j, drop = FALSE] -> x[i, j]; drop = TRUE is the default.
                 if (isLogicalConstant(CAR(a), FALSE))
+                {
+                    SEXP dropped = PROTECT(dropArgument(expr, k));
                     addNodeReplacement(ops, path, node_start_line, node_start_col,
                                        node_end_line, node_end_col, expr,
-                                       dropArgument(expr, k), _file_path, "drop_idiom");
+                                       dropped, _file_path, "drop_idiom");
+                    UNPROTECT(1);
+                }
                 continue;
             }
             static const SymbolSet droppable = makeSymbolSet(
@@ -640,10 +643,11 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
             if (droppable.count(tag))
             {
                 SEXP shown = PROTECT(Rf_mkString("<default>"));
+                SEXP dropped = PROTECT(dropArgument(expr, k));
                 addNodeReplacement(ops, path, node_start_line, node_start_col,
                                    node_end_line, node_end_col, tag,
-                                   dropArgument(expr, k), _file_path, "named_arg_drop", shown);
-                UNPROTECT(1);
+                                   dropped, _file_path, "named_arg_drop", shown);
+                UNPROTECT(2);
             }
         }
     }
@@ -659,7 +663,8 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
                            node_end_line, node_end_col, expr, CADR(expr), _file_path, "call_unwrap");
     }
 
-    // tryCatch(expr, ...) -> expr
+    // tryCatch(expr, ...) -> expr. Unlike stop() below, not gated on blocks:
+    // deleting the statement also drops `expr`, unwrapping keeps it.
     if ((isSymbol(fun, SYM.s_trycatch) || isSymbol(fun, SYM.s_try) ||
          isSymbol(fun, SYM.s_with_handlers)) &&
         CDR(expr) != R_NilValue && (TAG(CDR(expr)) == R_NilValue || TAG(CDR(expr)) == SYM.s_expr))
@@ -834,7 +839,6 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
         if (isSymbol(fun, SYM.s_return) && idx == 0 && isScalarConstant(child))
             continue;
 
-        _parent_is_block = this_is_block;
-        gatherOperatorsRecursive(child, child_path, ops);
+        gatherOperatorsRecursive(child, child_path, ops, this_is_block);
     }
 }

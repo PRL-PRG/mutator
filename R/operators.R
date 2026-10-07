@@ -153,5 +153,8 @@ resolve_operators <- function(operators = NULL) {
       selected <- union(selected, expand(operators[i]))
     }
   }
+  if (length(selected) == 0L) {
+    stop("`operators` selects no mutation operator.", call. = FALSE)
+  }
   reg$id[reg$id %in% selected]
 }

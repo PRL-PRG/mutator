@@ -35,11 +35,11 @@ private:
     std::string _file_path;
     std::unordered_set<std::string> _enabled_operators;
     bool _filter_operators = false;
-    bool _parent_is_block = false; // set for the node being visited
 
     // Recursive helper function. Block nesting is tracked intrinsically during
     // traversal: a node is a deletable statement iff its parent is a `{ }` block.
-    void gatherOperatorsRecursive(SEXP expr, std::vector<int> path, std::vector<OperatorPos> &ops);
+    void gatherOperatorsRecursive(SEXP expr, std::vector<int> path, std::vector<OperatorPos> &ops,
+                                  bool parent_is_block);
 
     static bool isDeletableStatement(SEXP stmt);
 };

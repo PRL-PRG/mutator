@@ -14,7 +14,7 @@ public:
 
     // Note: deletion is handled structurally by Mutator::applyDeleteMutation and
     // is not a symbol replacement, so DeleteOperator deliberately does not
-    // implement flip() (it does not inherit from ReplacementOperator).
+    // implement flip() (it does not inherit from SymbolSwapOperator).
 };
 
 #endif

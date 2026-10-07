@@ -44,6 +44,8 @@ test_that("invalid specs are rejected with a suggestion", {
   expect_error(resolve(character()), "non-empty character")
   expect_error(resolve(1), "non-empty character")
   expect_error(resolve(NA_character_), "non-empty character")
+  expect_error(resolve(c("all", "-all")), "selects no mutation operator")
+  expect_error(resolve("-all"), "selects no mutation operator")
 })
 
 gen_ids <- function(code, operators, max_line_deletions = 0) {
