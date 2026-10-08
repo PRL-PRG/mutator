@@ -43,7 +43,7 @@ test_that("format_operator_scores renders one aligned row per operator", {
   ))
 })
 
-test_that("results and the console report include the per-operator scores", {
+test_that("results include the per-operator scores, printed only with full_log", {
   mutants <- list(
     m1 = list(pkg = "p1", info = "i", loc = list(operator_id = "rel_swap"), src = "a.R",
               mutant_file = "m1.R"),
@@ -59,10 +59,14 @@ test_that("results and the console report include the per-operator scores", {
   expect_identical(result$summary$by_operator$operator, c("arith_swap", "rel_swap"))
   expect_equal(result$summary$by_operator$mutation_score, c(0, 100))
 
-  out <- capture.output(
-    mutator:::report_package_mutation_result(result, pkg_dir = tempdir(), max_show = 0),
-    type = "message"
-  )
+  report <- function(...) {
+    capture.output(
+      mutator:::report_package_mutation_result(result, pkg_dir = tempdir(), max_show = 0, ...),
+      type = "message"
+    )
+  }
+  expect_false("Mutation Score by Operator:" %in% report())
+  out <- report(full_log = TRUE)
   at <- which(out == "Mutation Score by Operator:")
   expect_length(at, 1L)
   expect_match(out[at + 2L], "^  arith_swap .* 0\\.0%$")

@@ -191,7 +191,7 @@ format_mutation_score_line <- function(summary) {
 
 report_package_mutation_result <- function(result, pkg_dir,
                                            detect_equivalence = FALSE,
-                                           max_show = 50L) {
+                                           max_show = 50L, full_log = FALSE) {
   package_mutants <- result$package_mutants
   survivors <- Filter(
     function(mutant) identical(mutant$status, "SURVIVED"),
@@ -258,7 +258,7 @@ report_package_mutation_result <- function(result, pkg_dir,
   } else {
     message(score_line)
   }
-  operator_lines <- format_operator_scores(result$summary$by_operator)
+  operator_lines <- if (full_log) format_operator_scores(result$summary$by_operator)
   if (length(operator_lines) > 0) {
     message("")
     message("Mutation Score by Operator:")

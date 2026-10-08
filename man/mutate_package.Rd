@@ -32,7 +32,8 @@ mutate_package(
 
 \item{cores}{Number of parallel workers used for mutant test execution.}
 
-\item{isFullLog}{Logical; if \code{TRUE}, prints per-mutant logs and timeout info.}
+\item{isFullLog}{Logical; if \code{TRUE}, prints per-mutant logs, timeout info,
+and the mutation score per operator.}
 
 \item{detectEqMutants}{Logical; if \code{TRUE}, every generated mutant is analyzed
 for equivalence using the OpenAI-based workflow \emph{before} the test suites are

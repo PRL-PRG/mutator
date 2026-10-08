@@ -253,7 +253,8 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 #'
 #' @param pkg_dir Path to the package directory.
 #' @param cores Number of parallel workers used for mutant test execution.
-#' @param isFullLog Logical; if `TRUE`, prints per-mutant logs and timeout info.
+#' @param isFullLog Logical; if `TRUE`, prints per-mutant logs, timeout info,
+#'   and the mutation score per operator.
 #' @param detectEqMutants Logical; if `TRUE`, every generated mutant is analyzed
 #'   for equivalence using the OpenAI-based workflow *before* the test suites are
 #'   run. Mutants judged equivalent are recorded as survived without running
@@ -591,7 +592,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     result,
     pkg_dir = pkg_dir,
     detect_equivalence = detectEqMutants,
-    max_show = max_show
+    max_show = max_show,
+    full_log = isFullLog
   )
   invisible(result)
 }
