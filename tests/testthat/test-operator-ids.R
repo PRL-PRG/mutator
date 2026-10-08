@@ -58,3 +58,12 @@ test_that("mutation_location defaults operator_id to NA", {
   expect_identical(ml("x.R", NULL)$operator_id, NA_character_)
   expect_identical(ml("x.R", list(operator_id = "rel_swap"))$operator_id, "rel_swap")
 })
+
+test_that("a top-level constant replaced by NULL keeps its metadata", {
+  ms <- mutants_for(c("#' @keywords internal", "\"_PACKAGE\""))
+  nulled <- Filter(function(m) identical(m$loc$operator_id, "const_null"), ms)
+  expect_length(nulled, 1L)
+  expect_identical(nulled[[1]]$loc$start_line, 2L)
+  expect_identical(nulled[[1]]$loc$details, "'_PACKAGE' -> 'NULL'")
+  expect_false(anyNA(operator_ids(ms)))
+})
