@@ -157,8 +157,7 @@ test_that("C_mutate_file generates all operator mutants for a single expression"
   symbols <- symbols[!is.na(symbols)]
 
   # Three operator mutants plus two value mutations for each of four numeric
-  # constants (typed NA, NULL). The numeric value-flip / `-> 42` family is
-  # disabled (kept in C++ behind a flag).
+  # constants (typed NA, NULL). The `value_42` operator is off by default.
   expect_length(mutants, 3 + 4 * 2)
   expect_true(all(c("*", "+", "-") %in% sort(unique(symbols))))
 })

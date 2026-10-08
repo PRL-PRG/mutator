@@ -297,6 +297,35 @@ what `setup.sh`'s hardcoded dependency step used to cover; the driver now does i
 for any target. `baseline_green()` still runs as a pre-flight and flags any package
 whose suite isn't green after deps are installed.
 
+## Operator selection
+
+`operator_selection.R` measures each mutation operator separately, to choose the
+default set (`mutation_operators()$default`). For each package it first counts
+the mutants of every operator over the whole source, without running tests. Then,
+for each operator, it tests up to `--budget` sampled mutants with the same
+settings as the mutator benchmark above, and asks the LLM from `.openai_config`
+whether each survivor is equivalent.
+
+```sh
+# One process per package, e.g. on a large server:
+for p in prettyunits stringr forcats scales jsonlite lumberjack R.methodsS3; do
+  Rscript benchmarks/operator_selection.R --packages $p --budget 100 --cores 16 \
+    > operator-selection-$p.log 2>&1 &
+done
+wait
+Rscript benchmarks/operator_selection.R --summarize
+```
+
+Each (package, operator) run writes its own files under
+`results/operator-selection/` (`generation/`, `runs/`, `mutants/`), and finished
+runs are skipped, so an interrupted run resumes where it stopped. `--operators`
+restricts the operators; `--no-equivalence` skips the LLM; `--packages-dir`
+points to the package sources, e.g. `packages/system` as fetched by
+`tests/system/bootstrap.R`. `--summarize` writes `operator_summary.csv` with, per
+operator: mutants per 1000 source lines, kill rate (with Wilson CI), timeout
+rate, survival rate, the share of judged survivors that are equivalent, and the
+estimated share of tested mutants that survive without being equivalent.
+
 ## Results
 
 N = 500 mutants/tool/package (sampled; fewer when a tool's pool < 500, then
