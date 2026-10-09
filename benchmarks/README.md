@@ -300,31 +300,42 @@ whose suite isn't green after deps are installed.
 ## Operator selection
 
 `operator_selection.R` measures each mutation operator separately, to choose the
-default set (`mutation_operators()$default`). For each package it first counts
-the mutants of every operator over the whole source, without running tests. Then,
-for each operator, it tests up to `--budget` sampled mutants with the same
-settings as the mutator benchmark above, and asks the LLM from `.openai_config`
-whether each survivor is equivalent.
+default set (`mutation_operators()$default`). It runs in two phases.
+
+1. **Tests.** For each package, it counts the mutants of every operator over the
+   whole source, without running tests. Then, for each operator, it tests up to
+   `--budget` sampled mutants with the same settings as the mutator benchmark
+   above, and keeps the survivors' mutant files.
+2. **Equivalence** (`--judge`). It asks the LLM from `.openai_config` (or
+   `--model`) whether each survivor is equivalent. It runs from a single process,
+   so `--eq-workers` bounds the concurrent requests globally: set it to the API
+   key's parallel-request limit (by default, `max_parallel_requests` from the
+   config or the endpoint, else 1).
 
 ```sh
-# One process per package, e.g. on a large server:
+# Phase 1, one process per package:
 for p in prettyunits stringr forcats scales jsonlite lumberjack R.methodsS3; do
-  Rscript benchmarks/operator_selection.R --packages $p --budget 100 --cores 16 \
+  Rscript benchmarks/operator_selection.R --packages $p --budget 100 --cores 10 \
     > operator-selection-$p.log 2>&1 &
 done
 wait
+# Phase 2, a single process:
+Rscript benchmarks/operator_selection.R --judge --eq-workers 4
 Rscript benchmarks/operator_selection.R --summarize
 ```
 
 Each (package, operator) run writes its own files under
-`results/operator-selection/` (`generation/`, `runs/`, `mutants/`), and finished
-runs are skipped, so an interrupted run resumes where it stopped. `--operators`
-restricts the operators; `--no-equivalence` skips the LLM; `--packages-dir`
-points to the package sources, e.g. `packages/system` as fetched by
-`tests/system/bootstrap.R`. `--summarize` writes `operator_summary.csv` with, per
-operator: mutants per 1000 source lines, kill rate (with Wilson CI), timeout
-rate, survival rate, the share of judged survivors that are equivalent, and the
-estimated share of tested mutants that survive without being equivalent.
+`results/operator-selection/` (`generation/`, `runs/`, `mutants/`, `files/`,
+`judgments/`), and finished work is skipped, so an interrupted phase resumes
+where it stopped. `--judge` writes a run's judgments only when all its requests
+succeeded, so running it again retries the others. `--operators` restricts the
+operators; `--packages-dir` points to the package sources, e.g. `packages/system`
+as fetched by `tests/system/bootstrap.R`. `--summarize` writes
+`operator_summary.csv` with, per operator: mutants per 1000 source lines, kill
+rate (with Wilson CI), timeout rate, survival rate, survivors judged equivalent,
+not equivalent, uncertain or not yet judged, the share of judged survivors that
+are equivalent, and the estimated share of tested mutants that survive without
+being equivalent.
 
 ## Results
 

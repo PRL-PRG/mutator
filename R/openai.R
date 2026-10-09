@@ -202,6 +202,15 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
     attr(survived_mutants, "eq_n_batches") <- length(batches)
     attr(survived_mutants, "eq_failed_batches") <- sum(failed)
     attr(survived_mutants, "eq_errors") <- eq_errors
+    if (report && any(failed)) {
+        message(sprintf(
+            "  Note: %d of %d batch(es) produced no verdicts; their mutants are counted as Uncertain.",
+            sum(failed), length(batches)
+        ))
+        for (error in utils::head(unique(eq_errors[nzchar(eq_errors)]), 3L)) {
+            message(sprintf("    - %s", error))
+        }
+    }
 
     return(survived_mutants)
 }
@@ -267,12 +276,18 @@ create_equivalent_mutant_prompt <- function(original_code, mutant_details) {
 #' @param prompt The prompt to send to the API
 #' @param config API configuration with key and model information
 #'
+#' Requests refused for rate limiting (HTTP 429) or by an overloaded gateway
+#' (502, 503, 504) are retried with exponential backoff, honouring a
+#' `Retry-After` header when the server sends one.
+#'
+#' @param max_attempts Maximum number of requests, including the first one.
+#'
 #' @return On success, the parsed API response. On failure, an
 #'   `openai_api_error` object: a list with a `message` describing the cause
 #'   (HTTP status plus response body, or the network error), so callers can
 #'   surface *why* a request failed rather than a bare `NULL`.
 #' @keywords internal
-call_openai_api <- function(prompt, config) {
+call_openai_api <- function(prompt, config, max_attempts = 8L) {
     api_error <- function(message) {
         structure(list(message = message), class = "openai_api_error")
     }
@@ -310,18 +325,15 @@ call_openai_api <- function(prompt, config) {
                 base_url <- "https://api.openai.com/v1"
             }
 
-            # Make the API request
-            response <- httr::POST(
-                url = build_chat_completions_url(base_url),
-                httr::add_headers(
-                    "Content-Type" = "application/json",
-                    "Authorization" = paste("Bearer", config$api_key)
-                ),
-                body = json_body,
-                encode = "json"
-            )
-
-            code <- httr::status_code(response)
+            url <- build_chat_completions_url(base_url)
+            for (attempt in seq_len(max_attempts)) {
+                response <- post_chat_completion(url, config$api_key, json_body)
+                code <- httr::status_code(response)
+                if (!(code %in% c(429L, 502L, 503L, 504L)) || attempt == max_attempts) {
+                    break
+                }
+                openai_sleep(retry_delay(response, attempt))
+            }
             if (code == 200) {
                 return(httr::content(response, as = "parsed", type = "application/json"))
             }
@@ -343,6 +355,34 @@ call_openai_api <- function(prompt, config) {
 }
 
 # nocov end
+
+post_chat_completion <- function(url, api_key, json_body) {
+    httr::POST( # nocov
+        url = url,
+        httr::add_headers(
+            "Content-Type" = "application/json",
+            "Authorization" = paste("Bearer", api_key)
+        ),
+        body = json_body,
+        encode = "json"
+    )
+}
+
+openai_sleep <- function(seconds) Sys.sleep(seconds) # nocov
+
+# Seconds to wait before retry number `attempt`: the server's Retry-After when
+# it is a number of seconds, else 1, 2, 4, ... capped at 30, plus up to 1s of
+# jitter so parallel clients do not retry in lockstep. The jitter does not use
+# the RNG, to leave the caller's random state (and seeded sampling) untouched.
+retry_delay <- function(response, attempt) {
+    after <- suppressWarnings(as.numeric(httr::headers(response)[["retry-after"]]))
+    base <- if (length(after) == 1L && !is.na(after) && after >= 0) {
+        min(after, 60)
+    } else {
+        min(2^(attempt - 1), 30)
+    }
+    base + ((as.numeric(Sys.time()) * 1000 + Sys.getpid()) %% 1000) / 1000
+}
 
 # Internal store for configuration set programmatically via set_openai_config().
 .openai_config_store <- new.env(parent = emptyenv())

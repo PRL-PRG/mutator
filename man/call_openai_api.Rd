@@ -4,12 +4,18 @@
 \alias{call_openai_api}
 \title{Call OpenAI API}
 \usage{
-call_openai_api(prompt, config)
+call_openai_api(prompt, config, max_attempts = 8L)
 }
 \arguments{
 \item{prompt}{The prompt to send to the API}
 
-\item{config}{API configuration with key and model information}
+\item{config}{API configuration with key and model information
+
+Requests refused for rate limiting (HTTP 429) or by an overloaded gateway
+(502, 503, 504) are retried with exponential backoff, honouring a
+\code{Retry-After} header when the server sends one.}
+
+\item{max_attempts}{Maximum number of requests, including the first one.}
 }
 \value{
 On success, the parsed API response. On failure, an
