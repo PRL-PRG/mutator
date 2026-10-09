@@ -116,10 +116,32 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
         }
         verdicts <- parse_equivalence_verdicts(content)
         if (is.null(verdicts)) {
+            # Not valid JSON, e.g. an answer cut off by the output token limit:
+            # keep the verdicts of its complete entries.
+            verdicts <- salvage_equivalence_verdicts(content)
+        }
+        if (is.null(verdicts)) {
             # Not usable JSON: fall back to a strict per-line scan (matches each
             # id literally, verdict must be on the same line) to avoid the
             # cross-mutant "bleed" a greedy whole-response regex would cause.
             verdicts <- fallback_line_verdicts(content, batch_ids)
+        }
+
+        # An answer cut off by the output token limit (reasoning models can
+        # spend it all) misses verdicts: ask again for those, in two halves.
+        if (identical(response$choices[[1]]$finish_reason, "length")) {
+            missing <- setdiff(batch_ids, names(verdicts)[!is.na(verdicts)])
+            if (length(missing) == 0L) {
+                return(verdicts)
+            }
+            if (length(batch_ids) == 1L) {
+                attr(verdicts, "eq_error") <- "answer truncated by the output token limit"
+                return(verdicts)
+            }
+            half <- ceiling(length(missing) / 2)
+            for (part in split(missing, seq_along(missing) > half)) {
+                verdicts <- merge_equivalence_verdicts(verdicts, classify_batch(part))
+            }
         }
         verdicts
     }
@@ -192,7 +214,7 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
     # attribute carries the cause (HTTP body, network error) where known.
     failed <- vapply(
         batch_results,
-        function(r) is.null(r) || inherits(r, "try-error") || length(r) == 0,
+        function(r) is.null(r) || inherits(r, "try-error") || all(is.na(r)),
         logical(1)
     )
     eq_errors <- unlist(
@@ -727,6 +749,52 @@ parse_equivalence_verdicts <- function(content) {
         }
     }
     verdicts
+}
+
+# Verdicts of the complete `{"id": ..., "verdict": ...}` entries of an answer
+# that is not valid JSON as a whole, e.g. because it was cut off. NULL if none.
+salvage_equivalence_verdicts <- function(content) {
+    if (is.null(content) || is.na(content[1])) {
+        return(NULL)
+    }
+    entries <- regmatches(content[1], gregexpr("\\{[^{}]*\\}", content[1]))[[1]]
+    records <- lapply(entries, function(entry) {
+        record <- tryCatch(jsonlite::fromJSON(entry), error = function(e) NULL)
+        if (is.list(record) && is.character(record$id) && is.character(record$verdict)) record
+    })
+    records <- Filter(Negate(is.null), records)
+    if (length(records) == 0L) {
+        return(NULL)
+    }
+    ids <- vapply(records, function(r) r$id[1], character(1))
+    verdicts <- stats::setNames(vapply(records, function(r) r$verdict[1], character(1)), ids)
+    reasons <- vapply(records, function(r) if (is.character(r$reason)) r$reason[1] else NA_character_,
+                      character(1))
+    names(reasons) <- ids
+    reasons <- reasons[!is.na(reasons) & nzchar(reasons)]
+    if (length(reasons) > 0) {
+        attr(verdicts, "reasons") <- reasons
+    }
+    verdicts
+}
+
+# Combine two id -> verdict vectors (with their reasons and errors); a non-NA
+# verdict in `b` wins.
+merge_equivalence_verdicts <- function(a, b) {
+    known_a <- a[!is.na(a)]
+    known_b <- b[!is.na(b)]
+    out <- c(known_a[setdiff(names(known_a), names(known_b))], known_b)
+    reasons_a <- attr(a, "reasons")
+    reasons_b <- attr(b, "reasons")
+    reasons <- c(reasons_a[setdiff(names(reasons_a), names(reasons_b))], reasons_b)
+    if (length(reasons) > 0) {
+        attr(out, "reasons") <- reasons
+    }
+    errors <- c(attr(a, "eq_error"), attr(b, "eq_error"))
+    if (length(errors) > 0) {
+        attr(out, "eq_error") <- errors[1]
+    }
+    out
 }
 
 # Strict fallback when the response is not valid JSON: for each id, scan lines,

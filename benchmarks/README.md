@@ -310,7 +310,9 @@ default set (`mutation_operators()$default`). It runs in two phases.
    `--model`) whether each survivor is equivalent. It runs from a single process,
    so `--eq-workers` bounds the concurrent requests globally: set it to the API
    key's parallel-request limit (by default, `max_parallel_requests` from the
-   config or the endpoint, else 1).
+   config or the endpoint, else 1). With a reasoning model, answers can hit the
+   endpoint's output token limit; such batches are asked again in halves, and
+   `--batch-size` (default 25 mutants per request) makes that less frequent.
 
 ```sh
 # Phase 1, one process per package:

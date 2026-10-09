@@ -20,7 +20,7 @@
 #   Rscript benchmarks/operator_selection.R [--packages a,b] [--operators x,y]
 #       [--budget 100] [--cores N] [--out DIR] [--packages-dir DIR]
 #   Rscript benchmarks/operator_selection.R --judge [--model NAME] [--eq-workers N]
-#       [--out DIR] [--packages-dir DIR]
+#       [--batch-size 25] [--out DIR] [--packages-dir DIR]
 #   Rscript benchmarks/operator_selection.R --summarize [--out DIR]
 
 args_all <- commandArgs(trailingOnly = FALSE)
@@ -231,7 +231,8 @@ judge_unit <- function(rows, cfg) {
          src = src)
   })
   names(input) <- ids
-  res <- identify_equivalent_mutants(src, input, api_config = cfg, workers = 1, report = FALSE)
+  res <- identify_equivalent_mutants(src, input, api_config = cfg, workers = 1, report = FALSE,
+                                     batch_size = as.integer(get_opt("--batch-size", "25")))
   label <- paste0(pkg, "/", file)
   if (attr(res, "eq_failed_batches") > 0L) {
     errors <- attr(res, "eq_errors")
