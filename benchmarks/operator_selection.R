@@ -246,6 +246,15 @@ if ("--summarize" %in% argv) {
 } else {
   cat(sprintf("Output: %s\nBudget %d, cores %d, equivalence %s\n",
               out_dir, budget, cores, if (with_equivalence) "on" else "off"))
+  # Failed equivalence batches are dropped silently, so check the API first.
+  if (with_equivalence) {
+    cfg <- get_openai_config(dir = REPO_ROOT)
+    ping <- call_openai_api("Reply with the single word OK.", cfg)
+    if (inherits(ping, "openai_api_error")) {
+      stop("Equivalence API check failed (model '", cfg$model, "'): ", ping$message,
+           call. = FALSE)
+    }
+  }
   for (pkg in packages) {
     counts <- generation_counts(pkg)
     for (op in operators) {
