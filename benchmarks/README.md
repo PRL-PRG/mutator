@@ -328,7 +328,8 @@ Rscript benchmarks/operator_selection.R --summarize
 
 Each (package, operator) run writes its own files under
 `results/operator-selection/` (`generation/`, `runs/`, `mutants/`, `files/`,
-`judgments/`), and finished work is skipped, so an interrupted phase resumes
+`judgments/`; `raw/` keeps every LLM request with its raw answer), and finished
+work is skipped, so an interrupted phase resumes
 where it stopped. `--judge` writes a run's judgments only when all its requests
 succeeded, so running it again retries the others. `--operators` restricts the
 operators; `--packages-dir` points to the package sources, e.g. `packages/system`

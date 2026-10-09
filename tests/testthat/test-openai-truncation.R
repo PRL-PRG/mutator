@@ -86,3 +86,20 @@ test_that("an answer without any usable verdict counts as a failed batch", {
                                      api_config = list(api_key = "k"), report = FALSE)
   expect_identical(attr(res, "eq_failed_batches"), 1L)
 })
+
+test_that("requests are logged when mutator.equivalence_log_dir is set", {
+  dir <- tempfile("eqlog-")
+  old <- options(mutator.equivalence_log_dir = dir)
+  on.exit(options(old), add = TRUE)
+  testthat::local_mocked_bindings(
+    call_openai_api = function(prompt, config) response(answer(prompt_ids(prompt)))
+  )
+  identify_equivalent_mutants(src_file(), survivors(2), api_config = list(api_key = "k"), report = FALSE)
+  logs <- list.files(dir, full.names = TRUE)
+  expect_length(logs, 1L)
+  record <- jsonlite::read_json(logs[1], simplifyVector = TRUE)
+  expect_identical(record$ids, c("m01", "m02"))
+  expect_identical(record$finish_reason, "stop")
+  expect_match(record$answer, "NOT_EQUIVALENT")
+  expect_match(record$prompt, "m01")
+})

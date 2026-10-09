@@ -102,6 +102,7 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
             message("Prompt being sent to OpenAI:\n", prompt)
         }
         response <- call_openai_api(prompt, api_config)
+        log_equivalence_exchange(batch_ids, prompt, response)
         if (inherits(response, "openai_api_error")) {
             # Propagate the cause so the caller can surface it; the empty vector
             # marks the batch as having produced no verdicts.
@@ -749,6 +750,31 @@ parse_equivalence_verdicts <- function(content) {
         }
     }
     verdicts
+}
+
+# With option `mutator.equivalence_log_dir` set, save each equivalence request
+# (ids, prompt, raw answer, finish reason, token usage or error) as a JSON file
+# there, for auditing.
+log_equivalence_exchange <- function(ids, prompt, response) {
+    dir <- getOption("mutator.equivalence_log_dir")
+    if (is.null(dir)) {
+        return(invisible())
+    }
+    record <- list(time = format(Sys.time(), "%Y-%m-%d %H:%M:%OS3"), ids = ids, prompt = prompt)
+    if (inherits(response, "openai_api_error")) {
+        record$error <- response$message
+    } else {
+        choice <- if (length(response$choices)) response$choices[[1]] else list()
+        record$finish_reason <- choice$finish_reason
+        record$answer <- choice$message$content
+        record$usage <- response$usage
+    }
+    tryCatch({
+        dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+        jsonlite::write_json(record, tempfile("equivalence-", dir, ".json"),
+                             auto_unbox = TRUE, pretty = TRUE, null = "null")
+    }, error = function(e) NULL)
+    invisible()
 }
 
 # Verdicts of the complete `{"id": ..., "verdict": ...}` entries of an answer

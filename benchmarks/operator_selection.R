@@ -21,6 +21,7 @@
 #       [--budget 100] [--cores N] [--out DIR] [--packages-dir DIR]
 #   Rscript benchmarks/operator_selection.R --judge [--model NAME] [--eq-workers N]
 #       [--batch-size 25] [--out DIR] [--packages-dir DIR]
+#   Each request and its raw answer are saved under DIR/raw/.
 #   Rscript benchmarks/operator_selection.R --summarize [--out DIR]
 
 args_all <- commandArgs(trailingOnly = FALSE)
@@ -264,6 +265,7 @@ run_judge <- function() {
   if (inherits(ping, "openai_api_error")) {
     stop("Equivalence API check failed (model '", cfg$model, "'): ", ping$message, call. = FALSE)
   }
+  options(mutator.equivalence_log_dir = file.path(out_dir, "raw"))
   limit <- cfg$max_parallel_requests
   if (is.null(limit) || is.na(limit)) limit <- query_api_parallel_limit(cfg)
   workers <- as.integer(get_opt("--eq-workers", if (is.na(limit)) "1" else as.character(limit)))
