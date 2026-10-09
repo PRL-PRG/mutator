@@ -73,6 +73,8 @@ test_that("call_unwrap removes wrappers around their first argument", {
   m <- mutants_with("f <- function(x) c(rev(x), as.numeric(x, 1), sort(decreasing = TRUE, x), sum(x))",
                     "call_unwrap")
   expect_setequal(m$details, c("'rev(x)' -> 'x'", "'as.numeric(x, 1)' -> 'x'"))
+  # invisible() only changes auto-printing, which tests rarely check.
+  expect_equal(nrow(mutants_with("f <- function(x) invisible(x)", "call_unwrap")), 0)
 })
 
 test_that("error_handling removes tryCatch/try and neutralises stop", {

@@ -656,7 +656,7 @@ void ASTHandler::gatherOperatorsRecursive(SEXP expr, std::vector<int> path,
     static const SymbolSet unwrappable = makeSymbolSet(
         {"rev", "sort", "unique", "abs", "unname", "trimws", "tolower", "toupper",
          "na.omit", "as.integer", "as.numeric", "as.double", "as.character",
-         "as.vector", "drop", "suppressWarnings", "suppressMessages", "invisible"});
+         "as.vector", "drop", "suppressWarnings", "suppressMessages"});
     if (unwrappable.count(fun) && CDR(expr) != R_NilValue && TAG(CDR(expr)) == R_NilValue)
     {
         addNodeReplacement(ops, path, node_start_line, node_start_col,
