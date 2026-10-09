@@ -301,7 +301,9 @@ create_equivalent_mutant_prompt <- function(original_code, mutant_details) {
 #'
 #' Requests refused for rate limiting (HTTP 429) or by an overloaded gateway
 #' (502, 503, 504) are retried with exponential backoff, honouring a
-#' `Retry-After` header when the server sends one.
+#' `Retry-After` header when the server sends one. Network errors are retried
+#' twice. A request may wait up to 30 minutes for the first byte of the answer,
+#' as reasoning models send nothing while they think.
 #'
 #' @param max_attempts Maximum number of requests, including the first one.
 #'
@@ -349,8 +351,18 @@ call_openai_api <- function(prompt, config, max_attempts = 8L) {
             }
 
             url <- build_chat_completions_url(base_url)
+            network_errors <- 0L
             for (attempt in seq_len(max_attempts)) {
-                response <- post_chat_completion(url, config$api_key, json_body)
+                response <- tryCatch(post_chat_completion(url, config$api_key, json_body),
+                                     error = function(e) e)
+                if (inherits(response, "error")) {
+                    # Network errors (broken pipe, stalled connection) are
+                    # usually transient: retry them, but only twice.
+                    network_errors <- network_errors + 1L
+                    if (network_errors > 2L || attempt == max_attempts) stop(response)
+                    openai_sleep(2^network_errors)
+                    next
+                }
                 code <- httr::status_code(response)
                 if (!(code %in% c(429L, 502L, 503L, 504L)) || attempt == max_attempts) {
                     break
@@ -386,6 +398,9 @@ post_chat_completion <- function(url, api_key, json_body) {
             "Content-Type" = "application/json",
             "Authorization" = paste("Bearer", api_key)
         ),
+        # A reasoning model sends nothing until its answer is ready; curl's
+        # default aborts after 600 s without data.
+        httr::config(low_speed_time = 1800L),
         body = json_body,
         encode = "json"
     )

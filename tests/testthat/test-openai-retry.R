@@ -13,7 +13,8 @@ fake_response <- function(status, body = "{}", retry_after = NULL) {
   )
 }
 
-# Serves `responses` in order and records each request and sleep.
+# Serves `responses` in order (a condition is thrown, as a network error) and
+# records each request and sleep.
 mock_api <- function(responses) {
   state <- new.env()
   state$posts <- 0L
@@ -21,7 +22,9 @@ mock_api <- function(responses) {
   testthat::local_mocked_bindings(
     post_chat_completion = function(url, api_key, json_body) {
       state$posts <- state$posts + 1L
-      responses[[min(state$posts, length(responses))]]
+      r <- responses[[min(state$posts, length(responses))]]
+      if (inherits(r, "condition")) stop(r)
+      r
     },
     openai_sleep = function(seconds) state$sleeps <- c(state$sleeps, seconds),
     .env = parent.frame()
@@ -56,6 +59,20 @@ test_that("other errors are not retried", {
   expect_match(res$message, "^HTTP 400: .*Invalid model name")
   expect_identical(api$posts, 1L)
   expect_length(api$sleeps, 0L)
+})
+
+test_that("network errors are retried twice", {
+  stalled <- simpleError("Timeout was reached: Operation too slow")
+  api <- mock_api(list(stalled, stalled, fake_response(200, ok_body)))
+  res <- mutator:::call_openai_api("p", config)
+  expect_identical(res$choices[[1]]$message$content, "OK")
+  expect_identical(api$posts, 3L)
+
+  api <- mock_api(list(stalled))
+  res <- mutator:::call_openai_api("p", config)
+  expect_s3_class(res, "openai_api_error")
+  expect_match(res$message, "Operation too slow")
+  expect_identical(api$posts, 3L)
 })
 
 test_that("retry_delay follows Retry-After, else backs off exponentially", {

@@ -13,7 +13,9 @@ call_openai_api(prompt, config, max_attempts = 8L)
 
 Requests refused for rate limiting (HTTP 429) or by an overloaded gateway
 (502, 503, 504) are retried with exponential backoff, honouring a
-\code{Retry-After} header when the server sends one.}
+\code{Retry-After} header when the server sends one. Network errors are retried
+twice. A request may wait up to 30 minutes for the first byte of the answer,
+as reasoning models send nothing while they think.}
 
 \item{max_attempts}{Maximum number of requests, including the first one.}
 }
