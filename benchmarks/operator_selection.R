@@ -10,9 +10,10 @@
 # can be split across processes with --packages / --operators and resumed.
 #
 # Phase 2 (--judge): ask the LLM configured in .openai_config whether each
-# survivor is equivalent. Run it from a single process, so that --eq-workers (by
-# default the API key's parallel-request limit) bounds the requests globally.
-# Runs whose judgments are complete are skipped; runs with failed requests are
+# survivor is equivalent, grouping the survivors of all operators by source file.
+# Run it after phase 1 has finished, from a single process, so that --eq-workers
+# (by default the API key's parallel-request limit) bounds the requests globally.
+# Files whose judgments are complete are skipped; files with failed requests are
 # retried by running --judge again.
 #
 # Usage:
@@ -204,47 +205,54 @@ run_tests <- function() {
 # Phase 2: equivalence of the survivors
 # ---------------------------------------------------------------------------
 
-# Judge the survivors of one run. Writes its judgments only when every request
-# succeeded, so that failed runs are retried by the next --judge.
-judge_run <- function(key, cfg) {
-  detail <- utils::read.csv(file.path(out_dir, "mutants", paste0(key, ".csv")),
-                            stringsAsFactors = FALSE)
-  surv <- detail[detail$status == "SURVIVED", , drop = FALSE]
-  judged <- list()
-  failures <- character()
-  for (file in unique(surv$file)) {
-    rows <- surv[surv$file == file, , drop = FALSE]
-    src <- file.path(packages_dir, rows$package[1], file)
-    input <- lapply(seq_len(nrow(rows)), function(i) {
-      list(mutation_info = rows$mutation_info[i],
-           mutant_file = file.path(out_dir, rows$mutant_file[i]),
-           src = src)
-    })
-    names(input) <- rows$id
-    res <- identify_equivalent_mutants(src, input, api_config = cfg, workers = 1, report = FALSE)
-    if (attr(res, "eq_failed_batches") > 0L) {
-      failures <- c(failures, attr(res, "eq_errors"), "batch failed")
-    }
-    judged <- c(judged, res)
-  }
-  if (length(failures)) {
-    return(sprintf("%s: FAILED (%s)", key, failures[1]))
+# Survivors of all runs, one row each.
+all_survivors <- function() {
+  d <- read_all("mutants")
+  d <- d[d$status == "SURVIVED" & d$package %in% packages & d$operator %in% operators, , drop = FALSE]
+  d$key <- run_key(d$package, d$operator)
+  d
+}
+
+unit_name <- function(pkg, file) paste0(pkg, "__", gsub("[^A-Za-z0-9_.-]", "_", file))
+
+# Judge the survivors of one source file, across all operators: a request then
+# carries up to 25 of them instead of the few of a single run. Writes the
+# judgments only when every request succeeded, so a failed file is retried by
+# the next --judge.
+judge_unit <- function(rows, cfg) {
+  pkg <- rows$package[1]
+  file <- rows$file[1]
+  src <- file.path(packages_dir, pkg, file)
+  # Mutant ids are numbered per run, so they repeat across operators.
+  ids <- paste0(rows$operator, "/", rows$id)
+  input <- lapply(seq_len(nrow(rows)), function(i) {
+    list(mutation_info = rows$mutation_info[i],
+         mutant_file = file.path(out_dir, rows$mutant_file[i]),
+         src = src)
+  })
+  names(input) <- ids
+  res <- identify_equivalent_mutants(src, input, api_config = cfg, workers = 1, report = FALSE)
+  label <- paste0(pkg, "/", file)
+  if (attr(res, "eq_failed_batches") > 0L) {
+    errors <- attr(res, "eq_errors")
+    return(sprintf("%s: FAILED (%s)", label, if (length(errors)) errors[1] else "no verdicts"))
   }
   out <- data.frame(
-    id = surv$id,
-    equivalent = vapply(surv$id, function(id) {
-      e <- judged[[id]]$equivalent
+    key = rows$key,
+    id = rows$id,
+    equivalent = vapply(ids, function(id) {
+      e <- res[[id]]$equivalent
       if (is.null(e) || length(e) != 1L) NA else as.logical(e)
-    }, logical(1)),
-    status = vapply(surv$id, function(id) as.character(judged[[id]]$equivalence_status %||% NA_character_),
-                    character(1)),
-    reason = vapply(surv$id, function(id) as.character(judged[[id]]$equivalence_reason %||% NA_character_),
-                    character(1)),
+    }, logical(1), USE.NAMES = FALSE),
+    status = vapply(ids, function(id) as.character(res[[id]]$equivalence_status %||% NA_character_),
+                    character(1), USE.NAMES = FALSE),
+    reason = vapply(ids, function(id) as.character(res[[id]]$equivalence_reason %||% NA_character_),
+                    character(1), USE.NAMES = FALSE),
     model = cfg$model,
     stringsAsFactors = FALSE
   )
-  write_atomic(out, file.path(out_dir, "judgments", paste0(key, ".csv")))
-  sprintf("%s: %d judged", key, nrow(out))
+  write_atomic(out, file.path(out_dir, "judgments", paste0(unit_name(pkg, file), ".csv")))
+  sprintf("%s: %d judged", label, nrow(out))
 }
 
 run_judge <- function() {
@@ -259,19 +267,22 @@ run_judge <- function() {
   if (is.null(limit) || is.na(limit)) limit <- query_api_parallel_limit(cfg)
   workers <- as.integer(get_opt("--eq-workers", if (is.na(limit)) "1" else as.character(limit)))
 
-  runs <- read_all("runs")
-  sel <- runs$survived > 0 & runs$package %in% packages & runs$operator %in% operators
-  keys <- run_key(runs$package[sel], runs$operator[sel])
-  keys <- keys[!file.exists(file.path(out_dir, "judgments", paste0(keys, ".csv")))]
-  cat(sprintf("Judging %d run(s) with model '%s', %d request(s) at a time.\n",
-              length(keys), cfg$model, workers))
-  results <- parallel::mclapply(keys, function(key) {
-    msg <- tryCatch(judge_run(key, cfg), error = function(e) sprintf("%s: ERROR (%s)", key, conditionMessage(e)))
+  surv <- all_survivors()
+  units <- split(surv, unit_name(surv$package, surv$file))
+  units <- units[!file.exists(file.path(out_dir, "judgments", paste0(names(units), ".csv")))]
+  # Largest files first, so they do not end up alone at the end.
+  units <- units[order(-vapply(units, nrow, integer(1)))]
+  cat(sprintf("Judging %d survivor(s) in %d source file(s) with model '%s', %d request(s) at a time.\n",
+              sum(vapply(units, nrow, integer(1))), length(units), cfg$model, workers))
+  results <- parallel::mclapply(units, function(rows) {
+    msg <- tryCatch(judge_unit(rows, cfg), error = function(e) {
+      sprintf("%s/%s: ERROR (%s)", rows$package[1], rows$file[1], conditionMessage(e))
+    })
     cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), msg))
     msg
   }, mc.cores = max(1L, workers), mc.preschedule = FALSE)
   failed <- sum(grepl("FAILED|ERROR", unlist(results)))
-  cat(sprintf("Done: %d of %d run(s) judged.%s\n", length(keys) - failed, length(keys),
+  cat(sprintf("Done: %d of %d file(s) judged.%s\n", length(units) - failed, length(units),
               if (failed) " Run --judge again to retry the others." else ""))
 }
 
@@ -283,10 +294,7 @@ summarize <- function() {
   gen <- read_all("generation")
   runs <- read_all("runs")
   if (is.null(gen) || is.null(runs)) stop("No results in ", out_dir, call. = FALSE)
-  judgments <- do.call(rbind, lapply(
-    list.files(file.path(out_dir, "judgments"), pattern = "\\.csv$", full.names = TRUE),
-    function(f) cbind(key = sub("\\.csv$", "", basename(f)), utils::read.csv(f, stringsAsFactors = FALSE))
-  ))
+  judgments <- read_all("judgments")
 
   reg <- mutation_operators()
   total_sloc <- sum(unique(gen[c("package", "sloc")])$sloc)
