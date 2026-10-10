@@ -56,6 +56,8 @@ normalise_mutation_result <- function(result, fixture_dir) {
       location$end_line,
       location$end_col,
       location$details,
+      # NA, not dropped by paste(), when a mutant has no operator id.
+      if (is.null(location$operator_id)) NA else location$operator_id,
       sep = " | "
     )
   }, character(1))
