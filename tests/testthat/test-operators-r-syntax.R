@@ -15,11 +15,11 @@ mutants_with <- function(code, operators) {
   )
 }
 
-test_that("these operators are off by default", {
+test_that("bool_flip and super_assign are on by default, the others off", {
   code <- 'f <- function(x, d = TRUE) { y <<- x[["a"]] && TRUE; y }'
   ids <- mutants_with(code, "default")$id
-  expect_false(any(c("bool_flip", "super_assign", "scalar_vector_logic",
-                     "index_ops", "string_empty") %in% ids))
+  expect_true(all(c("bool_flip", "super_assign") %in% ids))
+  expect_false(any(c("scalar_vector_logic", "index_ops", "string_empty") %in% ids))
 })
 
 test_that("bool_flip flips logical literals but not NA", {

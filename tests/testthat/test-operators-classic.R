@@ -15,10 +15,11 @@ mutants_with <- function(code, operators) {
   )
 }
 
-test_that("classic operators are off by default", {
-  ids <- mutants_with("f <- function(x) if (x < 1 && x %% 2 == 0) -x else 10", "default")$id
-  expect_false(any(c("rel_boundary", "arith_extra", "loop_ctrl", "cond_force",
-                     "and_or_operand", "const_off_by_one") %in% ids))
+test_that("classic operators are on by default, except cond_force and const_off_by_one", {
+  code <- "f <- function(x) { for (i in x) if (i < 1 && i %% 2 == 0) break; -x }"
+  ids <- mutants_with(code, "default")$id
+  expect_true(all(c("rel_boundary", "arith_extra", "loop_ctrl", "and_or_operand") %in% ids))
+  expect_false(any(c("cond_force", "const_off_by_one") %in% ids))
 })
 
 test_that("rel_boundary moves each comparison boundary", {

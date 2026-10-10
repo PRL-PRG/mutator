@@ -4,13 +4,13 @@
 # assert on the emitted mutation descriptions, so they fail if the classifier
 # mislabels a node type (not merely if no mutant is produced).
 
-mutation_details <- function(code) {
+mutation_details <- function(code, operators = NULL) {
   src <- tempfile(fileext = ".R")
   out <- tempfile("mut_")
   dir.create(out)
   on.exit(unlink(c(src, out), recursive = TRUE), add = TRUE)
   writeLines(code, src)
-  mutants <- mutate_file(src, out_dir = out)
+  mutants <- mutate_file(src, out_dir = out, operators = operators)
   # Each $info is "File: ...\nRange: ...\nDetails: '<x>' -> '<y>'"; pull out the
   # "'x' -> 'y'" summary from the Details line of each mutant.
   details <- vapply(mutants, function(m) {
@@ -22,7 +22,8 @@ mutation_details <- function(code) {
 }
 
 test_that("typed NA constants are retyped and nulled", {
-  det <- mutation_details("f <- function() list(NA, NA_integer_, NA_real_, NA_character_)")
+  det <- mutation_details("f <- function() list(NA, NA_integer_, NA_real_, NA_character_)",
+                          operators = c("default", "na_type_swap"))
   expect_true(all(c(
     "'NA' -> 'NA_integer_'",
     "'NA' -> 'NA_real_'",

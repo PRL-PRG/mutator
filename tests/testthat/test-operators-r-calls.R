@@ -18,13 +18,16 @@ mutants_with <- function(code, operators) {
 new_ids <- c("seq_idiom", "drop_idiom", "named_arg_drop", "fun_swap",
              "fun_swap_extra", "scalar_vector_fun", "call_unwrap", "error_handling")
 
-test_that("these operators are off by default", {
+test_that("named_arg_drop, fun_swap and error_handling are on by default, the others off", {
   code <- c("f <- function(x, m) {",
             "  for (i in seq_along(x)) x[i] <- max(unique(x), na.rm = TRUE)",
             "  if (any(x < 0)) stop(\"neg\")",
             "  tryCatch(m[1, , drop = FALSE], error = function(e) paste(x))",
             "}")
-  expect_false(any(new_ids %in% mutants_with(code, "default")$id))
+  ids <- mutants_with(code, "default")$id
+  on <- c("named_arg_drop", "fun_swap", "error_handling")
+  expect_true(all(on %in% ids))
+  expect_false(any(setdiff(new_ids, on) %in% ids))
 })
 
 test_that("seq_idiom reintroduces 1:n", {

@@ -1,11 +1,12 @@
 # Every mutant records the id of the operator that produced it.
 
-mutants_for <- function(code, max_line_deletions = 0) {
+mutants_for <- function(code, max_line_deletions = 0, operators = NULL) {
   src <- tempfile(fileext = ".R")
   out <- tempfile("mut_")
   on.exit(unlink(src), add = TRUE)
   writeLines(code, src)
-  suppressMessages(mutate_file(src, out_dir = out, max_line_deletions = max_line_deletions))
+  suppressMessages(mutate_file(src, out_dir = out, max_line_deletions = max_line_deletions,
+                               operators = operators))
 }
 
 operator_ids <- function(mutants) {
@@ -44,7 +45,7 @@ test_that("each operator family gets its own id", {
 })
 
 test_that("NA retyping and line deletion are tagged", {
-  ms <- mutants_for("f <- function() NA_real_")
+  ms <- mutants_for("f <- function() NA_real_", operators = "na_type_swap")
   expect_true("na_type_swap" %in% operator_ids(ms))
 
   ms <- mutants_for(c("a <- 1", "b <- 2"), max_line_deletions = 2)

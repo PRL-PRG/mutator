@@ -209,7 +209,8 @@ test_that("C_mutate_file replaces only non-constant direct return values with NU
 test_that("C_mutate_file swaps NA constants between typed NAs", {
   exprs <- parse(text = "f <- function() g(NA, NA_real_)", keep.source = TRUE)
 
-  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(), PACKAGE = "mutator")
+  mutants <- .Call("C_mutate_file", exprs, mutator:::resolve_operators(c("default", "na_type_swap")),
+                   PACKAGE = "mutator")
   code <- vapply(mutants, function(m) {
     paste(vapply(m, function(x) paste(deparse(x), collapse = "\n"), character(1)), collapse = "\n")
   }, character(1))
