@@ -67,7 +67,8 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 <span>  coverage_backend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"record_tests"</span>, <span class="st">"per_file"</span><span class="op">)</span>,</span>
 <span>  target_margin <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  confidence <span class="op">=</span> <span class="fl">0.95</span>,</span>
-<span>  max_show <span class="op">=</span> <span class="fl">50L</span></span>
+<span>  max_show <span class="op">=</span> <span class="fl">50L</span>,</span>
+<span>  operators <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -84,7 +85,8 @@ tests against each mutant in parallel, and summarizes mutation outcomes.</p>
 
 
 <dt id="arg-isfulllog">isFullLog<a class="anchor" aria-label="anchor" href="#arg-isfulllog"></a></dt>
-<dd><p>Logical; if <code>TRUE</code>, prints per-mutant logs and timeout info.</p></dd>
+<dd><p>Logical; if <code>TRUE</code>, prints per-mutant logs, timeout info,
+and the mutation score per operator.</p></dd>
 
 
 <dt id="arg-detecteqmutants">detectEqMutants<a class="anchor" aria-label="anchor" href="#arg-detecteqmutants"></a></dt>
@@ -165,7 +167,9 @@ each worker its own copy at the cost of extra disk. Note that running with
 are generated. <code>NULL</code> (the default) mutates every file. This complements
 the in-source <code># mutator:ignore-file</code> and
 <code># mutator:ignore-start</code> / <code># mutator:ignore-end</code> directives, which exclude
-a whole file or a line region from within the source itself. Note that for
+a whole file or a line region from within the source itself, optionally
+only for the operators they list (e.g.
+<code># mutator:ignore-start seq_idiom, constants</code>). Note that for
 operator mutations the engine only resolves positions to the enclosing
 top-level definition, so a region directive excludes that function's
 operator mutants as a group (line-deletion mutants are excluded
@@ -240,6 +244,14 @@ Wilson confidence interval reported on a sampled mutation score. Default 0.95.</
 the remainder are summarised as "... and N more" but always remain in the
 returned <code>package_mutants</code>. Use <code>Inf</code> to print every survivor. Default 50.</p></dd>
 
+
+<dt id="arg-operators">operators<a class="anchor" aria-label="anchor" href="#arg-operators"></a></dt>
+<dd><p>Mutation operators to apply: a character vector of
+operator ids and families, read left to right, where a <code>-</code> prefix removes
+(e.g. <code>c("default", "-na_type_swap")</code>). <code>NULL</code> uses the option
+<code>mutator.operators</code>, or <code>"default"</code> if it is unset. See
+<code><a href="mutation_operators.html">mutation_operators()</a></code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -258,7 +270,9 @@ and optional equivalence flags.</p></dd>
 <dt><code>summary</code></dt>
 <dd><p>Named list with <code>generated</code>, <code>tested</code>, <code>killed</code>, <code>hanged</code>,
 <code>survived</code>, <code>mutation_score</code>, <code>mutation_score_ci</code> (a length-2 percentage
-vector, or <code>NULL</code> when no sampling occurred), and <code>confidence</code>.</p></dd>
+vector, or <code>NULL</code> when no sampling occurred), <code>confidence</code>, and
+<code>by_operator</code>, a data frame with one row per mutation operator and columns
+<code>operator</code>, <code>tested</code>, <code>killed</code>, <code>hanged</code>, <code>survived</code> and <code>mutation_score</code>.</p></dd>
 
 
 </dl></div>

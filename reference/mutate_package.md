@@ -26,7 +26,8 @@ mutate_package(
   coverage_backend = c("record_tests", "per_file"),
   target_margin = NULL,
   confidence = 0.95,
-  max_show = 50L
+  max_show = 50L,
+  operators = NULL
 )
 ```
 
@@ -42,7 +43,8 @@ mutate_package(
 
 - isFullLog:
 
-  Logical; if `TRUE`, prints per-mutant logs and timeout info.
+  Logical; if `TRUE`, prints per-mutant logs, timeout info, and the
+  mutation score per operator.
 
 - detectEqMutants:
 
@@ -127,11 +129,13 @@ mutate_package(
   mutants are generated. `NULL` (the default) mutates every file. This
   complements the in-source `# mutator:ignore-file` and
   `# mutator:ignore-start` / `# mutator:ignore-end` directives, which
-  exclude a whole file or a line region from within the source itself.
-  Note that for operator mutations the engine only resolves positions to
-  the enclosing top-level definition, so a region directive excludes
-  that function's operator mutants as a group (line-deletion mutants are
-  excluded line-precisely).
+  exclude a whole file or a line region from within the source itself,
+  optionally only for the operators they list (e.g.
+  `# mutator:ignore-start seq_idiom, constants`). Note that for operator
+  mutations the engine only resolves positions to the enclosing
+  top-level definition, so a region directive excludes that function's
+  operator mutants as a group (line-deletion mutants are excluded
+  line-precisely).
 
 - strategy:
 
@@ -213,6 +217,14 @@ mutate_package(
   returned `package_mutants`. Use `Inf` to print every survivor. Default
   50.
 
+- operators:
+
+  Mutation operators to apply: a character vector of operator ids and
+  families, read left to right, where a `-` prefix removes (e.g.
+  `c("default", "-na_type_swap")`). `NULL` uses the option
+  `mutator.operators`, or `"default"` if it is unset. See
+  [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md).
+
 ## Value
 
 An invisible list with four components:
@@ -236,7 +248,10 @@ An invisible list with four components:
 
   Named list with `generated`, `tested`, `killed`, `hanged`, `survived`,
   `mutation_score`, `mutation_score_ci` (a length-2 percentage vector,
-  or `NULL` when no sampling occurred), and `confidence`.
+  or `NULL` when no sampling occurred), `confidence`, and `by_operator`,
+  a data frame with one row per mutation operator and columns
+  `operator`, `tested`, `killed`, `hanged`, `survived` and
+  `mutation_score`.
 
 ## Details
 

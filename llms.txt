@@ -223,17 +223,65 @@ vignette](https://prl-prg.github.io/mutator/articles/configuration.html)**
 
 ## Mutation Operators
 
-mutator currently generates these mutation families:
+[`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md)
+lists the operators. The `operators` argument of
+[`mutate_file()`](https://prl-prg.github.io/mutator/reference/mutate_file.md)
+and
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+selects them by id or family, and `-` removes one,
+e.g. `operators = c("default", "seq_idiom", "-bool_flip")`.
 
-| Family | Mutations |
+### On by default
+
+| Operator | Mutation |
 |----|----|
-| Arithmetic operators | `+` ↔︎ `-`, `*` ↔︎ `/` |
-| Comparison operators | `==` ↔︎ `!=`, `<` ↔︎ `>`, `<=` ↔︎ `>=` |
-| Logical operators | `&` ↔︎ `\|`, `&&` ↔︎ `\|\|`, removes `!`, and negates `if` / `while` conditions |
-| Assignment and call values | Replaces assignment right-hand sides and ordinary function calls with `42` |
-| Scalar constants | Replaces numeric zero with `42`, numeric non-zero values with `0`, constants with a typed `NA`, and constants with `NULL` |
-| Returns | Replaces non-constant direct [`return()`](https://rdrr.io/r/base/function.html) values with `NULL`, for example `return(x)` → `return(NULL)` |
-| Deletions | Deletes statements inside `{ ... }` blocks and, as a fallback, valid source lines |
+| `arith_swap` | `+` ↔︎ `-`, `*` ↔︎ `/` |
+| `arith_extra` | `^` → `*`, `%%` ↔︎ `%/%`, `-x` → `x` |
+| `rel_swap` | `<` ↔︎ `>`, `<=` ↔︎ `>=`, `==` ↔︎ `!=` |
+| `rel_boundary` | `<` ↔︎ `<=`, `>` ↔︎ `>=` |
+| `logic_swap` | `&` ↔︎ `\|`, `&&` ↔︎ `\|\|` |
+| `not_remove` | `!x` → `x` |
+| `and_or_operand` | `a && b` → `a` and → `b` (same for `\|\|`) |
+| `cond_negate` | `if (c)`, `while (c)` → `if (!(c))`, `while (!(c))` |
+| `loop_ctrl` | [`break`](https://rdrr.io/r/base/Control.html) ↔︎ [`next`](https://rdrr.io/r/base/Control.html) |
+| `return_null` | `return(x)` → `return(NULL)` |
+| `na_replace` | Constant → `NA` of the same type, e.g. `1` → `NA_real_` |
+| `const_null` | Constant → `NULL` |
+| `bool_flip` | `TRUE` ↔︎ `FALSE`, including argument defaults: `f(x, na.rm = TRUE)` → `f(x, na.rm = FALSE)` |
+| `super_assign` | `x <<- v` → `x <- v` |
+| `named_arg_drop` | Drops an argument such as `na.rm`, `drop`, `sep`, `collapse` or `fixed`, so that its default applies |
+| `fun_swap` | `any` ↔︎ `all`, `min` ↔︎ `max`, `pmin` ↔︎ `pmax`, `which.min` ↔︎ `which.max`, `head` ↔︎ `tail`, `nrow` ↔︎ `ncol`, `isTRUE` ↔︎ `isFALSE`, `sub` ↔︎ `gsub` |
+| `error_handling` | `tryCatch(e, ...)`, `try(e)`, `withCallingHandlers(e, ...)` → `e`; [`stop()`](https://rdrr.io/r/base/stop.html), [`stopifnot()`](https://rdrr.io/r/base/stopifnot.html) → `invisible(NULL)` |
+| `stmt_delete` | Deletes a statement of a [`{ }`](https://rdrr.io/r/base/Paren.html) block |
+| `line_delete` | Deletes a source line (budget: `max_line_deletions`, `0` by default in [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)) |
+
+### Opt-in
+
+Operators are opt-in when they create too many equivalent mutants (more
+than 20%) or too many mutants in general.
+
+We ran each operator on seven packages (prettyunits, stringr, forcats,
+scales, jsonlite, lumberjack, R.methodsS3; about 10,600 source lines),
+with up to 100 sampled mutants per operator and package: 9,414 mutants,
+3,996 of which survived. An LLM (qwen3.8-flash-next) judged whether each
+survivor is equivalent to the original code. We checked 56 of these
+verdicts by hand: 45 of the 46 “equivalent” verdicts were correct. The
+benchmark script is `benchmarks/operator_selection.R`.
+
+| Operator | Mutation | Why it is opt-in |
+|----|----|----|
+| `cond_force` | `if (c)` → `if (TRUE)`, `if (FALSE)` | Overlaps with `cond_negate`; 142 mutants per 1,000 source lines |
+| `const_off_by_one` | Number `n` → `n + 1`, `n - 1` | 185 mutants per 1,000 source lines |
+| `value_42` | Numbers, assigned values and call results → `42` (or `0`) | 860 mutants per 1,000 source lines, mostly killed by type errors |
+| `string_empty` | Non-empty string → `""` | Mostly changes error and warning messages, which tests rarely check |
+| `na_type_swap` | `NA` ↔︎ `NA_integer_` ↔︎ `NA_real_` ↔︎ `NA_character_` | 62% of survivors are equivalent, e.g. any `NA` assigned into a character vector |
+| `scalar_vector_logic` | `&&` ↔︎ `&`, `\|\|` ↔︎ `\|` | 67% equivalent: operands are usually scalars |
+| `scalar_vector_fun` | `max(a, b)` ↔︎ `pmax(a, b)`, `min` ↔︎ `pmin` | 83% equivalent: arguments are usually scalars |
+| `index_ops` | `x[[i]]` ↔︎ `x[i]` | 47% equivalent: same result for one element of an atomic vector |
+| `seq_idiom` | `seq_len(n)` → `1:n`, `seq_along(x)` → `1:length(x)` | 35% equivalent (lengths that cannot be zero); the other survivors show untested empty inputs |
+| `drop_idiom` | `m[i, , drop = FALSE]` → `m[i, ]` | Rare; all 3 survivors were equivalent |
+| `fun_swap_extra` | `paste` ↔︎ `paste0`, `floor` ↔︎ `ceiling`, `sapply` → `lapply`, … | 30% equivalent, e.g. `paste` vs `paste0` with a single argument |
+| `call_unwrap` | `rev(x)`, `unique(x)`, `as.numeric(x)`, … → `x` | 24% equivalent: the wrapper often does not change the value |
 
 ## Dependencies
 
@@ -304,6 +352,8 @@ test suite can be frustrating!
   : Generate Mutants for a Single R File
 - [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
   : Run Mutation Testing for an R Package
+- [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md)
+  : List the Mutation Operators
 - [`operators`](https://prl-prg.github.io/mutator/reference/operators.md)
   : Mutation Operators Supported by mutator
 - [`reset_openai_config()`](https://prl-prg.github.io/mutator/reference/reset_openai_config.md)

@@ -7,7 +7,13 @@ mutants.
 ## Usage
 
 ``` r
-mutate_file(src_file, out_dir, max_mutants = NULL, max_line_deletions = 5)
+mutate_file(
+  src_file,
+  out_dir,
+  max_mutants = NULL,
+  max_line_deletions = 5,
+  operators = NULL
+)
 ```
 
 ## Arguments
@@ -34,6 +40,14 @@ mutate_file(src_file, out_dir, max_mutants = NULL, max_line_deletions = 5)
   deletions by also covering top-level / non-block lines. Use `0` to
   disable line-deletion mutants entirely. Defaults to `5`.
 
+- operators:
+
+  Mutation operators to apply: a character vector of operator ids and
+  families, read left to right, where a `-` prefix removes (e.g.
+  `c("default", "-na_type_swap")`). `NULL` uses the option
+  `mutator.operators`, or `"default"` if it is unset. See
+  [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md).
+
 ## Value
 
 A list of mutants. Each element contains:
@@ -49,7 +63,9 @@ A list of mutants. Each element contains:
 - `loc`:
 
   Machine-readable location: a list with `file_path`, `start_line`, and
-  `end_line` (the latter two `NA` when unavailable).
+  `end_line` (the latter two `NA` when unavailable), and `operator_id`,
+  the id of the mutation operator that produced the mutant (e.g.
+  `"rel_swap"`, `"stmt_delete"`).
 
 ## Examples
 
@@ -57,7 +73,7 @@ A list of mutants. Each element contains:
 src <- tempfile(fileext = ".R")
 writeLines("add <- function(x, y) x + y", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"), max_mutants = 1)
-#> Generated 1 AST-based mutants for file1a104bed0138.R
+#> Generated 1 AST-based mutants for file198c410217de.R
 length(mutants)
 #> [1] 1
 ```

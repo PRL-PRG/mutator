@@ -87,27 +87,21 @@ result <- mutate_package(
   timeout_seconds = 10,
   coverage_guided = FALSE
 )
-#> Generated 9 AST-based mutants for clamp.R
-#> Generated 9 mutants from 1 source files.
+#> Generated 11 AST-based mutants for clamp.R
+#> Generated 11 mutants from 1 source files.
 #> Running the test suites of 2 mutants...
-#> 
-#> Surviving mutants (1):
-#>   R/clamp.R:3   'upper' -> 'NULL'
-#>       2 |   if (x < lower) return(lower)
-#>     > 3 |   if (x > upper) return(upper)
-#>       4 |   x
 #> Timing (seconds):
-#>   Baseline run:          0.8
-#>   Mutant generation:     0.0
-#>   Test execution:        2.2
+#>   Baseline run:          0.9
+#>   Mutant generation:     0.1
+#>   Test execution:        2.6
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
 #>   Total mutants:    2
-#>   Killed:           1
+#>   Killed:           2
 #>   Hanged:           0
-#>   Survived:         1
-#>   Mutation Score:   50.00%  (95% CI 9.5-90.5%, sampled 2 of 9)
+#>   Survived:         0
+#>   Mutation Score:   100.00%  (95% CI 34.2-100.0%, sampled 2 of 11)
 ```
 
 ## Interpret the results
@@ -134,25 +128,25 @@ data.frame(
   status = unname(unlist(result$test_results)),
   row.names = NULL
 )
-#>            mutation   status
-#> 1 'upper' -> 'NULL' SURVIVED
-#> 2        '<' -> '>'   KILLED
+#>     mutation status
+#> 1 '>' -> '<' KILLED
+#> 2 '<' -> '>' KILLED
 
 result$summary[c("generated", "tested", "killed", "survived", "mutation_score")]
 #> $generated
-#> [1] 9
+#> [1] 11
 #> 
 #> $tested
 #> [1] 2
 #> 
 #> $killed
-#> [1] 1
+#> [1] 2
 #> 
 #> $survived
-#> [1] 1
+#> [1] 0
 #> 
 #> $mutation_score
-#> [1] 50
+#> [1] 100
 ```
 
 ## Improve the tests
@@ -180,13 +174,13 @@ improved_result <- mutate_package(
   timeout_seconds = 10,
   coverage_guided = FALSE
 )
-#> Generated 9 AST-based mutants for clamp.R
-#> Generated 9 mutants from 1 source files.
+#> Generated 11 AST-based mutants for clamp.R
+#> Generated 11 mutants from 1 source files.
 #> Running the test suites of 2 mutants...
 #> Timing (seconds):
 #>   Baseline run:          0.8
 #>   Mutant generation:     0.0
-#>   Test execution:        2.2
+#>   Test execution:        2.4
 #>   Equivalence detection: 0.0
 #> 
 #> Mutation Testing Summary:
@@ -194,7 +188,7 @@ improved_result <- mutate_package(
 #>   Killed:           2
 #>   Hanged:           0
 #>   Survived:         0
-#>   Mutation Score:   100.00%  (95% CI 34.2-100.0%, sampled 2 of 9)
+#>   Mutation Score:   100.00%  (95% CI 34.2-100.0%, sampled 2 of 11)
 
 unname(unlist(improved_result$test_results))
 #> [1] "KILLED" "KILLED"

@@ -220,55 +220,227 @@
 <div class="section level2">
 <h2 id="mutation-operators">Mutation Operators<a class="anchor" aria-label="anchor" href="#mutation-operators"></a>
 </h2>
-<p>mutator currently generates these mutation families:</p>
+<p><code><a href="reference/mutation_operators.html">mutation_operators()</a></code> lists the operators. The <code>operators</code> argument of <code><a href="reference/mutate_file.html">mutate_file()</a></code> and <code><a href="reference/mutate_package.html">mutate_package()</a></code> selects them by id or family, and <code>-</code> removes one, e.g. <code>operators = c("default", "seq_idiom", "-bool_flip")</code>.</p>
+<div class="section level3">
+<h3 id="on-by-default">On by default<a class="anchor" aria-label="anchor" href="#on-by-default"></a>
+</h3>
 <table class="table">
 <colgroup>
-<col width="17%">
-<col width="82%">
+<col width="12%">
+<col width="87%">
 </colgroup>
 <thead><tr>
-<th>Family</th>
-<th>Mutations</th>
+<th>Operator</th>
+<th>Mutation</th>
 </tr></thead>
 <tbody>
 <tr>
-<td>Arithmetic operators</td>
+<td><code>arith_swap</code></td>
 <td>
 <code>+</code> ↔︎ <code>-</code>, <code>*</code> ↔︎ <code>/</code>
 </td>
 </tr>
 <tr>
-<td>Comparison operators</td>
+<td><code>arith_extra</code></td>
 <td>
-<code>==</code> ↔︎ <code>!=</code>, <code>&lt;</code> ↔︎ <code>&gt;</code>, <code>&lt;=</code> ↔︎ <code>&gt;=</code>
+<code>^</code> → <code>*</code>, <code>%%</code> ↔︎ <code>%/%</code>, <code>-x</code> → <code>x</code>
 </td>
 </tr>
 <tr>
-<td>Logical operators</td>
+<td><code>rel_swap</code></td>
 <td>
-<code>&amp;</code> ↔︎ <code>\|</code>, <code>&amp;&amp;</code> ↔︎ <code>\|\|</code>, removes <code>!</code>, and negates <code>if</code> / <code>while</code> conditions</td>
-</tr>
-<tr>
-<td>Assignment and call values</td>
-<td>Replaces assignment right-hand sides and ordinary function calls with <code>42</code>
+<code>&lt;</code> ↔︎ <code>&gt;</code>, <code>&lt;=</code> ↔︎ <code>&gt;=</code>, <code>==</code> ↔︎ <code>!=</code>
 </td>
 </tr>
 <tr>
-<td>Scalar constants</td>
-<td>Replaces numeric zero with <code>42</code>, numeric non-zero values with <code>0</code>, constants with a typed <code>NA</code>, and constants with <code>NULL</code>
+<td><code>rel_boundary</code></td>
+<td>
+<code>&lt;</code> ↔︎ <code>&lt;=</code>, <code>&gt;</code> ↔︎ <code>&gt;=</code>
 </td>
 </tr>
 <tr>
-<td>Returns</td>
-<td>Replaces non-constant direct <code><a href="https://rdrr.io/r/base/function.html" class="external-link">return()</a></code> values with <code>NULL</code>, for example <code>return(x)</code> → <code>return(NULL)</code>
+<td><code>logic_swap</code></td>
+<td>
+<code>&amp;</code> ↔︎ <code>\|</code>, <code>&amp;&amp;</code> ↔︎ <code>\|\|</code>
 </td>
 </tr>
 <tr>
-<td>Deletions</td>
-<td>Deletes statements inside <code>{ ... }</code> blocks and, as a fallback, valid source lines</td>
+<td><code>not_remove</code></td>
+<td>
+<code>!x</code> → <code>x</code>
+</td>
+</tr>
+<tr>
+<td><code>and_or_operand</code></td>
+<td>
+<code>a &amp;&amp; b</code> → <code>a</code> and → <code>b</code> (same for <code>\|\|</code>)</td>
+</tr>
+<tr>
+<td><code>cond_negate</code></td>
+<td>
+<code>if (c)</code>, <code>while (c)</code> → <code>if (!(c))</code>, <code>while (!(c))</code>
+</td>
+</tr>
+<tr>
+<td><code>loop_ctrl</code></td>
+<td>
+<code><a href="https://rdrr.io/r/base/Control.html" class="external-link">break</a></code> ↔︎ <code><a href="https://rdrr.io/r/base/Control.html" class="external-link">next</a></code>
+</td>
+</tr>
+<tr>
+<td><code>return_null</code></td>
+<td>
+<code>return(x)</code> → <code>return(NULL)</code>
+</td>
+</tr>
+<tr>
+<td><code>na_replace</code></td>
+<td>Constant → <code>NA</code> of the same type, e.g. <code>1</code> → <code>NA_real_</code>
+</td>
+</tr>
+<tr>
+<td><code>const_null</code></td>
+<td>Constant → <code>NULL</code>
+</td>
+</tr>
+<tr>
+<td><code>bool_flip</code></td>
+<td>
+<code>TRUE</code> ↔︎ <code>FALSE</code>, including argument defaults: <code>f(x, na.rm = TRUE)</code> → <code>f(x, na.rm = FALSE)</code>
+</td>
+</tr>
+<tr>
+<td><code>super_assign</code></td>
+<td>
+<code>x &lt;&lt;- v</code> → <code>x &lt;- v</code>
+</td>
+</tr>
+<tr>
+<td><code>named_arg_drop</code></td>
+<td>Drops an argument such as <code>na.rm</code>, <code>drop</code>, <code>sep</code>, <code>collapse</code> or <code>fixed</code>, so that its default applies</td>
+</tr>
+<tr>
+<td><code>fun_swap</code></td>
+<td>
+<code>any</code> ↔︎ <code>all</code>, <code>min</code> ↔︎ <code>max</code>, <code>pmin</code> ↔︎ <code>pmax</code>, <code>which.min</code> ↔︎ <code>which.max</code>, <code>head</code> ↔︎ <code>tail</code>, <code>nrow</code> ↔︎ <code>ncol</code>, <code>isTRUE</code> ↔︎ <code>isFALSE</code>, <code>sub</code> ↔︎ <code>gsub</code>
+</td>
+</tr>
+<tr>
+<td><code>error_handling</code></td>
+<td>
+<code>tryCatch(e, ...)</code>, <code>try(e)</code>, <code>withCallingHandlers(e, ...)</code> → <code>e</code>; <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>, <code><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot()</a></code> → <code>invisible(NULL)</code>
+</td>
+</tr>
+<tr>
+<td><code>stmt_delete</code></td>
+<td>Deletes a statement of a <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{ }</a></code> block</td>
+</tr>
+<tr>
+<td><code>line_delete</code></td>
+<td>Deletes a source line (budget: <code>max_line_deletions</code>, <code>0</code> by default in <code><a href="reference/mutate_package.html">mutate_package()</a></code>)</td>
 </tr>
 </tbody>
 </table>
+</div>
+<div class="section level3">
+<h3 id="opt-in">Opt-in<a class="anchor" aria-label="anchor" href="#opt-in"></a>
+</h3>
+<p>Operators are opt-in when they create too many equivalent mutants (more than 20%) or too many mutants in general.</p>
+<p>We ran each operator on seven packages (prettyunits, stringr, forcats, scales, jsonlite, lumberjack, R.methodsS3; about 10,600 source lines), with up to 100 sampled mutants per operator and package: 9,414 mutants, 3,996 of which survived. An LLM (qwen3.8-flash-next) judged whether each survivor is equivalent to the original code. We checked 56 of these verdicts by hand: 45 of the 46 “equivalent” verdicts were correct. The benchmark script is <code>benchmarks/operator_selection.R</code>.</p>
+<table class="table">
+<colgroup>
+<col width="10%">
+<col width="37%">
+<col width="51%">
+</colgroup>
+<thead><tr>
+<th>Operator</th>
+<th>Mutation</th>
+<th>Why it is opt-in</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>cond_force</code></td>
+<td>
+<code>if (c)</code> → <code>if (TRUE)</code>, <code>if (FALSE)</code>
+</td>
+<td>Overlaps with <code>cond_negate</code>; 142 mutants per 1,000 source lines</td>
+</tr>
+<tr>
+<td><code>const_off_by_one</code></td>
+<td>Number <code>n</code> → <code>n + 1</code>, <code>n - 1</code>
+</td>
+<td>185 mutants per 1,000 source lines</td>
+</tr>
+<tr>
+<td><code>value_42</code></td>
+<td>Numbers, assigned values and call results → <code>42</code> (or <code>0</code>)</td>
+<td>860 mutants per 1,000 source lines, mostly killed by type errors</td>
+</tr>
+<tr>
+<td><code>string_empty</code></td>
+<td>Non-empty string → <code>""</code>
+</td>
+<td>Mostly changes error and warning messages, which tests rarely check</td>
+</tr>
+<tr>
+<td><code>na_type_swap</code></td>
+<td>
+<code>NA</code> ↔︎ <code>NA_integer_</code> ↔︎ <code>NA_real_</code> ↔︎ <code>NA_character_</code>
+</td>
+<td>62% of survivors are equivalent, e.g. any <code>NA</code> assigned into a character vector</td>
+</tr>
+<tr>
+<td><code>scalar_vector_logic</code></td>
+<td>
+<code>&amp;&amp;</code> ↔︎ <code>&amp;</code>, <code>\|\|</code> ↔︎ <code>\|</code>
+</td>
+<td>67% equivalent: operands are usually scalars</td>
+</tr>
+<tr>
+<td><code>scalar_vector_fun</code></td>
+<td>
+<code>max(a, b)</code> ↔︎ <code>pmax(a, b)</code>, <code>min</code> ↔︎ <code>pmin</code>
+</td>
+<td>83% equivalent: arguments are usually scalars</td>
+</tr>
+<tr>
+<td><code>index_ops</code></td>
+<td>
+<code>x[[i]]</code> ↔︎ <code>x[i]</code>
+</td>
+<td>47% equivalent: same result for one element of an atomic vector</td>
+</tr>
+<tr>
+<td><code>seq_idiom</code></td>
+<td>
+<code>seq_len(n)</code> → <code>1:n</code>, <code>seq_along(x)</code> → <code>1:length(x)</code>
+</td>
+<td>35% equivalent (lengths that cannot be zero); the other survivors show untested empty inputs</td>
+</tr>
+<tr>
+<td><code>drop_idiom</code></td>
+<td>
+<code>m[i, , drop = FALSE]</code> → <code>m[i, ]</code>
+</td>
+<td>Rare; all 3 survivors were equivalent</td>
+</tr>
+<tr>
+<td><code>fun_swap_extra</code></td>
+<td>
+<code>paste</code> ↔︎ <code>paste0</code>, <code>floor</code> ↔︎ <code>ceiling</code>, <code>sapply</code> → <code>lapply</code>, …</td>
+<td>30% equivalent, e.g. <code>paste</code> vs <code>paste0</code> with a single argument</td>
+</tr>
+<tr>
+<td><code>call_unwrap</code></td>
+<td>
+<code>rev(x)</code>, <code>unique(x)</code>, <code>as.numeric(x)</code>, … → <code>x</code>
+</td>
+<td>24% equivalent: the wrapper often does not change the value</td>
+</tr>
+</tbody>
+</table>
+</div>
 </div>
 <div class="section level2">
 <h2 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>

@@ -148,27 +148,21 @@ keep the example fast.</p>
 <span>  timeout_seconds <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  coverage_guided <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Generated 9 AST-based mutants for clamp.R</span></span>
-<span><span class="co">#&gt; Generated 9 mutants from 1 source files.</span></span>
+<span><span class="co">#&gt; Generated 11 AST-based mutants for clamp.R</span></span>
+<span><span class="co">#&gt; Generated 11 mutants from 1 source files.</span></span>
 <span><span class="co">#&gt; Running the test suites of 2 mutants...</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Surviving mutants (1):</span></span>
-<span><span class="co">#&gt;   <span style="color: #00BBBB; font-weight: bold;">R/clamp.R:3</span>   'upper' -&gt; 'NULL'</span></span>
-<span><span class="co">#&gt;       <span style="color: #555555;">2</span> |   if (x &lt; lower) return(lower)</span></span>
-<span><span class="co">#&gt;     &gt; <span style="color: #555555;">3</span> |   <span style="color: #BB0000;">if (x &gt; upper) return(upper)</span></span></span>
-<span><span class="co">#&gt;       <span style="color: #555555;">4</span> |   x</span></span>
 <span><span class="co">#&gt; Timing (seconds):</span></span>
-<span><span class="co">#&gt;   Baseline run:          0.8</span></span>
-<span><span class="co">#&gt;   Mutant generation:     0.0</span></span>
-<span><span class="co">#&gt;   Test execution:        2.2</span></span>
+<span><span class="co">#&gt;   Baseline run:          0.9</span></span>
+<span><span class="co">#&gt;   Mutant generation:     0.1</span></span>
+<span><span class="co">#&gt;   Test execution:        2.6</span></span>
 <span><span class="co">#&gt;   Equivalence detection: 0.0</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Mutation Testing Summary:</span></span>
 <span><span class="co">#&gt;   Total mutants:    2</span></span>
-<span><span class="co">#&gt;   Killed:           1</span></span>
+<span><span class="co">#&gt;   Killed:           2</span></span>
 <span><span class="co">#&gt;   Hanged:           0</span></span>
-<span><span class="co">#&gt;   Survived:         1</span></span>
-<span><span class="co">#&gt;   Mutation Score:   50.00%  (95% CI 9.5-90.5%, sampled 2 of 9)</span></span></code></pre></div>
+<span><span class="co">#&gt;   Survived:         0</span></span>
+<span><span class="co">#&gt;   Mutation Score:   100.00%  (95% CI 34.2-100.0%, sampled 2 of 11)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="interpret-the-results">Interpret the results<a class="anchor" aria-label="anchor" href="#interpret-the-results"></a>
@@ -197,25 +191,25 @@ illustrative rather than a precise estimate of test-suite quality.</p>
 <span>  status <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unname.html" class="external-link">unname</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">test_results</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  row.names <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt;            mutation   status</span></span>
-<span><span class="co">#&gt; 1 'upper' -&gt; 'NULL' SURVIVED</span></span>
-<span><span class="co">#&gt; 2        '&lt;' -&gt; '&gt;'   KILLED</span></span>
+<span><span class="co">#&gt;     mutation status</span></span>
+<span><span class="co">#&gt; 1 '&gt;' -&gt; '&lt;' KILLED</span></span>
+<span><span class="co">#&gt; 2 '&lt;' -&gt; '&gt;' KILLED</span></span>
 <span></span>
 <span><span class="va">result</span><span class="op">$</span><span class="va">summary</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"generated"</span>, <span class="st">"tested"</span>, <span class="st">"killed"</span>, <span class="st">"survived"</span>, <span class="st">"mutation_score"</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt; $generated</span></span>
-<span><span class="co">#&gt; [1] 9</span></span>
+<span><span class="co">#&gt; [1] 11</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $tested</span></span>
 <span><span class="co">#&gt; [1] 2</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $killed</span></span>
-<span><span class="co">#&gt; [1] 1</span></span>
+<span><span class="co">#&gt; [1] 2</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $survived</span></span>
-<span><span class="co">#&gt; [1] 1</span></span>
+<span><span class="co">#&gt; [1] 0</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $mutation_score</span></span>
-<span><span class="co">#&gt; [1] 50</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 100</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="improve-the-tests">Improve the tests<a class="anchor" aria-label="anchor" href="#improve-the-tests"></a>
@@ -241,13 +235,13 @@ surviving upper-bound mutant is now killed.</p>
 <span>  timeout_seconds <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  coverage_guided <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt; Generated 9 AST-based mutants for clamp.R</span></span>
-<span><span class="co">#&gt; Generated 9 mutants from 1 source files.</span></span>
+<span><span class="co">#&gt; Generated 11 AST-based mutants for clamp.R</span></span>
+<span><span class="co">#&gt; Generated 11 mutants from 1 source files.</span></span>
 <span><span class="co">#&gt; Running the test suites of 2 mutants...</span></span>
 <span><span class="co">#&gt; Timing (seconds):</span></span>
 <span><span class="co">#&gt;   Baseline run:          0.8</span></span>
 <span><span class="co">#&gt;   Mutant generation:     0.0</span></span>
-<span><span class="co">#&gt;   Test execution:        2.2</span></span>
+<span><span class="co">#&gt;   Test execution:        2.4</span></span>
 <span><span class="co">#&gt;   Equivalence detection: 0.0</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Mutation Testing Summary:</span></span>
@@ -255,7 +249,7 @@ surviving upper-bound mutant is now killed.</p>
 <span><span class="co">#&gt;   Killed:           2</span></span>
 <span><span class="co">#&gt;   Hanged:           0</span></span>
 <span><span class="co">#&gt;   Survived:         0</span></span>
-<span><span class="co">#&gt;   Mutation Score:   100.00%  (95% CI 34.2-100.0%, sampled 2 of 9)</span></span>
+<span><span class="co">#&gt;   Mutation Score:   100.00%  (95% CI 34.2-100.0%, sampled 2 of 11)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/unname.html" class="external-link">unname</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="va">improved_result</span><span class="op">$</span><span class="va">test_results</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "KILLED" "KILLED"</span></span>

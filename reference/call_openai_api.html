@@ -45,7 +45,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">call_openai_api</span><span class="op">(</span><span class="va">prompt</span>, <span class="va">config</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">call_openai_api</span><span class="op">(</span><span class="va">prompt</span>, <span class="va">config</span>, max_attempts <span class="op">=</span> <span class="fl">8L</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -57,7 +57,16 @@
 
 
 <dt id="arg-config">config<a class="anchor" aria-label="anchor" href="#arg-config"></a></dt>
-<dd><p>API configuration with key and model information</p></dd>
+<dd><p>API configuration with key and model information</p>
+<p>Requests refused for rate limiting (HTTP 429) or by an overloaded gateway
+(502, 503, 504) are retried with exponential backoff, honouring a
+<code>Retry-After</code> header when the server sends one. Network errors are retried
+twice. A request may wait up to 30 minutes for the first byte of the answer,
+as reasoning models send nothing while they think.</p></dd>
+
+
+<dt id="arg-max-attempts">max_attempts<a class="anchor" aria-label="anchor" href="#arg-max-attempts"></a></dt>
+<dd><p>Maximum number of requests, including the first one.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -220,6 +220,17 @@ in the `.R` file itself:
 
   An unmatched `-start` excludes through the end of the file.
 
+- Both directives can list operator ids or families (see
+  [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md)),
+  separated by commas or spaces. Only those operators are then excluded:
+
+  ``` r
+
+  # mutator:ignore-start seq_idiom, constants
+  idx <- seq_len(n)
+  # mutator:ignore-end
+  ```
+
 **3. With covr’s `# nocov` annotations.** mutator also honours
 [covr](https://covr.r-lib.org/)’s coverage-exclusion comments, so code
 you have already marked as untested-by-design needs no separate mutator

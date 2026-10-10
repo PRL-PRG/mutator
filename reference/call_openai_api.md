@@ -5,7 +5,7 @@ Makes a POST request to the OpenAI Chat Completions API.
 ## Usage
 
 ``` r
-call_openai_api(prompt, config)
+call_openai_api(prompt, config, max_attempts = 8L)
 ```
 
 ## Arguments
@@ -17,6 +17,17 @@ call_openai_api(prompt, config)
 - config:
 
   API configuration with key and model information
+
+  Requests refused for rate limiting (HTTP 429) or by an overloaded
+  gateway (502, 503, 504) are retried with exponential backoff,
+  honouring a `Retry-After` header when the server sends one. Network
+  errors are retried twice. A request may wait up to 30 minutes for the
+  first byte of the answer, as reasoning models send nothing while they
+  think.
+
+- max_attempts:
+
+  Maximum number of requests, including the first one.
 
 ## Value
 
