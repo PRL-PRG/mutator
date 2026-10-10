@@ -36,7 +36,11 @@ jobs:
       - name: Restore fixture and dependencies
         run: Rscript tests/system/bootstrap.R --install-deps --packages=${{ matrix.package }}
       - name: Run mutation snapshot
-        run: Rscript tests/system/run.R --no-bootstrap --packages=${{ matrix.package }}
+        # Runners have a 16 MB stack. With it, infinite-recursion mutants print
+        # huge testthat backtraces and time out under the installed strategy.
+        run: |
+          ulimit -s 8192
+          Rscript tests/system/run.R --no-bootstrap --packages=${{ matrix.package }}
       # Changed snapshots, to merge with tests/system/merge-snapshots.R.
       - name: Upload new snapshot
         if: failure()
@@ -72,7 +76,10 @@ jobs:
       - name: Restore fixture and dependencies
         run: Rscript tests/system/bootstrap.R --install-deps --packages=${{ matrix.package }}
       - name: Run full mutation snapshots
-        run: Rscript tests/system/run.R --no-bootstrap --profile=full --packages=${{ matrix.package }}
+        # See the smoke job for the stack limit.
+        run: |
+          ulimit -s 8192
+          Rscript tests/system/run.R --no-bootstrap --profile=full --packages=${{ matrix.package }}
       - name: Upload new snapshot
         if: failure()
         uses: actions/upload-artifact@v4
