@@ -20,12 +20,15 @@ struct OperatorPos
     // Possibly store the original operator symbol too, if you want
     SEXP original_symbol;
     std::string file_path;
+    std::string operator_id; // e.g. "rel_swap", "stmt_delete"
 
     // Constructor for convenience
     OperatorPos(const std::vector<int> &p, std::unique_ptr<Operator> operator_ptr, int start_line,
-                int start_col, int end_line, int end_col, SEXP original_symbol, const std::string &file_path = "")
+                int start_col, int end_line, int end_col, SEXP original_symbol, const std::string &file_path = "",
+                const std::string &operator_id = "")
         : path(p), op(std::move(operator_ptr)), start_line(start_line), start_col(start_col),
-          end_line(end_line), end_col(end_col), original_symbol(original_symbol), file_path(file_path)
+          end_line(end_line), end_col(end_col), original_symbol(original_symbol), file_path(file_path),
+          operator_id(operator_id)
     {
     }
 };

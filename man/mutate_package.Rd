@@ -23,7 +23,8 @@ mutate_package(
   coverage_backend = c("record_tests", "per_file"),
   target_margin = NULL,
   confidence = 0.95,
-  max_show = 50L
+  max_show = 50L,
+  operators = NULL
 )
 }
 \arguments{
@@ -31,7 +32,8 @@ mutate_package(
 
 \item{cores}{Number of parallel workers used for mutant test execution.}
 
-\item{isFullLog}{Logical; if \code{TRUE}, prints per-mutant logs and timeout info.}
+\item{isFullLog}{Logical; if \code{TRUE}, prints per-mutant logs, timeout info,
+and the mutation score per operator.}
 
 \item{detectEqMutants}{Logical; if \code{TRUE}, every generated mutant is analyzed
 for equivalence using the OpenAI-based workflow \emph{before} the test suites are
@@ -92,7 +94,9 @@ each worker its own copy at the cost of extra disk. Note that running with
 are generated. \code{NULL} (the default) mutates every file. This complements
 the in-source \verb{# mutator:ignore-file} and
 \verb{# mutator:ignore-start} / \verb{# mutator:ignore-end} directives, which exclude
-a whole file or a line region from within the source itself. Note that for
+a whole file or a line region from within the source itself, optionally
+only for the operators they list (e.g.
+\verb{# mutator:ignore-start seq_idiom, constants}). Note that for
 operator mutations the engine only resolves positions to the enclosing
 top-level definition, so a region directive excludes that function's
 operator mutants as a group (line-deletion mutants are excluded
@@ -154,6 +158,12 @@ Wilson confidence interval reported on a sampled mutation score. Default 0.95.}
 \item{max_show}{Maximum number of surviving mutants to print to the console;
 the remainder are summarised as "... and N more" but always remain in the
 returned \code{package_mutants}. Use \code{Inf} to print every survivor. Default 50.}
+
+\item{operators}{Mutation operators to apply: a character vector of
+operator ids and families, read left to right, where a \code{-} prefix removes
+(e.g. \code{c("default", "-na_type_swap")}). \code{NULL} uses the option
+\code{mutator.operators}, or \code{"default"} if it is unset. See
+\code{\link[=mutation_operators]{mutation_operators()}}.}
 }
 \value{
 An invisible list with four components:
@@ -166,7 +176,9 @@ and optional equivalence flags.}
 \code{generation}, \code{test_execution}, and \code{equivalence_detection}.}
 \item{\code{summary}}{Named list with \code{generated}, \code{tested}, \code{killed}, \code{hanged},
 \code{survived}, \code{mutation_score}, \code{mutation_score_ci} (a length-2 percentage
-vector, or \code{NULL} when no sampling occurred), and \code{confidence}.}
+vector, or \code{NULL} when no sampling occurred), \code{confidence}, and
+\code{by_operator}, a data frame with one row per mutation operator and columns
+\code{operator}, \code{tested}, \code{killed}, \code{hanged}, \code{survived} and \code{mutation_score}.}
 }
 }
 \description{

@@ -22,3 +22,18 @@ require identical generated/tested/killed/survived/hanged counts and mutation
 scores, as well as identical verdicts for every sampled mutant. The invariance
 matrix is capped at 10 mutants per fixture; the full profile still snapshots 50
 mutants, but uses a separate seeded 10-mutant reference for these comparisons.
+
+## Updating the snapshots from CI
+
+When a change in mutator changes the results (e.g. the default operators), the
+snapshot jobs fail and upload their new snapshot as an artifact,
+`snapshot-<profile>-<package>`. To accept them:
+
+```sh
+gh run download <run-id> --dir snapshots
+Rscript tests/system/merge-snapshots.R snapshots --variant=smoke
+```
+
+The `full` jobs run only on the weekly schedule or a manual trigger
+(`gh workflow run mutation-system-tests.yaml`); merge their artifacts with
+`--variant=full`.

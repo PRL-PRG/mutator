@@ -102,6 +102,7 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
             message("Prompt being sent to OpenAI:\n", prompt)
         }
         response <- call_openai_api(prompt, api_config)
+        log_equivalence_exchange(batch_ids, prompt, response)
         if (inherits(response, "openai_api_error")) {
             # Propagate the cause so the caller can surface it; the empty vector
             # marks the batch as having produced no verdicts.
@@ -116,10 +117,32 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
         }
         verdicts <- parse_equivalence_verdicts(content)
         if (is.null(verdicts)) {
+            # Not valid JSON, e.g. an answer cut off by the output token limit:
+            # keep the verdicts of its complete entries.
+            verdicts <- salvage_equivalence_verdicts(content)
+        }
+        if (is.null(verdicts)) {
             # Not usable JSON: fall back to a strict per-line scan (matches each
             # id literally, verdict must be on the same line) to avoid the
             # cross-mutant "bleed" a greedy whole-response regex would cause.
             verdicts <- fallback_line_verdicts(content, batch_ids)
+        }
+
+        # An answer cut off by the output token limit (reasoning models can
+        # spend it all) misses verdicts: ask again for those, in two halves.
+        if (identical(response$choices[[1]]$finish_reason, "length")) {
+            missing <- setdiff(batch_ids, names(verdicts)[!is.na(verdicts)])
+            if (length(missing) == 0L) {
+                return(verdicts)
+            }
+            if (length(batch_ids) == 1L) {
+                attr(verdicts, "eq_error") <- "answer truncated by the output token limit"
+                return(verdicts)
+            }
+            half <- ceiling(length(missing) / 2)
+            for (part in split(missing, seq_along(missing) > half)) {
+                verdicts <- merge_equivalence_verdicts(verdicts, classify_batch(part))
+            }
         }
         verdicts
     }
@@ -192,7 +215,7 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
     # attribute carries the cause (HTTP body, network error) where known.
     failed <- vapply(
         batch_results,
-        function(r) is.null(r) || inherits(r, "try-error") || length(r) == 0,
+        function(r) is.null(r) || inherits(r, "try-error") || all(is.na(r)),
         logical(1)
     )
     eq_errors <- unlist(
@@ -202,6 +225,15 @@ identify_equivalent_mutants <- function(src_file, survived_mutants, api_config =
     attr(survived_mutants, "eq_n_batches") <- length(batches)
     attr(survived_mutants, "eq_failed_batches") <- sum(failed)
     attr(survived_mutants, "eq_errors") <- eq_errors
+    if (report && any(failed)) {
+        message(sprintf(
+            "  Note: %d of %d batch(es) produced no verdicts; their mutants are counted as Uncertain.",
+            sum(failed), length(batches)
+        ))
+        for (error in utils::head(unique(eq_errors[nzchar(eq_errors)]), 3L)) {
+            message(sprintf("    - %s", error))
+        }
+    }
 
     return(survived_mutants)
 }
@@ -267,12 +299,20 @@ create_equivalent_mutant_prompt <- function(original_code, mutant_details) {
 #' @param prompt The prompt to send to the API
 #' @param config API configuration with key and model information
 #'
+#' Requests refused for rate limiting (HTTP 429) or by an overloaded gateway
+#' (502, 503, 504) are retried with exponential backoff, honouring a
+#' `Retry-After` header when the server sends one. Network errors are retried
+#' twice. A request may wait up to 30 minutes for the first byte of the answer,
+#' as reasoning models send nothing while they think.
+#'
+#' @param max_attempts Maximum number of requests, including the first one.
+#'
 #' @return On success, the parsed API response. On failure, an
 #'   `openai_api_error` object: a list with a `message` describing the cause
 #'   (HTTP status plus response body, or the network error), so callers can
 #'   surface *why* a request failed rather than a bare `NULL`.
 #' @keywords internal
-call_openai_api <- function(prompt, config) {
+call_openai_api <- function(prompt, config, max_attempts = 8L) {
     api_error <- function(message) {
         structure(list(message = message), class = "openai_api_error")
     }
@@ -310,18 +350,25 @@ call_openai_api <- function(prompt, config) {
                 base_url <- "https://api.openai.com/v1"
             }
 
-            # Make the API request
-            response <- httr::POST(
-                url = build_chat_completions_url(base_url),
-                httr::add_headers(
-                    "Content-Type" = "application/json",
-                    "Authorization" = paste("Bearer", config$api_key)
-                ),
-                body = json_body,
-                encode = "json"
-            )
-
-            code <- httr::status_code(response)
+            url <- build_chat_completions_url(base_url)
+            network_errors <- 0L
+            for (attempt in seq_len(max_attempts)) {
+                response <- tryCatch(post_chat_completion(url, config$api_key, json_body),
+                                     error = function(e) e)
+                if (inherits(response, "error")) {
+                    # Network errors (broken pipe, stalled connection) are
+                    # usually transient: retry them, but only twice.
+                    network_errors <- network_errors + 1L
+                    if (network_errors > 2L || attempt == max_attempts) stop(response)
+                    openai_sleep(2^network_errors)
+                    next
+                }
+                code <- httr::status_code(response)
+                if (!(code %in% c(429L, 502L, 503L, 504L)) || attempt == max_attempts) {
+                    break
+                }
+                openai_sleep(retry_delay(response, attempt))
+            }
             if (code == 200) {
                 return(httr::content(response, as = "parsed", type = "application/json"))
             }
@@ -343,6 +390,37 @@ call_openai_api <- function(prompt, config) {
 }
 
 # nocov end
+
+post_chat_completion <- function(url, api_key, json_body) {
+    httr::POST( # nocov
+        url = url,
+        httr::add_headers(
+            "Content-Type" = "application/json",
+            "Authorization" = paste("Bearer", api_key)
+        ),
+        # A reasoning model sends nothing until its answer is ready; curl's
+        # default aborts after 600 s without data.
+        httr::config(low_speed_time = 1800L),
+        body = json_body,
+        encode = "json"
+    )
+}
+
+openai_sleep <- function(seconds) Sys.sleep(seconds) # nocov
+
+# Seconds to wait before retry number `attempt`: the server's Retry-After when
+# it is a number of seconds, else 1, 2, 4, ... capped at 30, plus up to 1s of
+# jitter so parallel clients do not retry in lockstep. The jitter does not use
+# the RNG, to leave the caller's random state (and seeded sampling) untouched.
+retry_delay <- function(response, attempt) {
+    after <- suppressWarnings(as.numeric(httr::headers(response)[["retry-after"]]))
+    base <- if (length(after) == 1L && !is.na(after) && after >= 0) {
+        min(after, 60)
+    } else {
+        min(2^(attempt - 1), 30)
+    }
+    base + ((as.numeric(Sys.time()) * 1000 + Sys.getpid()) %% 1000) / 1000
+}
 
 # Internal store for configuration set programmatically via set_openai_config().
 .openai_config_store <- new.env(parent = emptyenv())
@@ -687,6 +765,77 @@ parse_equivalence_verdicts <- function(content) {
         }
     }
     verdicts
+}
+
+# With option `mutator.equivalence_log_dir` set, save each equivalence request
+# (ids, prompt, raw answer, finish reason, token usage or error) as a JSON file
+# there, for auditing.
+log_equivalence_exchange <- function(ids, prompt, response) {
+    dir <- getOption("mutator.equivalence_log_dir")
+    if (is.null(dir)) {
+        return(invisible())
+    }
+    record <- list(time = format(Sys.time(), "%Y-%m-%d %H:%M:%OS3"), ids = ids, prompt = prompt)
+    if (inherits(response, "openai_api_error")) {
+        record$error <- response$message
+    } else {
+        choice <- if (length(response$choices)) response$choices[[1]] else list()
+        record$finish_reason <- choice$finish_reason
+        record$answer <- choice$message$content
+        record$usage <- response$usage
+    }
+    tryCatch({
+        dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+        jsonlite::write_json(record, tempfile("equivalence-", dir, ".json"),
+                             auto_unbox = TRUE, pretty = TRUE, null = "null")
+    }, error = function(e) NULL)
+    invisible()
+}
+
+# Verdicts of the complete `{"id": ..., "verdict": ...}` entries of an answer
+# that is not valid JSON as a whole, e.g. because it was cut off. NULL if none.
+salvage_equivalence_verdicts <- function(content) {
+    if (is.null(content) || is.na(content[1])) {
+        return(NULL)
+    }
+    entries <- regmatches(content[1], gregexpr("\\{[^{}]*\\}", content[1]))[[1]]
+    records <- lapply(entries, function(entry) {
+        record <- tryCatch(jsonlite::fromJSON(entry), error = function(e) NULL)
+        if (is.list(record) && is.character(record$id) && is.character(record$verdict)) record
+    })
+    records <- Filter(Negate(is.null), records)
+    if (length(records) == 0L) {
+        return(NULL)
+    }
+    ids <- vapply(records, function(r) r$id[1], character(1))
+    verdicts <- stats::setNames(vapply(records, function(r) r$verdict[1], character(1)), ids)
+    reasons <- vapply(records, function(r) if (is.character(r$reason)) r$reason[1] else NA_character_,
+                      character(1))
+    names(reasons) <- ids
+    reasons <- reasons[!is.na(reasons) & nzchar(reasons)]
+    if (length(reasons) > 0) {
+        attr(verdicts, "reasons") <- reasons
+    }
+    verdicts
+}
+
+# Combine two id -> verdict vectors (with their reasons and errors); a non-NA
+# verdict in `b` wins.
+merge_equivalence_verdicts <- function(a, b) {
+    known_a <- a[!is.na(a)]
+    known_b <- b[!is.na(b)]
+    out <- c(known_a[setdiff(names(known_a), names(known_b))], known_b)
+    reasons_a <- attr(a, "reasons")
+    reasons_b <- attr(b, "reasons")
+    reasons <- c(reasons_a[setdiff(names(reasons_a), names(reasons_b))], reasons_b)
+    if (length(reasons) > 0) {
+        attr(out, "reasons") <- reasons
+    }
+    errors <- c(attr(a, "eq_error"), attr(b, "eq_error"))
+    if (length(errors) > 0) {
+        attr(out, "eq_error") <- errors[1]
+    }
+    out
 }
 
 # Strict fallback when the response is not valid JSON: for each id, scan lines,

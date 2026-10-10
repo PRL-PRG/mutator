@@ -56,10 +56,14 @@ normalise_mutation_result <- function(result, fixture_dir) {
       location$end_line,
       location$end_col,
       location$details,
+      # NA, not dropped by paste(), when a mutant has no operator id.
+      if (is.null(location$operator_id)) NA else location$operator_id,
       sep = " | "
     )
   }, character(1))
-  summary <- paste(vapply(names(result$summary), function(name) {
+  # by_operator is derived from the mutants and is covered by unit tests.
+  summary_fields <- setdiff(names(result$summary), "by_operator")
+  summary <- paste(vapply(summary_fields, function(name) {
     sprintf("%s=%s", name, paste(result$summary[[name]], collapse = ","))
   }, character(1)), collapse = " | ")
   list(outcome = "OK", summary = summary, mutants = paste(mutants, collapse = "\n"))

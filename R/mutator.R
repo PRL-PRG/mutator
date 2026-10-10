@@ -60,7 +60,8 @@ delete_line_mutants <- function(src_file,
         new_symbol = NA_character_,
         file_path = normalizePath(src_file, mustWork = FALSE),
         mutation_type = "line_deletion",
-        deleted_line = as.integer(idx)
+        deleted_line = as.integer(idx),
+        operator_id = "line_delete"
       )
     )
   }
@@ -82,13 +83,20 @@ delete_line_mutants <- function(src_file,
 #'   per file (a random subset of deletable lines). These complement the
 #'   AST-based statement deletions by also covering top-level / non-block lines.
 #'   Use `0` to disable line-deletion mutants entirely. Defaults to `5`.
+#' @param operators Mutation operators to apply: a character vector of
+#'   operator ids and families, read left to right, where a `-` prefix removes
+#'   (e.g. `c("default", "-na_type_swap")`). `NULL` uses the option
+#'   `mutator.operators`, or `"default"` if it is unset. See
+#'   [mutation_operators()].
 #'
 #' @return A list of mutants. Each element contains:
 #' \describe{
 #'   \item{`path`}{Path to the mutant file.}
 #'   \item{`info`}{Formatted mutation metadata (file, source range, and details).}
 #'   \item{`loc`}{Machine-readable location: a list with `file_path`,
-#'   `start_line`, and `end_line` (the latter two `NA` when unavailable).}
+#'   `start_line`, and `end_line` (the latter two `NA` when unavailable), and
+#'   `operator_id`, the id of the mutation operator that produced the mutant
+#'   (e.g. `"rel_swap"`, `"stmt_delete"`).}
 #' }
 #'
 #' @examples
@@ -99,7 +107,8 @@ delete_line_mutants <- function(src_file,
 #'
 #' @export
 mutate_file <- function(src_file, out_dir, max_mutants = NULL,
-                        max_line_deletions = 5) {
+                        max_line_deletions = 5, operators = NULL) {
+  operators <- resolve_operators(operators)
   max_mutants <- normalize_max_mutants(max_mutants)
   max_line_deletions <- normalize_max_mutants(max_line_deletions, "max_line_deletions")
   if (is.null(max_line_deletions)) {
@@ -116,8 +125,9 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
   if (isTRUE(excl$whole_file)) {
     return(list())
   }
-  exclude_lines <- if (length(excl$ranges) > 0) {
-    unique(unlist(lapply(excl$ranges, function(r) seq.int(r[1], r[2]))))
+  line_delete_ranges <- ranges_for_operator(excl$ranges, "line_delete")
+  exclude_lines <- if (length(line_delete_ranges) > 0) {
+    unique(unlist(lapply(line_delete_ranges, function(r) seq.int(r[1], r[2]))))
   } else {
     integer()
   }
@@ -128,7 +138,7 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
   }
 
   raw_mutations <- tryCatch(
-    .Call(C_mutate_file, parsed),
+    .Call(C_mutate_file, parsed, operators),
     error = function(e) {
       message("C_mutate_file error: ", e$message)
       list()
@@ -166,7 +176,8 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
     # Skip mutants whose source span overlaps a `# mutator:ignore-*` region
     # before writing any file. (Operator mutants report their enclosing
     # top-level expression's bounds, so this excludes at function granularity.)
-    if (is.list(info) && is_excluded_range(info$start_line, info$end_line, excl$ranges)) {
+    op_id <- if (is.list(info) && !is.null(info$operator_id)) info$operator_id else NA_character_
+    if (is.list(info) && is_excluded_range(info$start_line, info$end_line, excl$ranges, op_id)) {
       next
     }
 
@@ -187,14 +198,16 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
   }
 
   # Fallback string-deletion mutants
-  results <- c(
-    results,
-    delete_line_mutants(src_file, out_dir, base_name,
-      max_del       = max_line_deletions,
-      start_idx     = length(results) + 1L,
-      exclude_lines = exclude_lines
+  if ("line_delete" %in% operators) {
+    results <- c(
+      results,
+      delete_line_mutants(src_file, out_dir, base_name,
+        max_del       = max_line_deletions,
+        start_idx     = length(results) + 1L,
+        exclude_lines = exclude_lines
+      )
     )
-  )
+  }
 
   if (!is.null(max_mutants) && length(results) > max_mutants) {
     results <- results[base::sample.int(length(results), max_mutants)]
@@ -240,7 +253,8 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 #'
 #' @param pkg_dir Path to the package directory.
 #' @param cores Number of parallel workers used for mutant test execution.
-#' @param isFullLog Logical; if `TRUE`, prints per-mutant logs and timeout info.
+#' @param isFullLog Logical; if `TRUE`, prints per-mutant logs, timeout info,
+#'   and the mutation score per operator.
 #' @param detectEqMutants Logical; if `TRUE`, every generated mutant is analyzed
 #'   for equivalence using the OpenAI-based workflow *before* the test suites are
 #'   run. Mutants judged equivalent are recorded as survived without running
@@ -306,7 +320,9 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 #'   are generated. `NULL` (the default) mutates every file. This complements 
 #'   the in-source `# mutator:ignore-file` and
 #'   `# mutator:ignore-start` / `# mutator:ignore-end` directives, which exclude
-#'   a whole file or a line region from within the source itself. Note that for
+#'   a whole file or a line region from within the source itself, optionally
+#'   only for the operators they list (e.g.
+#'   `# mutator:ignore-start seq_idiom, constants`). Note that for
 #'   operator mutations the engine only resolves positions to the enclosing
 #'   top-level definition, so a region directive excludes that function's
 #'   operator mutants as a group (line-deletion mutants are excluded
@@ -347,6 +363,7 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 #' @param max_show Maximum number of surviving mutants to print to the console;
 #'   the remainder are summarised as "... and N more" but always remain in the
 #'   returned `package_mutants`. Use `Inf` to print every survivor. Default 50.
+#' @inheritParams mutate_file
 #'
 #' @return An invisible list with four components:
 #' \describe{
@@ -358,7 +375,9 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 #'   `generation`, `test_execution`, and `equivalence_detection`.}
 #'   \item{`summary`}{Named list with `generated`, `tested`, `killed`, `hanged`,
 #'   `survived`, `mutation_score`, `mutation_score_ci` (a length-2 percentage
-#'   vector, or `NULL` when no sampling occurred), and `confidence`.}
+#'   vector, or `NULL` when no sampling occurred), `confidence`, and
+#'   `by_operator`, a data frame with one row per mutation operator and columns
+#'   `operator`, `tested`, `killed`, `hanged`, `survived` and `mutation_score`.}
 #' }
 #'
 #' @examples
@@ -399,8 +418,9 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
                            coverage_guided = TRUE,
                            coverage_backend = c("record_tests", "per_file"),
                            target_margin = NULL, confidence = 0.95,
-                           max_show = 50L) {
+                           max_show = 50L, operators = NULL) {
   strategy <- match.arg(strategy)
+  operators <- resolve_operators(operators)
   # Number of surviving mutants to print to the console (the rest remain in the
   # returned `package_mutants`). `Inf` prints them all.
   if (length(max_show) != 1 || is.na(max_show) ||
@@ -497,7 +517,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     max_line_deletions = max_line_deletions,
     exclude_files = exclude_files,
     isolate = isolate,
-    test_strategy = test_strategy
+    test_strategy = test_strategy,
+    operators = operators
   )
   mutants <- generation$mutants
   total_generated <- generation$total_generated
@@ -571,7 +592,8 @@ mutate_package <- function(pkg_dir, cores = max(1, parallel::detectCores() - 2),
     result,
     pkg_dir = pkg_dir,
     detect_equivalence = detectEqMutants,
-    max_show = max_show
+    max_show = max_show,
+    full_log = isFullLog
   )
   invisible(result)
 }

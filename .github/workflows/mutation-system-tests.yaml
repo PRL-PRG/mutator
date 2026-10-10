@@ -37,6 +37,14 @@ jobs:
         run: Rscript tests/system/bootstrap.R --install-deps --packages=${{ matrix.package }}
       - name: Run mutation snapshot
         run: Rscript tests/system/run.R --no-bootstrap --packages=${{ matrix.package }}
+      # Changed snapshots, to merge with tests/system/merge-snapshots.R.
+      - name: Upload new snapshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-smoke-${{ matrix.package }}
+          path: tests/system/_snaps/**/*.new.md
+          if-no-files-found: ignore
 
   full:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -65,3 +73,10 @@ jobs:
         run: Rscript tests/system/bootstrap.R --install-deps --packages=${{ matrix.package }}
       - name: Run full mutation snapshots
         run: Rscript tests/system/run.R --no-bootstrap --profile=full --packages=${{ matrix.package }}
+      - name: Upload new snapshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-full-${{ matrix.package }}
+          path: tests/system/_snaps/**/*.new.md
+          if-no-files-found: ignore

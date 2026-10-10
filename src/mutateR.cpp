@@ -22,7 +22,21 @@
 #include "Mutator.h"
 #include <vector>
 
-static SEXP mutate_single(SEXP expr_sexp, SEXP src_ref_sexp, bool is_inside_block)
+// NULL means all operators, otherwise a character vector of operator ids.
+static void applyOperatorFilter(ASTHandler &handler, SEXP operators)
+{
+    if (operators == R_NilValue)
+        return;
+    if (TYPEOF(operators) != STRSXP)
+        Rf_error("`operators` must be NULL or a character vector.");
+    std::unordered_set<std::string> ids;
+    for (R_xlen_t i = 0; i < XLENGTH(operators); ++i)
+        if (STRING_ELT(operators, i) != NA_STRING)
+            ids.insert(CHAR(STRING_ELT(operators, i)));
+    handler.setEnabledOperators(ids);
+}
+
+static SEXP mutate_single(SEXP expr_sexp, SEXP src_ref_sexp, bool is_inside_block, SEXP operators)
 {
     if (TYPEOF(expr_sexp) == EXPRSXP) {
         if (Rf_length(expr_sexp) == 0)
@@ -31,31 +45,36 @@ static SEXP mutate_single(SEXP expr_sexp, SEXP src_ref_sexp, bool is_inside_bloc
     }
 
     SEXP buffer = R_NilValue;
+    SEXP info_buffer = R_NilValue;
     R_xlen_t n_mutants = 0;
     int n = 0;
 
     {
         ASTHandler astHandler;
-        std::vector<OperatorPos> operators =
+        applyOperatorFilter(astHandler, operators);
+        std::vector<OperatorPos> ops =
             astHandler.gatherOperators(expr_sexp, src_ref_sexp, is_inside_block);
 
-        n = static_cast<int>(operators.size());
+        n = static_cast<int>(ops.size());
         if (n > 0) {
             Mutator mutator;
             buffer = PROTECT(Rf_allocVector(VECSXP, n));
+            info_buffer = PROTECT(Rf_allocVector(VECSXP, n));
 
             for (int i = 0; i < n; ++i) {
-                auto result = mutator.applyMutation(expr_sexp, operators, i);
-                if (result.second) {
-                    SET_VECTOR_ELT(buffer, n_mutants, result.first);
+                Mutation m = mutator.applyMutation(expr_sexp, ops, i);
+                if (m.ok) {
+                    SET_VECTOR_ELT(buffer, n_mutants, m.mutant);
+                    SET_VECTOR_ELT(info_buffer, n_mutants, m.info);
                     ++n_mutants;
                 }
             }
 
             // The operator vector owns preserved replacement objects. Preserve
-            // the buffer independently before that vector is destroyed.
+            // the buffers independently before that vector is destroyed.
             R_PreserveObject(buffer);
-            UNPROTECT(1);
+            R_PreserveObject(info_buffer);
+            UNPROTECT(2);
         }
     }
 
@@ -63,22 +82,30 @@ static SEXP mutate_single(SEXP expr_sexp, SEXP src_ref_sexp, bool is_inside_bloc
         return Rf_allocVector(VECSXP, 0);
 
     SEXP res = PROTECT(Rf_allocVector(VECSXP, n_mutants));
-    for (R_xlen_t i = 0; i < n_mutants; ++i)
+    SEXP infos = PROTECT(Rf_allocVector(VECSXP, n_mutants));
+    for (R_xlen_t i = 0; i < n_mutants; ++i) {
         SET_VECTOR_ELT(res, i, VECTOR_ELT(buffer, i));
+        SET_VECTOR_ELT(infos, i, VECTOR_ELT(info_buffer, i));
+    }
+    // One mutation_info per mutant, in the same order. A list, not attributes
+    // on the mutants, since a NULL mutant cannot carry attributes.
+    Rf_setAttrib(res, Rf_install("mutation_infos"), infos);
 
     R_ReleaseObject(buffer);
-    UNPROTECT(1);
+    R_ReleaseObject(info_buffer);
+    UNPROTECT(2);
     return res;
 }
 
-extern "C" SEXP C_mutate_single(SEXP expr_sexp, SEXP src_ref_sexp, SEXP is_inside_block_sexp)
+extern "C" SEXP C_mutate_single(SEXP expr_sexp, SEXP src_ref_sexp, SEXP is_inside_block_sexp,
+                                SEXP operators)
 {
     int is_inside_block = Rf_asLogical(is_inside_block_sexp);
     if (is_inside_block == NA_LOGICAL) {
         Rf_error("`is_inside_block` must be TRUE or FALSE.");
     }
 
-    return mutate_single(expr_sexp, src_ref_sexp, is_inside_block != 0);
+    return mutate_single(expr_sexp, src_ref_sexp, is_inside_block != 0, operators);
 }
 
 static bool isValidMutant(SEXP mutant)
@@ -107,7 +134,7 @@ static bool isValidMutant(SEXP mutant)
     return valid;
 }
 
-extern "C" SEXP C_mutate_file(SEXP exprs)
+extern "C" SEXP C_mutate_file(SEXP exprs, SEXP operators)
 {
     if (TYPEOF(exprs) != EXPRSXP)
         Rf_error("Input must be an expression list (EXPRSXP).");
@@ -127,15 +154,16 @@ extern "C" SEXP C_mutate_file(SEXP exprs)
         // Each entry is a top-level expression, so it is never itself a
         // statement inside a `{ }` block. Block nesting (and the statement
         // deletions it enables) is discovered as the AST is traversed.
-        SEXP cur_mutants  = PROTECT(mutate_single(cur_expr, cur_src_ref, false));
+        SEXP cur_mutants  = PROTECT(mutate_single(cur_expr, cur_src_ref, false, operators));
         if (TYPEOF(cur_mutants) != VECSXP)
             Rf_error("C_mutate_single did not return a list for expression %d.", i);
 
         const int n_mut   = Rf_length(cur_mutants);
+        SEXP infos = Rf_getAttrib(cur_mutants, Rf_install("mutation_infos"));
         for (int j = 0; j < n_mut; ++j) {
             SEXP file_mut = PROTECT(Rf_allocVector(EXPRSXP, n_expr));
             SEXP mut = PROTECT(VECTOR_ELT(cur_mutants, j));
-            SEXP mut_info = PROTECT(Rf_getAttrib(mut, Rf_install("mutation_info")));
+            SEXP mut_info = PROTECT(VECTOR_ELT(infos, j));
 
             for (int k = 0; k < n_expr; ++k) {
                 if (k == i) {

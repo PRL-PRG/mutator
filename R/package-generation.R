@@ -19,13 +19,15 @@ list_package_mutation_sources <- function(pkg_dir, exclude_files = NULL) {
   r_files
 }
 
-collect_mutant_specs <- function(r_files, mutation_dir, max_line_deletions) {
+collect_mutant_specs <- function(r_files, mutation_dir, max_line_deletions,
+                                 operators = NULL) {
   specs <- list()
   for (src in r_files) {
     generated <- mutate_file(
       src,
       out_dir = mutation_dir,
-      max_line_deletions = max_line_deletions
+      max_line_deletions = max_line_deletions,
+      operators = operators
     )
     for (mutant in generated) {
       id <- paste(basename(src), basename(mutant$path), sep = "_")
@@ -96,10 +98,10 @@ materialize_mutant_packages <- function(specs, pkg_dir, isolate, test_strategy) 
 generate_package_mutants <- function(pkg_dir, mutation_dir, max_mutants,
                                      target_margin, confidence,
                                      max_line_deletions, exclude_files,
-                                     isolate, test_strategy) {
+                                     isolate, test_strategy, operators = NULL) {
   started <- Sys.time()
   r_files <- list_package_mutation_sources(pkg_dir, exclude_files)
-  specs <- collect_mutant_specs(r_files, mutation_dir, max_line_deletions)
+  specs <- collect_mutant_specs(r_files, mutation_dir, max_line_deletions, operators)
   total_generated <- length(specs)
 
   message(sprintf(

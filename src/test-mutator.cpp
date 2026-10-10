@@ -3,7 +3,7 @@
 #include <Rinternals.h>
 #include "ASTHandler.h"
 #include "Mutator.h"
-#include "PlusOperator.h"
+#include "SymbolSwapOperator.h"
 #include "DeleteOperator.h"
 
 static SEXP makeSrcref()
@@ -35,7 +35,7 @@ context("Mutator C++ tests")
         {
             Mutator mutator;
             auto result = mutator.applyMutation(expr, ops, 0);
-            SEXP mutated = PROTECT(result.first);
+            SEXP mutated = PROTECT(result.mutant);
             bool valid_type = TYPEOF(mutated) == LANGSXP ||
                               TYPEOF(mutated) == EXPRSXP ||
                               TYPEOF(mutated) == VECSXP;
@@ -55,29 +55,49 @@ context("Mutator C++ tests")
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
 
-        ops.push_back(OperatorPos({0}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_install("+")));
+        ops.push_back(OperatorPos({0}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_install("+")));
         Mutator mutator;
         auto result = mutator.applyMutation(expr, ops, 9);
 
-        expect_true(result.second == false);
-        expect_true(result.first == R_NilValue);
+        expect_true(result.ok == false);
+        expect_true(result.mutant == R_NilValue);
         UNPROTECT(1);
     }
 
-    test_that("applyFlipMutation records mutation_info on valid path")
+    test_that("applyFlipMutation returns mutation_info on valid path")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_install("+")));
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_install("+")));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);
-        SEXP mutated = PROTECT(result.first);
+        SEXP mutated = PROTECT(result.mutant);
 
-        expect_true(result.second == true);
+        expect_true(result.ok == true);
         expect_true(TYPEOF(mutated) == LANGSXP);
-        expect_true(Rf_getAttrib(mutated, Rf_install("mutation_info")) != R_NilValue);
+        expect_true(result.info != R_NilValue);
         UNPROTECT(2);
+    }
+
+    test_that("mutation_info carries the operator id, NA when unset")
+    {
+        SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
+        std::vector<OperatorPos> ops;
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5,
+                                  Rf_install("+"), "", "arith_swap"));
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5,
+                                  Rf_install("+")));
+
+        Mutator mutator;
+        SEXP info = PROTECT(mutator.applyFlipMutation(expr, ops, 0).info);
+        SEXP id = VECTOR_ELT(info, 7);
+        expect_true(std::string(CHAR(STRING_ELT(Rf_getAttrib(info, R_NamesSymbol), 7))) == "operator_id");
+        expect_true(std::string(CHAR(STRING_ELT(id, 0))) == "arith_swap");
+
+        SEXP info2 = PROTECT(mutator.applyFlipMutation(expr, ops, 1).info);
+        expect_true(STRING_ELT(VECTOR_ELT(info2, 7), 0) == NA_STRING);
+        UNPROTECT(3);
     }
 
     test_that("applyDeleteMutation rejects root deletion")
@@ -89,8 +109,8 @@ context("Mutator C++ tests")
         Mutator mutator;
         auto result = mutator.applyDeleteMutation(expr, ops, 0);
 
-        expect_true(result.second == false);
-        expect_true(result.first == R_NilValue);
+        expect_true(result.ok == false);
+        expect_true(result.mutant == R_NilValue);
         UNPROTECT(1);
     }
 
@@ -102,13 +122,13 @@ context("Mutator C++ tests")
 
         Mutator mutator;
         auto result = mutator.applyDeleteMutation(expr, ops, 0);
-        SEXP mutated = PROTECT(result.first);
+        SEXP mutated = PROTECT(result.mutant);
 
-        expect_true(result.second == true);
+        expect_true(result.ok == true);
         expect_true(TYPEOF(mutated) == LANGSXP);
         expect_true(CAR(CDR(mutated)) == Rf_install("b"));
         expect_true(CDDR(mutated) == R_NilValue);
-        expect_true(Rf_getAttrib(mutated, Rf_install("mutation_info")) != R_NilValue);
+        expect_true(result.info != R_NilValue);
         UNPROTECT(2);
     }
 
@@ -120,13 +140,13 @@ context("Mutator C++ tests")
 
         Mutator mutator;
         auto result = mutator.applyDeleteMutation(expr, ops, 0);
-        SEXP mutated = PROTECT(result.first);
+        SEXP mutated = PROTECT(result.mutant);
 
-        expect_true(result.second == true);
+        expect_true(result.ok == true);
         expect_true(TYPEOF(mutated) == LANGSXP);
         expect_true(CAR(CDR(mutated)) == Rf_install("a"));
         expect_true(CDDR(mutated) == R_NilValue);
-        expect_true(Rf_getAttrib(mutated, Rf_install("mutation_info")) != R_NilValue);
+        expect_true(result.info != R_NilValue);
         UNPROTECT(2);
     }
 
@@ -139,9 +159,9 @@ context("Mutator C++ tests")
 
         Mutator mutator;
         auto result = mutator.applyDeleteMutation(expr, ops, 0);
-        SEXP mutated = PROTECT(result.first);
+        SEXP mutated = PROTECT(result.mutant);
 
-        expect_true(result.second == true);
+        expect_true(result.ok == true);
         expect_true(TYPEOF(mutated) == LANGSXP);
 
         SEXP mutated_inner = CAR(CDR(mutated));
@@ -168,9 +188,9 @@ context("Mutator C++ tests")
 
             std::vector<OperatorPos> ops = handler.gatherOperators(expr, srcref, false);
             auto result = mutator.applyMutation(expr, ops, 0);
-            SEXP mutated = PROTECT(result.first);
+            SEXP mutated = PROTECT(result.mutant);
 
-            expect_true(result.second == true);
+            expect_true(result.ok == true);
             expect_true(TYPEOF(mutated) == LANGSXP);
             UNPROTECT(3);
         }
@@ -180,13 +200,13 @@ context("Mutator C++ tests")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
-        ops.push_back(OperatorPos({2}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_install("+")));
+        ops.push_back(OperatorPos({2}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_install("+")));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);
 
-        expect_true(result.second == false);
-        expect_true(result.first == R_NilValue);
+        expect_true(result.ok == false);
+        expect_true(result.mutant == R_NilValue);
         UNPROTECT(1);
     }
 
@@ -194,14 +214,14 @@ context("Mutator C++ tests")
     {
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, Rf_mkChar("+")));
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, Rf_mkChar("+")));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);
-        SEXP mutated = PROTECT(result.first);
+        SEXP mutated = PROTECT(result.mutant);
 
-        expect_true(result.second == true);
-        SEXP info = PROTECT(Rf_getAttrib(mutated, Rf_install("mutation_info")));
+        expect_true(result.ok == true);
+        SEXP info = PROTECT(result.info);
         expect_true(TYPEOF(info) == VECSXP);
 
         SEXP orig = VECTOR_ELT(info, 4); // original_symbol
@@ -219,14 +239,14 @@ context("Mutator C++ tests")
         SEXP expr = PROTECT(Rf_lang3(Rf_install("+"), Rf_install("a"), Rf_install("b")));
         std::vector<OperatorPos> ops;
         SEXP original_symbol = PROTECT(Rf_mkString("+"));
-        ops.push_back(OperatorPos({}, std::make_unique<PlusOperator>(), 1, 1, 1, 5, original_symbol));
+        ops.push_back(OperatorPos({}, std::make_unique<SymbolSwapOperator>(Rf_install("+"), Rf_install("-")), 1, 1, 1, 5, original_symbol));
 
         Mutator mutator;
         auto result = mutator.applyFlipMutation(expr, ops, 0);
-        SEXP mutated = PROTECT(result.first);
+        SEXP mutated = PROTECT(result.mutant);
 
-        expect_true(result.second == true);
-        SEXP info = PROTECT(Rf_getAttrib(mutated, Rf_install("mutation_info")));
+        expect_true(result.ok == true);
+        SEXP info = PROTECT(result.info);
         expect_true(TYPEOF(info) == VECSXP);
 
         SEXP orig = VECTOR_ELT(info, 4); // original_symbol
