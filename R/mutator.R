@@ -68,6 +68,28 @@ delete_line_mutants <- function(src_file,
   mutants
 }
 
+# One string per top-level expression, as written to the mutant file.
+deparse_exprs <- function(exprs) {
+  vapply(exprs, function(x) {
+    if (!is.language(x)) "" else paste(deparse(x), collapse = "\n")
+  }, character(1))
+}
+
+# skipped: list(no_op = , duplicate = ), each the operator ids of the mutants
+# dropped for that reason.
+report_skipped_mutants <- function(skipped, file_name) {
+  for (reason in names(skipped)) {
+    ids <- skipped[[reason]]
+    if (length(ids) == 0) next
+    counts <- table(ids, useNA = "ifany")
+    message(sprintf(
+      "Skipped %d %s mutant(s) for %s (%s)",
+      length(ids), sub("_", "-", reason, fixed = TRUE), file_name,
+      paste(sprintf("%s: %d", names(counts), counts), collapse = ", ")
+    ))
+  }
+}
+
 #' Generate Mutants for a Single R File
 #'
 #' Creates mutants for a single R source file by combining AST-based mutations
@@ -160,15 +182,17 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
 
   message(sprintf("Generated %d AST-based mutants for %s", length(raw_mutations), base_name))
 
+  # A mutant changes a single top-level expression, so it is a no-op when its
+  # deparsed code equals the original's, and two mutants are identical only
+  # when they change the same expression into the same text.
+  orig_code <- tryCatch(deparse_exprs(parsed), error = function(e) NULL)
+  seen <- new.env(hash = TRUE, parent = emptyenv())
+  skipped <- list(no_op = character(), duplicate = character())
+
   # AST-driven mutants
   for (m in raw_mutations) {
     if (!is.list(m) && !is.language(m)) next
-    code <- tryCatch(
-      vapply(m, function(x) {
-        if (!is.language(x)) "" else paste(deparse(x), collapse = "\n")
-      }, character(1)),
-      error = function(e) NULL
-    )
+    code <- tryCatch(deparse_exprs(m), error = function(e) NULL)
     if (length(code) == 0) next
 
     info <- attr(m, "mutation_info")
@@ -179,6 +203,23 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
     op_id <- if (is.list(info) && !is.null(info$operator_id)) info$operator_id else NA_character_
     if (is.list(info) && is_excluded_range(info$start_line, info$end_line, excl$ranges, op_id)) {
       next
+    }
+
+    if (length(orig_code) == length(code)) {
+      changed <- which(code != orig_code)
+      if (length(changed) == 0) {
+        skipped$no_op <- c(skipped$no_op, op_id)
+        next
+      }
+      # Environment names are capped at 10000 bytes, so bucket by expression
+      # index and text size, and compare the texts within a bucket.
+      text <- paste(code[changed], collapse = "\r")
+      bucket <- paste(paste(changed, collapse = ","), nchar(text, type = "bytes"))
+      if (text %in% seen[[bucket]]) {
+        skipped$duplicate <- c(skipped$duplicate, op_id)
+        next
+      }
+      seen[[bucket]] <- c(seen[[bucket]], text)
     }
 
     # Sharpen the reported location: to the precise sub-expression span when the
@@ -196,6 +237,7 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
     results[[length(results) + 1]] <- list(path = out_file, info = info)
     idx <- idx + 1L
   }
+  report_skipped_mutants(skipped, base_name)
 
   # Fallback string-deletion mutants
   if ("line_delete" %in% operators) {
