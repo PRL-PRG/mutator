@@ -6,6 +6,9 @@
 
 # Smallest subtree where `orig` and `mut` differ, the ancestors of that node in
 # `orig` (innermost last), and its index in its parent. NULL if identical.
+# This search is most of the cost of the rules. Possible optimization: have the
+# C++ engine record the path of child indices to the mutated node in
+# mutation_info, and follow that path here instead.
 mutated_node <- function(orig, mut, ancestors = list(), index = NA_integer_) {
   if (identical(orig, mut, ignore.srcref = TRUE)) return(NULL)
   if ((is.call(orig) && is.call(mut)) || (is.pairlist(orig) && is.pairlist(mut))) {
@@ -202,23 +205,43 @@ rule_unused_formal <- function(d, file_functions) {
   !used_in_defaults && !uses_outside_missing(body, name)
 }
 
-TRIVIAL_EQUIVALENCE_RULES <- list(
-  paste_single_arg = rule_paste_single_arg,
-  paste_sep_empty = rule_paste_sep_empty,
-  sub_anchored = rule_sub_anchored,
-  arg_is_default = rule_arg_is_default,
-  fixed_plain_pattern = rule_fixed_plain_pattern,
-  unused_formal = rule_unused_formal
+# Operators that can replace a whole default value. The others only swap a
+# call's function (`+` to `-`) or change statements and conditions.
+DEFAULT_REPLACING_OPERATORS <- c(
+  "arith_extra", "not_remove", "and_or_operand", "na_replace", "na_type_swap",
+  "const_null", "const_off_by_one", "value_42", "string_empty", "bool_flip",
+  "seq_idiom", "drop_idiom", "named_arg_drop", "call_unwrap", "error_handling"
 )
 
-# Id of the first rule showing that `mut` is equivalent to the top-level
-# expression `orig`, or NA. A failing rule counts as not applying.
-trivial_equivalence_rule <- function(orig, mut, file_functions = character()) {
+# Each rule with the operators whose mutants it can apply to.
+TRIVIAL_EQUIVALENCE_RULES <- list(
+  paste_single_arg = list(rule = rule_paste_single_arg, operators = "fun_swap_extra"),
+  paste_sep_empty = list(rule = rule_paste_sep_empty, operators = "fun_swap_extra"),
+  sub_anchored = list(rule = rule_sub_anchored, operators = "fun_swap"),
+  arg_is_default = list(rule = rule_arg_is_default, operators = "named_arg_drop"),
+  fixed_plain_pattern = list(rule = rule_fixed_plain_pattern, operators = "named_arg_drop"),
+  unused_formal = list(rule = rule_unused_formal, operators = DEFAULT_REPLACING_OPERATORS)
+)
+
+RULES_BY_OPERATOR <- local({
+  ops <- unique(unlist(lapply(TRIVIAL_EQUIVALENCE_RULES, `[[`, "operators")))
+  names(ops) <- ops
+  lapply(ops, function(op) {
+    TRIVIAL_EQUIVALENCE_RULES[vapply(TRIVIAL_EQUIVALENCE_RULES, function(r) op %in% r$operators, logical(1))]
+  })
+})
+
+# Id of the first rule showing that `mut`, made by `operator_id`, is equivalent
+# to the top-level expression `orig`, or NA. A failing rule counts as not
+# applying.
+trivial_equivalence_rule <- function(orig, mut, operator_id, file_functions = character()) {
+  if (length(operator_id) != 1 || is.na(operator_id)) return(NA_character_)
+  rules <- RULES_BY_OPERATOR[[operator_id]]
+  if (length(rules) == 0) return(NA_character_)
   d <- mutated_node(orig, mut)
   if (is.null(d)) return(NA_character_)
-  for (id in names(TRIVIAL_EQUIVALENCE_RULES)) {
-    if (isTRUE(tryCatch(TRIVIAL_EQUIVALENCE_RULES[[id]](d, file_functions),
-                        error = function(e) FALSE))) {
+  for (id in names(rules)) {
+    if (isTRUE(tryCatch(rules[[id]]$rule(d, file_functions), error = function(e) FALSE))) {
       return(id)
     }
   }

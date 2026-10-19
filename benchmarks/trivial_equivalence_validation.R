@@ -65,7 +65,7 @@ for (pkg in unique(bench$package)) {
         m <- raw[[k]]
         changed <- which(deparse_exprs(m) != orig_code)
         rule <- if (length(changed) == 1) {
-          trivial_equivalence_rule(parsed[[changed]], m[[changed]], file_functions)
+          trivial_equivalence_rule(parsed[[changed]], m[[changed]], op, file_functions)
         } else {
           NA_character_
         }

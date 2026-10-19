@@ -224,7 +224,7 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
       seen[[bucket]] <- c(seen[[bucket]], text)
 
       if (length(changed) == 1) {
-        rule <- trivial_equivalence_rule(parsed[[changed]], m[[changed]], file_functions)
+        rule <- trivial_equivalence_rule(parsed[[changed]], m[[changed]], op_id, file_functions)
         if (!is.na(rule)) {
           skipped$trivial <- c(skipped$trivial, rule)
           next
