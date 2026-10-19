@@ -57,7 +57,7 @@ test_that("fun_swap and fun_swap_extra swap their pairs", {
   m <- mutants_with("f <- function(x) c(any(x), max(x), head(x), nrow(x), gsub(\"a\", \"b\", x))", "fun_swap")
   expect_setequal(m$details, c("'any' -> 'all'", "'max' -> 'min'", "'head' -> 'tail'",
                                "'nrow' -> 'ncol'", "'gsub' -> 'sub'"))
-  m <- mutants_with("f <- function(x) c(paste0(x), floor(x), is.null(x), sapply(x, abs))", "fun_swap_extra")
+  m <- mutants_with("f <- function(x) c(paste0(x, 'a'), floor(x), is.null(x), sapply(x, abs))", "fun_swap_extra")
   expect_setequal(m$details, c("'paste0' -> 'paste'", "'floor' -> 'ceiling'",
                                "'is.null' -> 'is.na'", "'sapply' -> 'lapply'"))
 })

@@ -75,16 +75,17 @@ deparse_exprs <- function(exprs) {
   }, character(1))
 }
 
-# skipped: list(no_op = , duplicate = ), each the operator ids of the mutants
-# dropped for that reason.
+# skipped: list(no_op = , duplicate = , trivial = ), the operator ids of the
+# no-op and duplicate mutants and the rule ids of the trivially equivalent ones.
 report_skipped_mutants <- function(skipped, file_name) {
+  labels <- c(no_op = "no-op", duplicate = "duplicate", trivial = "trivially equivalent")
   for (reason in names(skipped)) {
     ids <- skipped[[reason]]
     if (length(ids) == 0) next
     counts <- table(ids, useNA = "ifany")
     message(sprintf(
       "Skipped %d %s mutant(s) for %s (%s)",
-      length(ids), sub("_", "-", reason, fixed = TRUE), file_name,
+      length(ids), labels[[reason]], file_name,
       paste(sprintf("%s: %d", names(counts), counts), collapse = ", ")
     ))
   }
@@ -187,7 +188,8 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
   # when they change the same expression into the same text.
   orig_code <- tryCatch(deparse_exprs(parsed), error = function(e) NULL)
   seen <- new.env(hash = TRUE, parent = emptyenv())
-  skipped <- list(no_op = character(), duplicate = character())
+  skipped <- list(no_op = character(), duplicate = character(), trivial = character())
+  file_functions <- defined_functions(parsed)
 
   # AST-driven mutants
   for (m in raw_mutations) {
@@ -220,6 +222,14 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
         next
       }
       seen[[bucket]] <- c(seen[[bucket]], text)
+
+      if (length(changed) == 1) {
+        rule <- trivial_equivalence_rule(parsed[[changed]], m[[changed]], file_functions)
+        if (!is.na(rule)) {
+          skipped$trivial <- c(skipped$trivial, rule)
+          next
+        }
+      }
     }
 
     # Sharpen the reported location: to the precise sub-expression span when the

@@ -29,11 +29,11 @@ test_that("bool_flip flips logical literals but not NA", {
 })
 
 test_that("bool_flip flips argument defaults one at a time", {
-  m <- mutants_with("f <- function(x, drop = TRUE, y = 1, verbose = FALSE) x", "bool_flip")
+  m <- mutants_with("f <- function(x, drop = TRUE, y = 1, v = FALSE) c(drop, v)", "bool_flip")
   expect_setequal(m$details, c("'TRUE' -> 'FALSE'", "'FALSE' -> 'TRUE'"))
   expect_setequal(m$code, c(
-    "f <- function(x, drop = FALSE, y = 1, verbose = FALSE) x",
-    "f <- function(x, drop = TRUE, y = 1, verbose = TRUE) x"
+    "f <- function(x, drop = FALSE, y = 1, v = FALSE) c(drop, v)",
+    "f <- function(x, drop = TRUE, y = 1, v = TRUE) c(drop, v)"
   ))
   # The mutated default is the one that takes effect.
   env <- new.env()
