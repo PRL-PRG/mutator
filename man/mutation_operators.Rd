@@ -2,6 +2,7 @@
 % Please edit documentation in R/operators.R
 \name{mutation_operators}
 \alias{mutation_operators}
+\alias{operators}
 \title{List the Mutation Operators}
 \usage{
 mutation_operators()

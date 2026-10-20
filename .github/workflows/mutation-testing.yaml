@@ -6,7 +6,7 @@
 #     mutation:
 #       permissions:
 #         contents: write        # only needed when deploy-badge: true
-#       uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.2.2
+#       uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.3.0
 #       with:
 #         target-margin: "0.10"
 #
@@ -37,7 +37,7 @@ on:
           the release this workflow is versioned with; keep it a tag so the
           fallback stays reproducible.
         type: string
-        default: v0.2.2
+        default: v0.3.0
       mutator-fallback:
         description: >-
           Fall back to github::PRL-PRG/mutator@<mutator-ref> when mutator cannot

@@ -24,3 +24,4 @@ packages
 ^pkgdown$
 ^vignettes/articles$
 ^tests/system$
+^snapshots

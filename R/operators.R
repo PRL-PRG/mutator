@@ -101,6 +101,7 @@ operator_registry <- function() {
 #' When `operators` is `NULL`, the option `mutator.operators` is used, and
 #' `"default"` if that is unset.
 #'
+#' @aliases operators
 #' @examples
 #' mutation_operators()
 #'

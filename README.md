@@ -140,13 +140,13 @@ name: mutation-testing
 
 jobs:
   mutation:
-    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.2.2
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.3.0
     with:
       target-margin: "0.10" # sample to +/-10 percentage points
       fail-under: "75" # fail CI below a 75% mutation score
 ```
 
-Pin to a released tag such as `@v0.2.2`; the workflow is versioned with the
+Pin to a released tag such as `@v0.3.0`; the workflow is versioned with the
 mutator package, so the tag matches the package version. It installs mutator
 from CRAN and falls back to the matching GitHub tag when CRAN cannot provide it;
 `mutator-source: r-universe` or `mutator-source: github` picks another source.
