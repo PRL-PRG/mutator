@@ -100,6 +100,10 @@ on:
         description: Glob patterns (comma/space separated) of R/ files to skip.
         type: string
         default: ""
+      operators:
+        description: Mutation operators (comma/space separated ids or families, "-" removes one), as in mutate_package(operators =). Empty uses the default set.
+        type: string
+        default: ""
       fail-under:
         description: Fail the job if the mutation score (percent) is below this number. Empty never fails.
         type: string
@@ -267,6 +271,7 @@ jobs:
           MUTATOR_COVERAGE_GUIDED: ${{ inputs.coverage-guided }}
           MUTATOR_COVERAGE_BACKEND: ${{ inputs.coverage-backend }}
           MUTATOR_EXCLUDE_FILES: ${{ inputs.exclude-files }}
+          MUTATOR_OPERATORS: ${{ inputs.operators }}
           MUTATOR_FAIL_UNDER: ${{ inputs.fail-under }}
           MUTATOR_SHOW_CONFIDENCE_INTERVAL: ${{ inputs.show-confidence-interval }}
           MUTATOR_BADGE_LABEL: ${{ inputs.badge-label }}

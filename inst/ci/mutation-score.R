@@ -19,6 +19,7 @@
 #   MUTATOR_COVERAGE_GUIDED "true"/"false" run only covering tests (default "true")
 #   MUTATOR_COVERAGE_BACKEND "record_tests"/"per_file" coverage attribution backend
 #   MUTATOR_EXCLUDE_FILES   comma/space separated glob patterns to skip
+#   MUTATOR_OPERATORS       comma/space separated operator ids or families
 #   MUTATOR_FAIL_UNDER      fail the job if the score (%) is below this number
 #   MUTATOR_SHOW_CONFIDENCE_INTERVAL "true"/"false" show sampled-score CI
 #   MUTATOR_BADGE_LABEL     badge label (default "mutator")
@@ -139,6 +140,7 @@ main <- function() {
   args$target_margin <- target_margin
   args$timeout_seconds <- env_num("MUTATOR_TIMEOUT_SECONDS")
   args$exclude_files <- env_list("MUTATOR_EXCLUDE_FILES")
+  args$operators <- env_list("MUTATOR_OPERATORS")
   # NULL (unset) leaves mutate_package's default backend ("record_tests").
   args$coverage_backend <- env_chr("MUTATOR_COVERAGE_BACKEND")
   args <- args[!vapply(args, is.null, logical(1))]
