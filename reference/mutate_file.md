@@ -67,13 +67,20 @@ A list of mutants. Each element contains:
   the id of the mutation operator that produced the mutant (e.g.
   `"rel_swap"`, `"stmt_delete"`).
 
+## Details
+
+Mutants that cannot change behaviour are not written: those whose code
+is identical to the original or to another mutant, and those that simple
+rules show to be equivalent (for example `paste` to `paste0` with a
+single argument). A message gives their number per file.
+
 ## Examples
 
 ``` r
 src <- tempfile(fileext = ".R")
 writeLines("add <- function(x, y) x + y", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"), max_mutants = 1)
-#> Generated 1 AST-based mutants for file18937eea8675.R
+#> Generated 1 AST-based mutants for file1927e5f594a.R
 length(mutants)
 #> [1] 1
 ```

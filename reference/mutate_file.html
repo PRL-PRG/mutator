@@ -107,13 +107,20 @@ operator ids and families, read left to right, where a <code>-</code> prefix rem
 
 
 </dl></div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Mutants that cannot change behaviour are not written: those whose code is
+identical to the original or to another mutant, and those that simple rules
+show to be equivalent (for example <code>paste</code> to <code>paste0</code> with a single
+argument). A message gives their number per file.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">src</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".R"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="st">"add &lt;- function(x, y) x + y"</span>, <span class="va">src</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">mutants</span> <span class="op">&lt;-</span> <span class="fu">mutate_file</span><span class="op">(</span><span class="va">src</span>, out_dir <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"mutations_"</span><span class="op">)</span>, max_mutants <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 1 AST-based mutants for file18937eea8675.R</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 1 AST-based mutants for file1927e5f594a.R</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">mutants</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1</span>
 <span class="r-in"><span></span></span>
