@@ -29,10 +29,10 @@ When \code{operators} is \code{NULL}, the option \code{mutator.operators} is use
 \examples{
 mutation_operators()
 
-# Default set without NA retyping, plus a whole family:
+# Default set plus the constants family, without NA retyping:
 src <- tempfile(fileext = ".R")
 writeLines("f <- function(x) if (x > 0) x + 1 else NA", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"),
-                       operators = c("-na_type_swap", "constants"))
+                       operators = c("default", "constants", "-na_type_swap"))
 
 }

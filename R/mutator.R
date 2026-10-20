@@ -114,7 +114,7 @@ report_skipped_mutants <- function(skipped, file_name) {
 #'   Use `0` to disable line-deletion mutants entirely. Defaults to `5`.
 #' @param operators Mutation operators to apply: a character vector of
 #'   operator ids and families, read left to right, where a `-` prefix removes
-#'   (e.g. `c("default", "-na_type_swap")`). `NULL` uses the option
+#'   (e.g. `c("default", "seq_idiom", "-bool_flip")`). `NULL` uses the option
 #'   `mutator.operators`, or `"default"` if it is unset. See
 #'   [mutation_operators()].
 #'
