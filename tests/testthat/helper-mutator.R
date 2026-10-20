@@ -98,3 +98,30 @@ coverage_srcref <- function(file, first, last = first) {
         srcfile = list(filename = file)
     )
 }
+
+# Build a minimal installable testthat package from a named list of R/ files
+# and test files. Returns the package directory (caller cleans up temp_dir).
+make_exclusion_pkg <- function(temp_dir, pkg_name, r_files, test_files) {
+  pkg_dir <- file.path(temp_dir, pkg_name)
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+
+  writeLines(sprintf("Package: %s
+Version: 0.1.0
+Title: Test Package for mutator
+Description: A test package for mutation testing.
+Author: Test Author
+License: MIT
+RoxygenNote: 7.1.1", pkg_name), file.path(pkg_dir, "DESCRIPTION"))
+  writeLines("exportPattern(\"^[[:alpha:]]+\")", file.path(pkg_dir, "NAMESPACE"))
+  writeLines(sprintf("library(testthat)\nlibrary(%s)\n\ntest_check(\"%s\")", pkg_name, pkg_name),
+    file.path(pkg_dir, "tests", "testthat.R"))
+
+  for (nm in names(r_files)) {
+    writeLines(r_files[[nm]], file.path(pkg_dir, "R", nm))
+  }
+  for (nm in names(test_files)) {
+    writeLines(test_files[[nm]], file.path(pkg_dir, "tests", "testthat", nm))
+  }
+  pkg_dir
+}

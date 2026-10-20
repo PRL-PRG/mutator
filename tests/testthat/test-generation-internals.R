@@ -110,6 +110,26 @@ test_that("mutate_file falls back to line-deletion mutants when C call fails", {
     expect_true(all(vapply(mutants, function(m) file.exists(m$path), logical(1))))
 })
 
+test_that("a line-deletion mutant is the source without the deleted line", {
+    mutate_file <- resolve_mutator_fn("mutate_file")
+
+    src <- tempfile(fileext = ".R")
+    out_dir <- tempfile("md_")
+    dir.create(out_dir)
+    on.exit(unlink(c(src, out_dir), recursive = TRUE), add = TRUE)
+    lines <- c("# setup", "x <- 1", "", "y <- x + 1", "f <- function(a) {", "  a * y", "}")
+    writeLines(lines, src)
+
+    mutants <- mutate_file(src, out_dir = out_dir, operators = "line_delete",
+                           max_line_deletions = 10)
+    deleted <- vapply(mutants, function(m) m$loc$start_line, integer(1))
+    # Comments, empty lines and lines whose deletion does not parse are kept.
+    expect_setequal(deleted, c(2L, 4L, 6L))
+    for (i in seq_along(mutants)) {
+        expect_identical(readLines(mutants[[i]]$path), lines[-deleted[[i]]])
+    }
+})
+
 test_that("max_line_deletions caps and can disable line-deletion mutants", {
     mutate_file <- resolve_mutator_fn("mutate_file")
 
