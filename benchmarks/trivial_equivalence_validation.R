@@ -62,7 +62,7 @@ for (pkg in unique(bench$package)) {
   for (src in srcs) {
     parsed <- parse(src, keep.source = TRUE)
     orig_code <- deparse_exprs(parsed)
-    file_functions <- defined_functions(parsed)
+    file_functions <- defined_names(parsed)
     for (op in operators) {
       raw <- .Call(C_mutate_file, parsed, op)
       for (k in seq_along(raw)) {

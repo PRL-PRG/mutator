@@ -82,6 +82,7 @@ report_skipped_mutants <- function(skipped, file_name) {
   for (reason in names(skipped)) {
     ids <- skipped[[reason]]
     if (length(ids) == 0) next
+    ids[is.na(ids)] <- "unknown"
     counts <- table(ids, useNA = "ifany")
     message(sprintf(
       "Skipped %d %s mutant(s) for %s (%s)",
@@ -95,6 +96,11 @@ report_skipped_mutants <- function(skipped, file_name) {
 #'
 #' Creates mutants for a single R source file by combining AST-based mutations
 #' from the C++ mutation engine with fallback line-deletion mutants.
+#'
+#' Mutants that cannot change behaviour are not written: those whose code is
+#' identical to the original or to another mutant, and those that simple rules
+#' show to be equivalent (for example `paste` to `paste0` with a single
+#' argument). A message gives their number per file.
 #'
 #' @param src_file Path to an R source file.
 #' @param out_dir Directory where mutant files are written. This argument is
@@ -189,7 +195,7 @@ mutate_file <- function(src_file, out_dir, max_mutants = NULL,
   orig_code <- tryCatch(deparse_exprs(parsed), error = function(e) NULL)
   seen <- new.env(hash = TRUE, parent = emptyenv())
   skipped <- list(no_op = character(), duplicate = character(), trivial = character())
-  file_functions <- defined_functions(parsed)
+  file_functions <- defined_names(parsed)
 
   # AST-driven mutants
   for (m in raw_mutations) {

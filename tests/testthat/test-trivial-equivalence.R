@@ -195,6 +195,19 @@ test_that("rules keep mutants whose effect depends on the context", {
   # The mutant calls the file's own paste0.
   expect_identical(paste_rule(quote(paste(x)), quote(paste0(x)), file_functions = "paste0"), NA_character_)
 
+  # A formula keeps its expression: the two formulas differ.
+  orig <- quote(f <- function() ~paste(x))
+  mut <- quote(f <- function() ~paste0(x))
+  expect_false(identical(eval(orig[[3]])(), eval(mut[[3]])()))
+  expect_identical(paste_rule(orig, mut), NA_character_)
+
+  # xtabs() records its call, so an explicit default shows in the result.
+  drop_rule <- rule_with("named_arg_drop")
+  orig <- quote(xtabs(~a, data.frame(a = c(1, 2)), na.rm = FALSE))
+  mut <- quote(xtabs(~a, data.frame(a = c(1, 2))))
+  expect_false(identical(eval(orig), eval(mut)))
+  expect_identical(drop_rule(orig, mut), NA_character_)
+
   # fixed = TRUE ignores ignore.case; without it, ignore.case applies.
   drop <- rule_with("named_arg_drop")
   orig <- quote(grepl("ab", "AB", ignore.case = TRUE, fixed = TRUE))
@@ -209,6 +222,63 @@ test_that("rules keep mutants whose effect depends on the context", {
       quote(f <- function(x, flag = FALSE, env = environment()) g(x, env))
     ),
     NA_character_
+  )
+})
+
+test_that("paste -> paste0 is kept when paste is given sep", {
+  paste_rule <- rule_with("fun_swap_extra")
+  # paste0 has no sep: it pastes the value as a second vector.
+  orig <- quote(paste("a", sep = " "))
+  mut <- quote(paste0("a", sep = " "))
+  expect_false(identical(eval(orig), eval(mut)))
+  expect_identical(paste_rule(orig, mut), NA_character_)
+  expect_identical(paste_rule(quote(paste(x, se = " ")), quote(paste0(x, se = " "))), NA_character_)
+})
+
+test_that("functions the file redefines anywhere are not assumed to be base R", {
+  drop <- rule_with("named_arg_drop")
+  # A local exists() with another default.
+  code <- quote(f <- function(n) {
+    exists <- function(x, inherits = FALSE) inherits
+    exists(n, inherits = TRUE)
+  })
+  mut <- quote(f <- function(n) {
+    exists <- function(x, inherits = FALSE) inherits
+    exists(n)
+  })
+  expect_false(identical(eval(code[[3]])("a"), eval(mut[[3]])("a")))
+  names <- mutator:::defined_names(list(code))
+  expect_true("exists" %in% names)
+  expect_identical(drop(code, mut, file_functions = names), NA_character_)
+
+  # An S3 or S4 method for a group generic.
+  for (method in c("max.myclass", "Summary.myclass", "Summary")) {
+    expect_identical(
+      drop(quote(max(x, na.rm = FALSE)), quote(max(x)), file_functions = method),
+      NA_character_, info = method
+    )
+  }
+
+  names <- mutator:::defined_names(expression(
+    assign("get", identity),
+    setMethod("max", "myclass", function(x, ..., na.rm = FALSE) 1),
+    g <- function(paste) paste(1)
+  ))
+  expect_true(all(c("get", "max", "paste", "g") %in% names))
+})
+
+test_that("unused_formal is kept when the function inspects itself", {
+  flip <- rule_with("bool_flip")
+  expect_identical(
+    flip(quote(f <- function(x, flag = TRUE) cat(deparse(f))),
+         quote(f <- function(x, flag = FALSE) cat(deparse(f)))),
+    NA_character_
+  )
+  # Calling itself does not show the default.
+  expect_identical(
+    flip(quote(f <- function(x, flag = TRUE) if (x > 0) f(x - 1) else x),
+         quote(f <- function(x, flag = FALSE) if (x > 0) f(x - 1) else x)),
+    "unused_formal"
   )
 })
 

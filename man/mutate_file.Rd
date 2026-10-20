@@ -48,6 +48,12 @@ A list of mutants. Each element contains:
 Creates mutants for a single R source file by combining AST-based mutations
 from the C++ mutation engine with fallback line-deletion mutants.
 }
+\details{
+Mutants that cannot change behaviour are not written: those whose code is
+identical to the original or to another mutant, and those that simple rules
+show to be equivalent (for example \code{paste} to \code{paste0} with a single
+argument). A message gives their number per file.
+}
 \examples{
 src <- tempfile(fileext = ".R")
 writeLines("add <- function(x, y) x + y", src)

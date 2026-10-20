@@ -31,6 +31,8 @@ mutated_node <- function(orig, mut, ancestors = list(), index = NA_integer_) {
   list(orig = orig, mut = mut, ancestors = ancestors, index = index)
 }
 
+# The call containing the mutated node. The engine only swaps symbols in call
+# head position, so for a swapped symbol this is the call it names.
 parent_call <- function(d) {
   n <- length(d$ancestors)
   if (n == 0) NULL else d$ancestors[[n]]
@@ -57,7 +59,7 @@ call_args <- function(call) {
 # resolved safely: the file defines its own `fun`, the call passes `...` on, or
 # matching fails.
 bound_args <- function(call, fun, file_functions) {
-  if (fun %in% file_functions) return(NULL)
+  if (is_masked(fun, file_functions)) return(NULL)
   def <- base_function(fun)
   if (is.null(def) || is.primitive(def) || passes_dots(call)) return(NULL)
   m <- tryCatch(match.call(def, call, expand.dots = FALSE), error = function(e) NULL)
@@ -82,11 +84,17 @@ dropped_arg <- function(d) {
   if (length(dropped) == 1) dropped else NULL
 }
 
-# paste <-> paste0 with a single vector to paste: sep is unused.
+# paste <-> paste0 with a single vector to paste in both calls: sep is unused.
+# A sep given to paste goes into paste0's `...` and is pasted.
 rule_paste_single_arg <- function(d, file_functions) {
   if (!is.symbol(d$orig) || !as.character(d$orig) %in% c("paste", "paste0")) return(FALSE)
-  args <- bound_args(parent_call(d), as.character(d$orig), file_functions)
-  !is.null(args) && length(args[["..."]]) == 1
+  call <- parent_call(d)
+  mut_call <- call
+  mut_call[[1]] <- d$mut
+  args <- bound_args(call, as.character(d$orig), file_functions)
+  mut_args <- bound_args(mut_call, as.character(d$mut), file_functions)
+  !is.null(args) && !is.null(mut_args) &&
+    length(args[["..."]]) == 1 && length(mut_args[["..."]]) == 1
 }
 
 # paste(..., sep = "") -> paste0(..., sep = ""): sep becomes one more empty
@@ -142,13 +150,21 @@ PRIMITIVE_DEFAULTS <- list(
   all = list(na.rm = FALSE)
 )
 
+# Functions whose result does not depend on how an argument was given: they
+# do not record their call (as xtabs() or lm() do) and do not dispatch.
+DEFAULT_SAFE_FUNCTIONS <- c(
+  "exists", "get", "get0", "mget", "grepl", "grep", "sub", "gsub", "regexpr",
+  "gregexpr", "regexec", "strsplit", "paste", "paste0", "sapply", "vapply"
+)
+
 # A dropped argument whose literal value is the function's default, when the
 # other arguments keep their bindings.
 rule_arg_is_default <- function(d, file_functions) {
   arg <- dropped_arg(d)
   if (is.null(arg)) return(FALSE)
   fun <- called_function(d$orig)
-  if (is.na(fun) || fun %in% file_functions) return(FALSE)
+  if (is.na(fun) || is_masked(fun, file_functions)) return(FALSE)
+  if (!fun %in% c(DEFAULT_SAFE_FUNCTIONS, names(PRIMITIVE_DEFAULTS))) return(FALSE)
   value <- call_args(d$orig)[[arg]]
   if (!is_scalar_literal(value)) return(FALSE)
   # The other arguments of these primitives all go to `...`, so none can
@@ -212,6 +228,9 @@ uses_outside_missing <- function(expr, name) {
 }
 
 # A changed default of a parameter the function only uses through missing().
+# Code that inspects the function itself sees the default: deparse(f), args(f),
+# formals(f) inside f block the rule, but such code elsewhere, e.g. a test
+# checking formals(f)$flag, is not seen.
 rule_unused_formal <- function(d, file_functions) {
   n <- length(d$ancestors)
   if (n < 2 || !is.pairlist(d$ancestors[[n]])) return(FALSE)
@@ -221,6 +240,17 @@ rule_unused_formal <- function(d, file_functions) {
   name <- names(formals)[d$index]
   body <- fun[[3]]
   if (any(DYNAMIC_CALLS %in% all.names(body))) return(FALSE)
+  # f <- function(...): f used as a value, not only called.
+  if (n >= 3) {
+    assign_call <- d$ancestors[[n - 2]]
+    if (is.call(assign_call) && length(assign_call) == 3 && is.symbol(assign_call[[1]]) &&
+        is.symbol(assign_call[[2]]) &&
+        as.character(assign_call[[1]]) %in% c("<-", "=", "<<-") &&
+        as.character(assign_call[[2]]) %in%
+          c(all.vars(body), all.vars(as.call(c(as.name("list"), as.list(formals)))))) {
+      return(FALSE)
+    }
+  }
   others <- as.list(formals)[names(formals) != name]
   used_in_defaults <- any(vapply(others, function(v) {
     !missing(v) && (any(DYNAMIC_CALLS %in% all.names(v)) || uses_outside_missing(v, name))
@@ -264,7 +294,8 @@ trivial_equivalence_rule <- function(orig, mut, operator_id, file_functions = ch
   if (length(ids) == 0) return(NA_character_)
   d <- mutated_node(orig, mut)
   if (is.null(d)) return(NA_character_)
-  quoted <- c("quote", "expression", "substitute", "bquote", "alist")
+  # Code under these is data, not evaluated: a formula keeps its expression.
+  quoted <- c("quote", "expression", "substitute", "bquote", "alist", "~")
   if (any(vapply(d$ancestors, function(a) {
     is.call(a) && called_function(a) %in% quoted
   }, logical(1)))) return(NA_character_)
@@ -277,7 +308,7 @@ trivial_equivalence_rule <- function(orig, mut, operator_id, file_functions = ch
       } else {
         character()
       }
-      if (any(functions %in% file_functions)) next
+      if (any(vapply(functions, is_masked, logical(1), file_names = file_functions))) next
     }
     rule <- get(paste0("rule_", id), mode = "function")
     if (isTRUE(tryCatch(rule(d, file_functions), error = function(e) FALSE))) {
@@ -287,15 +318,38 @@ trivial_equivalence_rule <- function(orig, mut, operator_id, file_functions = ch
   NA_character_
 }
 
-# Names assigned a function at the top level of `exprs`.
-defined_functions <- function(exprs) {
+# Names the code in `exprs` may bind, at any depth: assignment targets,
+# parameters, and the names given to assign(), setGeneric() and setMethod().
+defined_names <- function(exprs) {
   names <- character()
-  for (e in exprs) {
-    if (is.call(e) && (identical(e[[1]], quote(`<-`)) || identical(e[[1]], quote(`=`))) &&
-        is.symbol(e[[2]]) &&
-        is.call(e[[3]]) && identical(e[[3]][[1]], quote(`function`))) {
-      names <- c(names, as.character(e[[2]]))
+  walk <- function(e) {
+    if (!is.call(e) && !is.pairlist(e) && !is.expression(e)) return()
+    if (is.call(e) && is.symbol(e[[1]])) {
+      f <- as.character(e[[1]])
+      if (f %in% c("<-", "=", "<<-") && length(e) == 3 && is.symbol(e[[2]])) {
+        names <<- c(names, as.character(e[[2]]))
+      }
+      if (f %in% c("assign", "delayedAssign", "setGeneric", "setMethod", "setReplaceMethod") &&
+          length(e) >= 2 && is_string(e[[2]])) {
+        names <<- c(names, e[[2]])
+      }
+      if (f == "function" && length(e) >= 2) names <<- c(names, names(e[[2]]))
     }
+    for (a in as.list(e)) if (!missing(a)) walk(a)
   }
-  unique(names)
+  for (e in exprs) walk(e)
+  unique(names[nzchar(names)])
+}
+
+# Group generics among the functions the rules know.
+SUMMARY_GROUP <- c("min", "max", "sum", "prod", "range", "any", "all")
+
+# Whether the file may change what `fun` does: it binds the name, or defines
+# an S3 or S4 method for it (Summary for the group generics). Definitions in
+# other files of the package and imported functions are not seen, a rare case
+# we accept.
+is_masked <- function(fun, file_names) {
+  fun %in% file_names || any(startsWith(file_names, paste0(fun, "."))) ||
+    (fun %in% SUMMARY_GROUP &&
+       any(file_names == "Summary" | startsWith(file_names, "Summary.")))
 }
