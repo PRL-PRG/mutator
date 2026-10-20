@@ -85,6 +85,7 @@ dropped_arg <- function(d) {
 rule_paste_single_arg <- function(d, file_functions) {
   if (!is.symbol(d$orig) || !as.character(d$orig) %in% c("paste", "paste0")) return(FALSE)
   args <- call_args(parent_call(d))
+  if (any(!names(args) %in% c("", "collapse"))) return(FALSE)
   unnamed <- args[names(args) == ""]
   length(unnamed) == 1 && !identical(unnamed[[1]], quote(...))
 }
@@ -160,7 +161,12 @@ rule_fixed_plain_pattern <- function(d, file_functions) {
   if (!identical(dropped_arg(d), "fixed")) return(FALSE)
   fun <- called_function(d$orig)
   if (is.na(fun) || !fun %in% REGEX_FUNCTIONS) return(FALSE)
-  if (!isTRUE(call_args(d$orig)$fixed) || arg_may_be_true(d$mut, "perl")) return(FALSE)
+  matched <- match.call(
+    definition = get(fun, envir = baseenv(), inherits = FALSE),
+    call = d$orig, expand.dots = FALSE
+  )
+  if (!isTRUE(call_args(d$orig)$fixed) || arg_may_be_true(d$mut, "perl") ||
+      arg_may_be_true(matched, "ignore.case")) return(FALSE)
   if (fun %in% c("sub", "gsub")) {
     r <- call_arg(d$orig, "replacement", 2)
     if (!r$found || !is_string(r$value) || grepl("\\", r$value, fixed = TRUE)) return(FALSE)
@@ -200,7 +206,7 @@ rule_unused_formal <- function(d, file_functions) {
   if (any(DYNAMIC_CALLS %in% all.names(body))) return(FALSE)
   others <- as.list(formals)[names(formals) != name]
   used_in_defaults <- any(vapply(others, function(v) {
-    !missing(v) && uses_outside_missing(v, name)
+    !missing(v) && (any(DYNAMIC_CALLS %in% all.names(v)) || uses_outside_missing(v, name))
   }, logical(1)))
   !used_in_defaults && !uses_outside_missing(body, name)
 }
@@ -241,7 +247,21 @@ trivial_equivalence_rule <- function(orig, mut, operator_id, file_functions = ch
   if (length(ids) == 0) return(NA_character_)
   d <- mutated_node(orig, mut)
   if (is.null(d)) return(NA_character_)
+  quoted <- c("quote", "expression", "substitute", "bquote", "alist")
+  if (any(vapply(d$ancestors, function(a) {
+    is.call(a) && called_function(a) %in% quoted
+  }, logical(1)))) return(NA_character_)
   for (id in ids) {
+    if (id != "unused_formal") {
+      functions <- if (is.symbol(d$orig) && is.symbol(d$mut)) {
+        c(as.character(d$orig), as.character(d$mut))
+      } else if (is.call(d$orig)) {
+        called_function(d$orig)
+      } else {
+        character()
+      }
+      if (any(functions %in% file_functions)) next
+    }
     rule <- get(paste0("rule_", id), mode = "function")
     if (isTRUE(tryCatch(rule(d, file_functions), error = function(e) FALSE))) {
       return(id)
