@@ -340,6 +340,22 @@ not equivalent, uncertain or not yet judged, the share of judged survivors that
 are equivalent, and the estimated share of tested mutants that survive without
 being equivalent.
 
+### Trivial equivalence rules
+
+`trivial_equivalence_validation.R` checks the rules in `R/trivial-equivalence.R`,
+which skip mutants that are equivalent by construction (for example `paste` to
+`paste0` with a single argument), against the operator-selection results. It
+regenerates the mutants of the operators the rules apply to, and counts the
+mutants each rule skips by benchmark outcome: killed, or the LLM verdict for
+survivors. A rule should only skip mutants judged equivalent.
+
+```sh
+Rscript benchmarks/trivial_equivalence_validation.R \
+  --results benchmarks/results/operator-selection --packages-dir packages/system
+```
+
+It writes `trivial_equivalence_validation.csv` in the results directory.
+
 ## Results
 
 N = 500 mutants/tool/package (sampled; fewer when a tool's pool < 500, then

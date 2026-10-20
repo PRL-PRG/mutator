@@ -61,10 +61,21 @@ test_that("mutation_location defaults operator_id to NA", {
 })
 
 test_that("a top-level constant replaced by NULL keeps its metadata", {
+  src <- tempfile(fileext = ".R")
+  on.exit(unlink(src), add = TRUE)
+  writeLines(c("#' @keywords internal", "\"_PACKAGE\""), src)
+  parsed <- parse(src, keep.source = TRUE)
+  raw <- .Call(mutator:::C_mutate_file, parsed, "const_null")
+
+  expect_length(raw, 1L)
+  expect_null(raw[[1]][[1]])
+  info <- attr(raw[[1]], "mutation_info")
+  expect_identical(info$operator_id, "const_null")
+  expect_identical(info$start_line, 2L)
+})
+
+test_that("mutants of a top-level constant are not written", {
+  # Top-level literals are written as empty lines, so these mutants are no-ops.
   ms <- mutants_for(c("#' @keywords internal", "\"_PACKAGE\""))
-  nulled <- Filter(function(m) identical(m$loc$operator_id, "const_null"), ms)
-  expect_length(nulled, 1L)
-  expect_identical(nulled[[1]]$loc$start_line, 2L)
-  expect_identical(nulled[[1]]$loc$details, "'_PACKAGE' -> 'NULL'")
-  expect_false(anyNA(operator_ids(ms)))
+  expect_length(ms, 0L)
 })
