@@ -40,10 +40,14 @@ bench <- do.call(rbind, lapply(file.path(results_dir, "mutants", bench_files), f
   read.csv(f)[, c("package", "operator", "id", "details", "status")]
 }))
 
-judgments <- do.call(rbind, lapply(
-  list.files(file.path(results_dir, "judgments"), pattern = "[.]csv$", full.names = TRUE),
-  read.csv
-))
+judgment_files <- list.files(
+  file.path(results_dir, "judgments"), pattern = "[.]csv$", full.names = TRUE
+)
+judgments <- if (length(judgment_files)) {
+  do.call(rbind, lapply(judgment_files, read.csv))
+} else {
+  data.frame(key = character(), id = character(), status = character())
+}
 judgments$package <- sub("__.*$", "", judgments$key)
 judgments$operator <- sub("^.*?__", "", judgments$key)
 judgments <- judgments[, c("package", "operator", "id", "status")]

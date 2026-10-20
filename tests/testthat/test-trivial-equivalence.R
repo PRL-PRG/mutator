@@ -185,6 +185,33 @@ test_that("rules bind arguments as R does", {
   expect_identical(paste_rule(orig, mut), NA_character_)
 })
 
+test_that("rules keep mutants whose effect depends on the context", {
+  paste_rule <- rule_with("fun_swap_extra")
+  # Quoted code is data: the two expressions differ.
+  expect_identical(
+    paste_rule(quote(e <- quote(paste(x))), quote(e <- quote(paste0(x)))),
+    NA_character_
+  )
+  # The mutant calls the file's own paste0.
+  expect_identical(paste_rule(quote(paste(x)), quote(paste0(x)), file_functions = "paste0"), NA_character_)
+
+  # fixed = TRUE ignores ignore.case; without it, ignore.case applies.
+  drop <- rule_with("named_arg_drop")
+  orig <- quote(grepl("ab", "AB", ignore.case = TRUE, fixed = TRUE))
+  mut <- quote(grepl("ab", "AB", ignore.case = TRUE))
+  expect_false(identical(suppressWarnings(eval(orig)), eval(mut)))
+  expect_identical(drop(orig, mut), NA_character_)
+
+  # Another default can read the parameter through environment().
+  expect_identical(
+    rule_with("bool_flip")(
+      quote(f <- function(x, flag = TRUE, env = environment()) g(x, env)),
+      quote(f <- function(x, flag = FALSE, env = environment()) g(x, env))
+    ),
+    NA_character_
+  )
+})
+
 test_that("rules do not apply to other changes by the same operators", {
   expect_identical(rule_with("rel_swap")(quote(x < y), quote(x > y)), NA_character_)
   expect_identical(rule_with("fun_swap_extra")(quote(paste(x)), quote(paste(x))), NA_character_)
