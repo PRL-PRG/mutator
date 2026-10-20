@@ -20,3 +20,5 @@ mutator.Rcheck
 docs
 *.gcda
 *.gcno
+# New snapshots written by failing system tests; merge them with tests/system/merge-snapshots.R.
+tests/system/_snaps/**/*.new.md

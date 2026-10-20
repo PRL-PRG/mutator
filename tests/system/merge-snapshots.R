@@ -35,7 +35,8 @@ entries <- if (file.exists(target)) read_entries(target) else list()
 
 # Artifacts are downloaded into one directory each, named snapshot-<variant>-<package>.
 new_files <- list.files(dir, pattern = "\\.new\\.md$", recursive = TRUE, full.names = TRUE)
-new_files <- new_files[grepl(paste0("snapshot-", variant, "-"), new_files, fixed = TRUE)]
+new_files <- new_files[grepl(paste0("snapshot-", variant, "-"), new_files, fixed = TRUE) &
+                         basename(dirname(new_files)) == variant]
 if (!length(new_files)) {
   stop("No ", variant, " snapshots found under ", dir, call. = FALSE)
 }
