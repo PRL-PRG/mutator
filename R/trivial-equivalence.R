@@ -51,19 +51,20 @@ call_args <- function(call) {
   args
 }
 
-# Argument by name, else the `position`-th unnamed one.
-call_arg <- function(call, name, position = Inf) {
-  args <- call_args(call)
-  if (name %in% names(args)) return(list(found = TRUE, value = args[[which(names(args) == name)[1]]]))
-  unnamed <- which(names(args) == "")
-  if (length(unnamed) >= position) return(list(found = TRUE, value = args[[unnamed[position]]]))
-  list(found = FALSE)
-}
-
-# Set to anything but a literal FALSE.
-arg_may_be_true <- function(call, name) {
-  a <- call_arg(call, name)
-  a$found && !identical(a$value, FALSE)
+# The arguments of `call` to the base function `fun`, bound to its formals as
+# R binds them (exact names, partial names, then positions), plus the defaults
+# of the formals not supplied; `...` is a list. NULL when the binding cannot be
+# resolved safely: the file defines its own `fun`, the call passes `...` on, or
+# matching fails.
+bound_args <- function(call, fun, file_functions) {
+  if (fun %in% file_functions) return(NULL)
+  def <- base_function(fun)
+  if (is.null(def) || is.primitive(def) || passes_dots(call)) return(NULL)
+  m <- tryCatch(match.call(def, call, expand.dots = FALSE), error = function(e) NULL)
+  if (is.null(m)) return(NULL)
+  args <- as.list(m)[-1]
+  defaults <- formals(def)
+  c(args, defaults[setdiff(names(defaults), c(names(args), "..."))])
 }
 
 is_scalar_literal <- function(x) {
@@ -81,12 +82,11 @@ dropped_arg <- function(d) {
   if (length(dropped) == 1) dropped else NULL
 }
 
-# paste <-> paste0 with a single unnamed argument: sep is unused.
+# paste <-> paste0 with a single vector to paste: sep is unused.
 rule_paste_single_arg <- function(d, file_functions) {
   if (!is.symbol(d$orig) || !as.character(d$orig) %in% c("paste", "paste0")) return(FALSE)
-  args <- call_args(parent_call(d))
-  unnamed <- args[names(args) == ""]
-  length(unnamed) == 1 && !identical(unnamed[[1]], quote(...))
+  args <- bound_args(parent_call(d), as.character(d$orig), file_functions)
+  !is.null(args) && length(args[["..."]]) == 1
 }
 
 # paste(..., sep = "") -> paste0(..., sep = ""): sep becomes one more empty
@@ -94,11 +94,9 @@ rule_paste_single_arg <- function(d, file_functions) {
 # hence the non-empty literal.
 rule_paste_sep_empty <- function(d, file_functions) {
   if (!identical(d$orig, quote(paste))) return(FALSE)
-  call <- parent_call(d)
-  sep <- call_arg(call, "sep")
-  if (!sep$found || !identical(sep$value, "")) return(FALSE)
-  args <- call_args(call)
-  any(vapply(args[names(args) == ""], function(a) {
+  args <- bound_args(parent_call(d), "paste", file_functions)
+  if (is.null(args) || !identical(args[["sep"]], "")) return(FALSE)
+  any(vapply(args[["..."]], function(a) {
     (is.character(a) || is.numeric(a)) && length(a) == 1
   }, logical(1)))
 }
@@ -107,13 +105,33 @@ rule_paste_sep_empty <- function(d, file_functions) {
 # perl = TRUE, `$` can also match before a final newline.
 rule_sub_anchored <- function(d, file_functions) {
   if (!is.symbol(d$orig) || !as.character(d$orig) %in% c("sub", "gsub")) return(FALSE)
-  call <- parent_call(d)
-  if (arg_may_be_true(call, "perl") || arg_may_be_true(call, "fixed")) return(FALSE)
-  p <- call_arg(call, "pattern", 1)
-  if (!p$found || !is_string(p$value)) return(FALSE)
-  pat <- p$value
+  args <- bound_args(parent_call(d), as.character(d$orig), file_functions)
+  if (is.null(args) || !identical(args[["perl"]], FALSE) || !identical(args[["fixed"]], FALSE)) return(FALSE)
+  if (!is_string(args[["pattern"]])) return(FALSE)
+  pat <- args[["pattern"]]
   if (grepl("|", pat, fixed = TRUE) || grepl("(?", pat, fixed = TRUE)) return(FALSE)
   startsWith(pat, "^") || (endsWith(pat, "$") && !endsWith(pat, "\\$"))
+}
+
+# `fun` from base, stats, utils or methods, or NULL.
+base_function <- function(fun) {
+  for (ns in c("base", "stats", "utils", "methods")) {
+    f <- get0(fun, envir = asNamespace(ns), mode = "function", inherits = FALSE)
+    if (!is.null(f)) return(f)
+  }
+  NULL
+}
+
+passes_dots <- function(call) {
+  any(vapply(as.list(call)[-1], function(a) !missing(a) && identical(a, quote(...)), logical(1)))
+}
+
+# Whether every argument, except those in `except`, is bound to the same
+# formal in both bindings. Dropping a named argument can shift positional
+# arguments to other formals.
+same_bindings <- function(args, mut_args, except = character()) {
+  formals <- setdiff(union(names(args), names(mut_args)), except)
+  all(vapply(formals, function(f) identical(args[[f]], mut_args[[f]]), logical(1)))
 }
 
 # Primitives have no formals.
@@ -124,31 +142,28 @@ PRIMITIVE_DEFAULTS <- list(
   all = list(na.rm = FALSE)
 )
 
-# list(default) for a base-R function's argument, or NULL.
-base_default <- function(fun, arg) {
-  if (!is.null(PRIMITIVE_DEFAULTS[[fun]])) return(PRIMITIVE_DEFAULTS[[fun]][arg])
-  for (ns in c("base", "stats", "utils", "methods")) {
-    f <- get0(fun, envir = asNamespace(ns), mode = "function", inherits = FALSE)
-    if (!is.null(f)) {
-      a <- args(f)
-      fm <- if (is.function(a)) formals(a) else NULL
-      if (!is.null(fm) && arg %in% names(fm)) return(fm[arg])
-      return(NULL)
-    }
-  }
-  NULL
-}
-
-# A dropped argument whose literal value is the function's default.
+# A dropped argument whose literal value is the function's default, when the
+# other arguments keep their bindings.
 rule_arg_is_default <- function(d, file_functions) {
   arg <- dropped_arg(d)
   if (is.null(arg)) return(FALSE)
   fun <- called_function(d$orig)
   if (is.na(fun) || fun %in% file_functions) return(FALSE)
-  def <- base_default(fun, arg)
-  if (is.null(def) || identical(def[[1]], quote(expr = ))) return(FALSE)
   value <- call_args(d$orig)[[arg]]
-  is_scalar_literal(value) && is_scalar_literal(def[[1]]) && identical(value, def[[1]])
+  if (!is_scalar_literal(value)) return(FALSE)
+  # The other arguments of these primitives all go to `...`, so none can
+  # shift, but `...` passed on could hold the dropped argument.
+  prim <- PRIMITIVE_DEFAULTS[[fun]]
+  if (!is.null(prim)) {
+    return(arg %in% names(prim) && !passes_dots(d$orig) && identical(value, prim[[arg]]))
+  }
+  args <- bound_args(d$orig, fun, file_functions)
+  mut_args <- bound_args(d$mut, fun, file_functions)
+  if (is.null(args) || is.null(mut_args)) return(FALSE)
+  defaults <- formals(base_function(fun))
+  if (!arg %in% names(defaults) || identical(defaults[[arg]], quote(expr = ))) return(FALSE)
+  is_scalar_literal(defaults[[arg]]) && identical(value, defaults[[arg]]) &&
+    same_bindings(args, mut_args)
 }
 
 REGEX_FUNCTIONS <- c("grepl", "grep", "sub", "gsub", "regexpr", "gregexpr",
@@ -160,13 +175,17 @@ rule_fixed_plain_pattern <- function(d, file_functions) {
   if (!identical(dropped_arg(d), "fixed")) return(FALSE)
   fun <- called_function(d$orig)
   if (is.na(fun) || !fun %in% REGEX_FUNCTIONS) return(FALSE)
-  if (!isTRUE(call_args(d$orig)$fixed) || arg_may_be_true(d$mut, "perl")) return(FALSE)
+  args <- bound_args(d$orig, fun, file_functions)
+  mut_args <- bound_args(d$mut, fun, file_functions)
+  if (is.null(args) || is.null(mut_args)) return(FALSE)
+  if (!isTRUE(args[["fixed"]]) || !identical(mut_args[["perl"]], FALSE)) return(FALSE)
+  if (!same_bindings(args, mut_args, except = "fixed")) return(FALSE)
   if (fun %in% c("sub", "gsub")) {
-    r <- call_arg(d$orig, "replacement", 2)
-    if (!r$found || !is_string(r$value) || grepl("\\", r$value, fixed = TRUE)) return(FALSE)
+    r <- args[["replacement"]]
+    if (!is_string(r) || grepl("\\", r, fixed = TRUE)) return(FALSE)
   }
-  p <- if (fun == "strsplit") call_arg(d$orig, "split", 2) else call_arg(d$orig, "pattern", 1)
-  p$found && is_string(p$value) && !grepl("[\\[\\].\\\\|()^$*+?{}]", p$value, perl = TRUE)
+  p <- if (fun == "strsplit") args[["split"]] else args[["pattern"]]
+  is_string(p) && !grepl("[\\[\\].\\\\|()^$*+?{}]", p, perl = TRUE)
 }
 
 # Calls through which a function can read its arguments without naming them.

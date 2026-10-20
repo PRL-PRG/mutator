@@ -136,6 +136,55 @@ test_that("rules only apply to the mutants of their operators", {
   )
 })
 
+test_that("rules bind arguments as R does", {
+  sub_rule <- rule_with("fun_swap")
+  # fixed = TRUE given by position: gsub returns "XX", sub "X^a".
+  orig <- quote(gsub("^a", "X", "^a^a", FALSE, FALSE, TRUE))
+  mut <- quote(sub("^a", "X", "^a^a", FALSE, FALSE, TRUE))
+  expect_false(identical(eval(orig), eval(mut)))
+  expect_identical(sub_rule(orig, mut), NA_character_)
+  # pattern bound by position after a named x.
+  expect_identical(sub_rule(quote(gsub(x = s, "^a", "")), quote(sub(x = s, "^a", ""))), "sub_anchored")
+  # Arguments passed on through ..., or a gsub defined in the file.
+  expect_identical(sub_rule(quote(gsub("^a", "", ...)), quote(sub("^a", "", ...))), NA_character_)
+  expect_identical(
+    sub_rule(quote(gsub("^a", "", x)), quote(sub("^a", "", x)), file_functions = "gsub"),
+    NA_character_
+  )
+
+  drop <- rule_with("named_arg_drop")
+  # The replacement is "\\1", not the input "a": without fixed, \\1 is a backreference.
+  orig <- quote(gsub(pattern = "a", "\\1", "a", fixed = TRUE))
+  mut <- quote(gsub(pattern = "a", "\\1", "a"))
+  expect_false(identical(eval(orig), eval(mut)))
+  expect_identical(drop(orig, mut), NA_character_)
+
+  # Dropping a named argument lets the following positional ones bind to other
+  # formals: the last TRUE goes from perl to fixed.
+  orig <- quote(strsplit("a.b", fixed = FALSE, ".", TRUE))
+  mut <- quote(strsplit("a.b", ".", TRUE))
+  expect_false(identical(eval(orig), eval(mut)))
+  expect_identical(drop(orig, mut), NA_character_)
+  expect_identical(
+    drop(quote(strsplit(x, fixed = TRUE, "a", TRUE)), quote(strsplit(x, "a", TRUE))),
+    NA_character_
+  )
+  # A shift onto a formal with the same value keeps the bindings.
+  expect_identical(
+    drop(quote(strsplit(x, fixed = TRUE, "a", FALSE)), quote(strsplit(x, "a", FALSE))),
+    "fixed_plain_pattern"
+  )
+  # max() takes its other arguments through ..., which may hold na.rm.
+  expect_identical(drop(quote(max(..., na.rm = FALSE)), quote(max(...))), NA_character_)
+
+  # A partial name after ... is not sep: paste pastes it as a second vector.
+  paste_rule <- rule_with("fun_swap_extra")
+  orig <- quote(paste("x", se = ""))
+  mut <- quote(paste0("x", se = ""))
+  expect_false(identical(eval(orig), eval(mut)))
+  expect_identical(paste_rule(orig, mut), NA_character_)
+})
+
 test_that("rules do not apply to other changes by the same operators", {
   expect_identical(rule_with("rel_swap")(quote(x < y), quote(x > y)), NA_character_)
   expect_identical(rule_with("fun_swap_extra")(quote(paste(x)), quote(paste(x))), NA_character_)
