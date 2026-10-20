@@ -68,13 +68,90 @@
     
     
 <p>This vignette documents the options that control how
-<code><a href="../reference/mutate_package.html">mutate_package()</a></code> runs: which test strategy is used, how
-mutant timeouts are calibrated, which tests are selected, how parallel
-workers are isolated, how to exclude code from mutation, and how the
-optional coverage-guided, precise-location, and
-equivalent-mutant-detection features behave. See
+<code><a href="../reference/mutate_package.html">mutate_package()</a></code> runs: which mutation operators are
+applied, which test strategy is used, how mutant timeouts are
+calibrated, which tests are selected, how parallel workers are isolated,
+how to exclude code from mutation, and how the optional coverage-guided,
+precise-location, and equivalent-mutant-detection features behave. See
 <code><a href="../reference/mutate_package.html">?mutate_package</a></code> for the full argument and return-value
 documentation.</p>
+<div class="section level2">
+<h2 id="mutation-operators-operators">Mutation operators (<code>operators</code>)<a class="anchor" aria-label="anchor" href="#mutation-operators-operators"></a>
+</h2>
+<p><code><a href="../reference/mutation_operators.html">mutation_operators()</a></code> lists the operators, with their id,
+family, whether they are in the default set, and an example:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">ops</span> <span class="op">&lt;-</span> <span class="fu">mutator</span><span class="fu">::</span><span class="fu"><a href="../reference/mutation_operators.html">mutation_operators</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">ops</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"id"</span>, <span class="st">"family"</span>, <span class="st">"default"</span>, <span class="st">"example"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co">#&gt;             id     family default             example</span></span>
+<span><span class="co">#&gt; 1   arith_swap arithmetic    TRUE    x + y  -&gt;  x - y</span></span>
+<span><span class="co">#&gt; 2  arith_extra arithmetic    TRUE x %% y  -&gt;  x %/% y</span></span>
+<span><span class="co">#&gt; 3     rel_swap relational    TRUE    x &lt; y  -&gt;  x &gt; y</span></span>
+<span><span class="co">#&gt; 4 rel_boundary relational    TRUE   x &lt; y  -&gt;  x &lt;= y</span></span>
+<span><span class="co">#&gt; 5   logic_swap    logical    TRUE  x &amp;&amp; y  -&gt;  x || y</span></span>
+<span><span class="co">#&gt; 6   not_remove    logical    TRUE           !x  -&gt;  x</span></span></code></pre></div>
+<p>The <code>operators</code> argument of <code><a href="../reference/mutate_package.html">mutate_package()</a></code>
+and <code><a href="../reference/mutate_file.html">mutate_file()</a></code> selects them. It is a character vector
+read from left to right. Each element is an operator id, a family
+(<code>arithmetic</code>, <code>relational</code>, <code>logical</code>,
+<code>control_flow</code>, <code>constants</code>,
+<code>r_idioms</code>, <code>deletion</code>), <code>"default"</code> or
+<code>"all"</code>. A <code>-</code> prefix removes operators. If the
+first element is a removal, the selection starts from the default
+set:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># The default set, plus seq_idiom, without bool_flip</span></span>
+<span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, operators <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"default"</span>, <span class="st">"seq_idiom"</span>, <span class="st">"-bool_flip"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Only relational and logical operators</span></span>
+<span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, operators <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"relational"</span>, <span class="st">"logical"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># The default set without the R-specific operators</span></span>
+<span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, operators <span class="op">=</span> <span class="st">"-r_idioms"</span><span class="op">)</span></span></code></pre></div>
+<p>An unknown name is an error that suggests the closest id. When
+<code>operators</code> is not given, the option
+<code>mutator.operators</code> is used, and <code>"default"</code> if it
+is unset:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>mutator.operators <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"default"</span>, <span class="st">"seq_idiom"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>Operators are left out of the default set when many of their mutants
+are equivalent to the original code or when they produce many mutants.
+The README lists the opt-in operators and the measurements behind each
+choice.</p>
+<p><code>line_delete</code> is in the default set, but
+<code><a href="../reference/mutate_package.html">mutate_package()</a></code> generates no line-deletion mutants unless
+<code>max_line_deletions</code> is above <code>0</code>.</p>
+<div class="section level3">
+<h3 id="mutation-score-per-operator">Mutation score per operator<a class="anchor" aria-label="anchor" href="#mutation-score-per-operator"></a>
+</h3>
+<p><code>result$summary$by_operator</code> gives the number of tested,
+killed, hanged and survived mutants and the mutation score for each
+operator. With <code>isFullLog = TRUE</code>,
+<code><a href="../reference/mutate_package.html">mutate_package()</a></code> also prints it as a table after the
+overall score. A low score for one operator points at a kind of fault
+the tests miss, for example <code>rel_boundary</code> survivors at
+untested boundaries.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span><span class="op">)</span></span>
+<span><span class="va">result</span><span class="op">$</span><span class="va">summary</span><span class="op">$</span><span class="va">by_operator</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="skipped-mutants">Skipped mutants<a class="anchor" aria-label="anchor" href="#skipped-mutants"></a>
+</h3>
+<p>Some mutants cannot change the behaviour of the code, and mutator
+does not write or test them:</p>
+<ul>
+<li>mutants whose code is identical to the original (no-op),</li>
+<li>mutants identical to another mutant of the same file
+(duplicate),</li>
+<li>mutants that simple rules show to be equivalent, for example
+<code>paste</code> to <code>paste0</code> with a single argument, or an
+argument dropped when its value is the default.</li>
+</ul>
+<p>A message gives their number per file and reason. These mutants are
+not counted in <code>generated</code>.</p>
+</div>
+</div>
 <div class="section level2">
 <h2 id="mutation-testing-modes-strategy">Mutation testing modes (<code>strategy</code>)<a class="anchor" aria-label="anchor" href="#mutation-testing-modes-strategy"></a>
 </h2>
@@ -104,7 +181,7 @@ an installed copy with <code>strategy = "tinytest-installed"</code>
 which is slower but matches an installed package and still supports
 coverage-guided selection. Pass <code>strategy</code> to
 <code><a href="../reference/mutate_package.html">mutate_package()</a></code> to override auto-detection:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, strategy <span class="op">=</span> <span class="st">"tinytest-installed"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -146,7 +223,7 @@ timeouts/kills from, e.g., tests that hit the network.</p>
 <p>Set <code>cran = FALSE</code> to run the <strong>full</strong> suite
 instead (<code>NOT_CRAN = "true"</code>, which is what happens by
 default when running <code>devtools::test()</code>):</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, cran <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>This applies to every test strategy (<code>testthat</code>,
 <code>tinytest</code>, <code>tinytest-installed</code>, and the
@@ -168,7 +245,7 @@ speeds up the test-running phase (often substantially for packages with
 large suites) without changing any mutant’s verdict.</p>
 <p>Set <code>fail_fast = FALSE</code> to run the full suite for every
 mutant:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, fail_fast <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>This applies to the <code>testthat</code> strategy: it sets
 <code>TESTTHAT_MAX_FAILS = 1</code> in the test subprocess and uses the
@@ -220,7 +297,7 @@ No contention, no extra disk, but the slowest option.</p></li>
 Each mutant gets its own deep copy of <code>src/</code> and
 <code>tests/</code> instead of a symlink, so file-writing tests can’t
 collide:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, isolate <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ol>
@@ -234,7 +311,7 @@ you see parallel-only <code>KILLED</code>/<code>HANG</code> results.</p>
 <p>When the optional <a href="https://cran.r-project.org/package=pbmcapply" class="external-link"><code>pbmcapply</code></a>
 package is installed, the multi-core test run shows a live progress
 bar.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"pbmcapply"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
@@ -251,7 +328,7 @@ code.</p>
 glob patterns matched against the base names of the <code>.R</code>
 files in <code>R/</code>. Matching files are skipped entirely before any
 mutants are generated:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/scales"</span>, exclude_files <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"import-standalone-*"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><strong>2. In the source, with <code># mutator:ignore</code>
 directives.</strong> Place markers in the <code>.R</code> file
@@ -263,7 +340,7 @@ the <strong>whole file</strong>.</p></li>
 <p><code># mutator:ignore-start</code> /
 <code># mutator:ignore-end</code> exclude the <strong>line
 region</strong> between them (wrap a function to exclude it):</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># mutator:ignore-start</span></span>
 <span><span class="va">legacy_helper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="co"># not worth mutation-testing</span></span>
@@ -277,7 +354,7 @@ file.</p>
 <p>Both directives can list operator ids or families (see
 <code><a href="../reference/mutation_operators.html">mutation_operators()</a></code>), separated by commas or spaces. Only
 those operators are then excluded:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># mutator:ignore-start seq_idiom, constants</span></span>
 <span><span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span></span>
 <span><span class="co"># mutator:ignore-end</span></span></code></pre></div>
@@ -293,7 +370,7 @@ untested-by-design needs no separate mutator directive:</p>
 <li>
 <p>A bare <code># nocov</code> excludes its <strong>own
 line</strong>, and may trail code:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="va">impossible_state</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"unreachable"</span><span class="op">)</span> <span class="co"># nocov</span></span>
 <span><span class="op">}</span></span></code></pre></div>
@@ -339,7 +416,7 @@ strategy is the generic installed-tests fallback, mutator cannot
 attribute coverage to test files, so it emits a warning and runs the
 full suite for every mutant. Pass <code>coverage_guided = FALSE</code>
 to disable the optimisation (and that warning).</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># On by default; pass FALSE to run the full suite for every mutant.</span></span>
 <span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>The single coverage run also serves as the baseline check (it runs
@@ -371,7 +448,7 @@ attribution</strong> with no helper fallback, at roughly the same cost
 as the single <code>record_tests</code> run (often faster overall, since
 more mutants get a narrowed test set). It reaches into covr internals,
 so it is opt-in:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, coverage_guided <span class="op">=</span> <span class="cn">TRUE</span>, coverage_backend <span class="op">=</span> <span class="st">"per_file"</span><span class="op">)</span></span></code></pre></div>
 </li>
 </ul>
@@ -396,7 +473,7 @@ spans for many operator mutants, typically narrowing a whole-function
 range down to the exact sub-expression on a single line. It is a
 GitHub-only optional package listed in <code>Enhances</code>; install it
 yourself to opt in:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"PRL-PRG/imputesrcref"</span><span class="op">)</span></span></code></pre></div>
 <p>When it is <strong>not</strong> installed, <code>mutator</code>
@@ -409,7 +486,7 @@ oracle: mutant files are deparsed from the original code and are
 semantics regardless. For best results, install the package under test
 from source with parse data retained, since <code>imputesrcref</code>
 reads it:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"&lt;pkg&gt;"</span>, INSTALL_opts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"--with-keep.source"</span>, <span class="st">"--with-keep.parse.data"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -422,7 +499,7 @@ mixed):</p>
 <ol style="list-style-type: decimal">
 <li>
 <p><strong>Programmatically</strong>, in your R session:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/set_openai_config.html">set_openai_config</a></span><span class="op">(</span></span>
 <span>  api_key  <span class="op">=</span> <span class="st">"api-key..."</span>,</span>
 <span>  model    <span class="op">=</span> <span class="st">"gpt-4"</span>,</span>
@@ -450,7 +527,7 @@ and the base URL to the public OpenAI API. Set <code>base_url</code> to
 target a self-hosted or alternative OpenAI-compatible service (for
 example <code>http://localhost:11434/v1</code>).</p>
 <p>Enable the analysis when running package mutation tests:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/mutate_package.html">mutate_package</a></span><span class="op">(</span><span class="st">"path/to/pkg"</span>, detectEqMutants <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p>Equivalence detection runs <strong>before</strong> the test suites.
 Because an equivalent mutant is behaviorally identical to the original,

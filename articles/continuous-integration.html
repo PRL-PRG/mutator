@@ -177,58 +177,65 @@ relying on covr internals.</td>
 <td>Glob patterns of <code>R/</code> files to skip.</td>
 </tr>
 <tr class="odd">
+<td><code>operators</code></td>
+<td><code>""</code></td>
+<td>Mutation operators,
+e.g. <code>"default, seq_idiom, -bool_flip"</code>. Empty uses the
+default set. See <code><a href="../reference/mutation_operators.html">mutation_operators()</a></code>.</td>
+</tr>
+<tr class="even">
 <td><code>badge-label</code></td>
 <td><code>mutator</code></td>
 <td>Label shown on the shields.io badge.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>deploy-badge</code></td>
 <td><code>false</code></td>
 <td>Publish a badge. Requires <code>contents: write</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>badge-branch</code></td>
 <td><code>gh-pages</code></td>
 <td>Branch the badge JSON is deployed to.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>mutator-source</code></td>
 <td><code>cran</code></td>
 <td>Where mutator is installed from: <code>cran</code>,
 <code>r-universe</code>, <code>github</code>, or <code>local</code>. See
 below.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>mutator-ref</code></td>
 <td>the matching release tag</td>
 <td>Git ref used by the <code>github</code> source and by the
 fallback.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>mutator-fallback</code></td>
 <td><code>true</code></td>
 <td>Install from GitHub when CRAN or r-universe cannot provide
 mutator.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>r-universe-repo</code></td>
 <td><code>https://prl-prg.r-universe.dev</code></td>
 <td>Repository consulted when <code>mutator-source</code> is
 <code>r-universe</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>mutator-spec</code></td>
 <td><code>""</code></td>
 <td>Explicit pak spec, overriding <code>mutator-source</code>
 entirely.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>install-imputesrcref</code></td>
 <td><code>true</code></td>
 <td>Install the optional imputesrcref package to refine mutant
 locations.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>r-version</code></td>
 <td><code>release</code></td>
 <td>R version passed to <code>setup-r</code>.</td>

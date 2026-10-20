@@ -128,11 +128,11 @@ mutation_operators()
 #> 30                         { a; b }  ->  { b }
 #> 31                     <line 3>  ->  <deleted>
 
-# Default set without NA retyping, plus a whole family:
+# Default set plus the constants family, without NA retyping:
 src <- tempfile(fileext = ".R")
 writeLines("f <- function(x) if (x > 0) x + 1 else NA", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"),
-                       operators = c("-na_type_swap", "constants"))
-#> Generated 19 AST-based mutants for file1927f5e38a4.R
-#> Skipped 1 duplicate mutant(s) for file1927f5e38a4.R (const_off_by_one: 1)
+                       operators = c("default", "constants", "-na_type_swap"))
+#> Generated 16 AST-based mutants for file19401b9c4848.R
+#> Skipped 1 duplicate mutant(s) for file19401b9c4848.R (const_off_by_one: 1)
 ```

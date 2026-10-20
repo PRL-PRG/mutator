@@ -221,7 +221,7 @@ mutate_package(
 
   Mutation operators to apply: a character vector of operator ids and
   families, read left to right, where a `-` prefix removes (e.g.
-  `c("default", "-na_type_swap")`). `NULL` uses the option
+  `c("default", "seq_idiom", "-bool_flip")`). `NULL` uses the option
   `mutator.operators`, or `"default"` if it is unset. See
   [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md).
 

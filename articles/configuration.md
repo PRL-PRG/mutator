@@ -2,12 +2,103 @@
 
 This vignette documents the options that control how
 [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
-runs: which test strategy is used, how mutant timeouts are calibrated,
-which tests are selected, how parallel workers are isolated, how to
-exclude code from mutation, and how the optional coverage-guided,
-precise-location, and equivalent-mutant-detection features behave. See
+runs: which mutation operators are applied, which test strategy is used,
+how mutant timeouts are calibrated, which tests are selected, how
+parallel workers are isolated, how to exclude code from mutation, and
+how the optional coverage-guided, precise-location, and
+equivalent-mutant-detection features behave. See
 [`?mutate_package`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
 for the full argument and return-value documentation.
+
+## Mutation operators (`operators`)
+
+[`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md)
+lists the operators, with their id, family, whether they are in the
+default set, and an example:
+
+``` r
+
+ops <- mutator::mutation_operators()
+head(ops[, c("id", "family", "default", "example")])
+#>             id     family default             example
+#> 1   arith_swap arithmetic    TRUE    x + y  ->  x - y
+#> 2  arith_extra arithmetic    TRUE x %% y  ->  x %/% y
+#> 3     rel_swap relational    TRUE    x < y  ->  x > y
+#> 4 rel_boundary relational    TRUE   x < y  ->  x <= y
+#> 5   logic_swap    logical    TRUE  x && y  ->  x || y
+#> 6   not_remove    logical    TRUE           !x  ->  x
+```
+
+The `operators` argument of
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+and
+[`mutate_file()`](https://prl-prg.github.io/mutator/reference/mutate_file.md)
+selects them. It is a character vector read from left to right. Each
+element is an operator id, a family (`arithmetic`, `relational`,
+`logical`, `control_flow`, `constants`, `r_idioms`, `deletion`),
+`"default"` or `"all"`. A `-` prefix removes operators. If the first
+element is a removal, the selection starts from the default set:
+
+``` r
+
+# The default set, plus seq_idiom, without bool_flip
+mutate_package("path/to/pkg", operators = c("default", "seq_idiom", "-bool_flip"))
+
+# Only relational and logical operators
+mutate_package("path/to/pkg", operators = c("relational", "logical"))
+
+# The default set without the R-specific operators
+mutate_package("path/to/pkg", operators = "-r_idioms")
+```
+
+An unknown name is an error that suggests the closest id. When
+`operators` is not given, the option `mutator.operators` is used, and
+`"default"` if it is unset:
+
+``` r
+
+options(mutator.operators = c("default", "seq_idiom"))
+```
+
+Operators are left out of the default set when many of their mutants are
+equivalent to the original code or when they produce many mutants. The
+README lists the opt-in operators and the measurements behind each
+choice.
+
+`line_delete` is in the default set, but
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+generates no line-deletion mutants unless `max_line_deletions` is above
+`0`.
+
+### Mutation score per operator
+
+`result$summary$by_operator` gives the number of tested, killed, hanged
+and survived mutants and the mutation score for each operator. With
+`isFullLog = TRUE`,
+[`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+also prints it as a table after the overall score. A low score for one
+operator points at a kind of fault the tests miss, for example
+`rel_boundary` survivors at untested boundaries.
+
+``` r
+
+result <- mutate_package("path/to/pkg")
+result$summary$by_operator
+```
+
+### Skipped mutants
+
+Some mutants cannot change the behaviour of the code, and mutator does
+not write or test them:
+
+- mutants whose code is identical to the original (no-op),
+- mutants identical to another mutant of the same file (duplicate),
+- mutants that simple rules show to be equivalent, for example `paste`
+  to `paste0` with a single argument, or an argument dropped when its
+  value is the default.
+
+A message gives their number per file and reason. These mutants are not
+counted in `generated`.
 
 ## Mutation testing modes (`strategy`)
 
