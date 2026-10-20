@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">mutator</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.2.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,29 @@
       <small>Source: <a href="https://github.com/PRL-PRG/mutator/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.0" id="mutator-030">mutator 0.3.0<a class="anchor" aria-label="anchor" href="#mutator-030"></a></h2>
+<div class="section level3">
+<h3 id="mutation-operators-0-3-0">Mutation operators<a class="anchor" aria-label="anchor" href="#mutation-operators-0-3-0"></a></h3>
+<ul><li>New <code>operators</code> argument of <code><a href="../reference/mutate_file.html">mutate_file()</a></code> and <code><a href="../reference/mutate_package.html">mutate_package()</a></code> to select the mutation operators by id or family, e.g. <code>operators = c("default", "seq_idiom", "-bool_flip")</code>. The option <code>mutator.operators</code> sets it for a session. The new <code><a href="../reference/mutation_operators.html">mutation_operators()</a></code> lists the operators.</li>
+<li>New operators: boundary changes of relational operators (<code>&lt;</code> to <code>&lt;=</code>), <code>^</code>, <code>%%</code> and <code>%/%</code> swaps, removal of an <code>&amp;&amp;</code>/<code>||</code> operand, <code><a href="https://rdrr.io/r/base/Control.html" class="external-link">break</a></code>/<code><a href="https://rdrr.io/r/base/Control.html" class="external-link">next</a></code> swaps, forced conditions, off-by-one constants, empty strings, and R-specific operators: <code>TRUE</code>/<code>FALSE</code> flips (also in argument defaults), <code>&lt;&lt;-</code> to <code>&lt;-</code>, <code>&amp;&amp;</code> to <code>&amp;</code>, <code>max</code> to <code>pmax</code>, <code>[[</code> to <code>[</code>, <code>seq_len(n)</code> to <code>1:n</code>, dropping <code>drop = FALSE</code> and other named arguments, function swaps (<code>any</code>/<code>all</code>, <code>min</code>/<code>max</code>, <code>head</code>/<code>tail</code>, …), removal of wrappers such as <code><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev()</a></code> or <code><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique()</a></code>, and removal of error handling (<code><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch()</a></code>, <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>). The replacement of values by <code>42</code>, which was disabled, is available as <code>value_42</code>.</li>
+<li>The default set changed, based on a benchmark of the operators on seven CRAN packages (see the README). It adds the boundary, <code>&amp;&amp;</code>/<code>||</code> operand, <code><a href="https://rdrr.io/r/base/Control.html" class="external-link">break</a></code>/<code><a href="https://rdrr.io/r/base/Control.html" class="external-link">next</a></code>, <code>TRUE</code>/<code>FALSE</code>, <code>&lt;&lt;-</code>, named argument, function swap and error handling operators. <code>NA</code> type swaps (<code>NA</code> to <code>NA_integer_</code>, …) are no longer in the default set, as most of their mutants are equivalent. Results of <code><a href="../reference/mutate_package.html">mutate_package()</a></code> therefore differ from earlier versions.</li>
+<li>
+<code># mutator:ignore-start</code> and <code># mutator:ignore-file</code> can list operator ids or families, to exclude only those operators.</li>
+<li>
+<code><a href="../reference/mutate_package.html">mutate_package()</a></code> reports the mutation score per operator in <code>summary$by_operator</code>, printed with <code>isFullLog = TRUE</code>.</li>
+<li>Mutants that cannot change the behaviour of the code are no longer written or tested: those identical to the original code or to another mutant, and those that simple rules show to be equivalent (for example <code>paste</code> to <code>paste0</code> with a single argument). A message gives their number per file.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="equivalent-mutant-detection-0-3-0">Equivalent mutant detection<a class="anchor" aria-label="anchor" href="#equivalent-mutant-detection-0-3-0"></a></h3>
+<ul><li>Requests refused for rate limiting (HTTP 429) or by an overloaded gateway (502, 503, 504) are retried with exponential backoff, honouring <code>Retry-After</code>. Network errors are retried twice, and a request may wait up to 30 minutes for the answer of a reasoning model.</li>
+<li>When an answer is cut off by the output token limit, the verdicts of its complete entries are kept and the missing mutants are asked again in smaller batches.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="continuous-integration-0-3-0">Continuous integration<a class="anchor" aria-label="anchor" href="#continuous-integration-0-3-0"></a></h3>
+<ul><li>The reusable workflow has a new <code>operators</code> input.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.2" id="mutator-022">mutator 0.2.2<a class="anchor" aria-label="anchor" href="#mutator-022"></a></h2>
 <ul><li>The reusable GitHub Actions workflow now installs mutator from CRAN by default, instead of from the tip of the GitHub repository. A new <code>mutator-source</code> input selects <code>cran</code> (default), <code>r-universe</code>, <code>github</code>, or <code>local</code> (mutator is the package under test). When CRAN or r-universe cannot provide the package, the workflow falls back to <code>PRL-PRG/mutator</code> at the tag given by the new <code>mutator-ref</code> input, which defaults to the release the workflow is versioned with; set <code>mutator-fallback: false</code> to fail instead. The existing <code>mutator-spec</code> input still accepts a raw pak spec and now overrides <code>mutator-source</code>; it no longer defaults to GitHub.</li>

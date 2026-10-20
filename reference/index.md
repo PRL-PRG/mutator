@@ -12,8 +12,6 @@
   : Run Mutation Testing for an R Package
 - [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md)
   : List the Mutation Operators
-- [`operators`](https://prl-prg.github.io/mutator/reference/operators.md)
-  : Mutation Operators Supported by mutator
 - [`reset_openai_config()`](https://prl-prg.github.io/mutator/reference/reset_openai_config.md)
   : Clear session OpenAI configuration
 - [`set_openai_config()`](https://prl-prg.github.io/mutator/reference/set_openai_config.md)

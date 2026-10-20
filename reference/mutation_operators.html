@@ -11,7 +11,7 @@ and mutate_package()."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">mutator</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.2.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -177,8 +177,8 @@ When <code>operators</code> is <code>NULL</code>, the option <code>mutator.opera
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="st">"f &lt;- function(x) if (x &gt; 0) x + 1 else NA"</span>, <span class="va">src</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">mutants</span> <span class="op">&lt;-</span> <span class="fu"><a href="mutate_file.html">mutate_file</a></span><span class="op">(</span><span class="va">src</span>, out_dir <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"mutations_"</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>                       operators <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"default"</span>, <span class="st">"constants"</span>, <span class="st">"-na_type_swap"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 16 AST-based mutants for file19401b9c4848.R</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Skipped 1 duplicate mutant(s) for file19401b9c4848.R (const_off_by_one: 1)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Generated 16 AST-based mutants for file190b2f64f3ae.R</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Skipped 1 duplicate mutant(s) for file190b2f64f3ae.R (const_off_by_one: 1)</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

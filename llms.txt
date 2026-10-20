@@ -167,13 +167,13 @@ name: mutation-testing
 
 jobs:
   mutation:
-    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.2.2
+    uses: PRL-PRG/mutator/.github/workflows/mutation-testing.yaml@v0.3.0
     with:
       target-margin: "0.10" # sample to +/-10 percentage points
       fail-under: "75" # fail CI below a 75% mutation score
 ```
 
-Pin to a released tag such as `@v0.2.2`; the workflow is versioned with
+Pin to a released tag such as `@v0.3.0`; the workflow is versioned with
 the mutator package, so the tag matches the package version. It installs
 mutator from CRAN and falls back to the matching GitHub tag when CRAN
 cannot provide it; `mutator-source: r-universe` or
@@ -354,8 +354,6 @@ test suite can be frustrating!
   : Run Mutation Testing for an R Package
 - [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md)
   : List the Mutation Operators
-- [`operators`](https://prl-prg.github.io/mutator/reference/operators.md)
-  : Mutation Operators Supported by mutator
 - [`reset_openai_config()`](https://prl-prg.github.io/mutator/reference/reset_openai_config.md)
   : Clear session OpenAI configuration
 - [`set_openai_config()`](https://prl-prg.github.io/mutator/reference/set_openai_config.md)

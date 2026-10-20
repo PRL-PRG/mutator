@@ -1,5 +1,67 @@
 # Changelog
 
+## mutator 0.3.0
+
+### Mutation operators
+
+- New `operators` argument of
+  [`mutate_file()`](https://prl-prg.github.io/mutator/reference/mutate_file.md)
+  and
+  [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+  to select the mutation operators by id or family, e.g.
+  `operators = c("default", "seq_idiom", "-bool_flip")`. The option
+  `mutator.operators` sets it for a session. The new
+  [`mutation_operators()`](https://prl-prg.github.io/mutator/reference/mutation_operators.md)
+  lists the operators.
+- New operators: boundary changes of relational operators (`<` to `<=`),
+  `^`, `%%` and `%/%` swaps, removal of an `&&`/`||` operand,
+  [`break`](https://rdrr.io/r/base/Control.html)/[`next`](https://rdrr.io/r/base/Control.html)
+  swaps, forced conditions, off-by-one constants, empty strings, and
+  R-specific operators: `TRUE`/`FALSE` flips (also in argument
+  defaults), `<<-` to `<-`, `&&` to `&`, `max` to `pmax`, `[[` to `[`,
+  `seq_len(n)` to `1:n`, dropping `drop = FALSE` and other named
+  arguments, function swaps (`any`/`all`, `min`/`max`, `head`/`tail`,
+  …), removal of wrappers such as
+  [`rev()`](https://rdrr.io/r/base/rev.html) or
+  [`unique()`](https://rdrr.io/r/base/unique.html), and removal of error
+  handling ([`tryCatch()`](https://rdrr.io/r/base/conditions.html),
+  [`stop()`](https://rdrr.io/r/base/stop.html)). The replacement of
+  values by `42`, which was disabled, is available as `value_42`.
+- The default set changed, based on a benchmark of the operators on
+  seven CRAN packages (see the README). It adds the boundary, `&&`/`||`
+  operand,
+  [`break`](https://rdrr.io/r/base/Control.html)/[`next`](https://rdrr.io/r/base/Control.html),
+  `TRUE`/`FALSE`, `<<-`, named argument, function swap and error
+  handling operators. `NA` type swaps (`NA` to `NA_integer_`, …) are no
+  longer in the default set, as most of their mutants are equivalent.
+  Results of
+  [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+  therefore differ from earlier versions.
+- `# mutator:ignore-start` and `# mutator:ignore-file` can list operator
+  ids or families, to exclude only those operators.
+- [`mutate_package()`](https://prl-prg.github.io/mutator/reference/mutate_package.md)
+  reports the mutation score per operator in `summary$by_operator`,
+  printed with `isFullLog = TRUE`.
+- Mutants that cannot change the behaviour of the code are no longer
+  written or tested: those identical to the original code or to another
+  mutant, and those that simple rules show to be equivalent (for example
+  `paste` to `paste0` with a single argument). A message gives their
+  number per file.
+
+### Equivalent mutant detection
+
+- Requests refused for rate limiting (HTTP 429) or by an overloaded
+  gateway (502, 503, 504) are retried with exponential backoff,
+  honouring `Retry-After`. Network errors are retried twice, and a
+  request may wait up to 30 minutes for the answer of a reasoning model.
+- When an answer is cut off by the output token limit, the verdicts of
+  its complete entries are kept and the missing mutants are asked again
+  in smaller batches.
+
+### Continuous integration
+
+- The reusable workflow has a new `operators` input.
+
 ## mutator 0.2.2
 
 - The reusable GitHub Actions workflow now installs mutator from CRAN by
