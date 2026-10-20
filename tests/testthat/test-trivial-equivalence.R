@@ -136,6 +136,21 @@ test_that("rules only apply to the mutants of their operators", {
   )
 })
 
+test_that("rules do not apply to other changes by the same operators", {
+  expect_identical(rule_with("rel_swap")(quote(x < y), quote(x > y)), NA_character_)
+  expect_identical(rule_with("fun_swap_extra")(quote(paste(x)), quote(paste(x))), NA_character_)
+  expect_identical(rule_with("fun_swap_extra")(quote(floor(x)), quote(ceiling(x))), NA_character_)
+  drop <- rule_with("named_arg_drop")
+  # Not a base R function, or no such argument.
+  expect_identical(drop(quote(my_max(x, na.rm = FALSE)), quote(my_max(x))), NA_character_)
+  expect_identical(drop(quote(exists(n, sep = "")), quote(exists(n))), NA_character_)
+  # fixed on a function that is not a regex function, or set to a variable.
+  expect_identical(drop(quote(f(x, fixed = TRUE)), quote(f(x))), NA_character_)
+  expect_identical(drop(quote(grepl("a", x, fixed = flag)), quote(grepl("a", x))), NA_character_)
+  # fixed = FALSE is the default.
+  expect_identical(drop(quote(grepl("a", x, fixed = FALSE)), quote(grepl("a", x))), "arg_is_default")
+})
+
 test_that("mutate_file skips trivially equivalent mutants and reports them", {
   src <- tempfile(fileext = ".R")
   out <- tempfile("mut_")

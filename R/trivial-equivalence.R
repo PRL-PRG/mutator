@@ -213,21 +213,22 @@ DEFAULT_REPLACING_OPERATORS <- c(
   "seq_idiom", "drop_idiom", "named_arg_drop", "call_unwrap", "error_handling"
 )
 
-# Each rule with the operators whose mutants it can apply to.
+# The operators whose mutants each rule can apply to. Rule `id` is the function
+# rule_<id>, looked up by name when called (so that covr sees the calls).
 TRIVIAL_EQUIVALENCE_RULES <- list(
-  paste_single_arg = list(rule = rule_paste_single_arg, operators = "fun_swap_extra"),
-  paste_sep_empty = list(rule = rule_paste_sep_empty, operators = "fun_swap_extra"),
-  sub_anchored = list(rule = rule_sub_anchored, operators = "fun_swap"),
-  arg_is_default = list(rule = rule_arg_is_default, operators = "named_arg_drop"),
-  fixed_plain_pattern = list(rule = rule_fixed_plain_pattern, operators = "named_arg_drop"),
-  unused_formal = list(rule = rule_unused_formal, operators = DEFAULT_REPLACING_OPERATORS)
+  paste_single_arg = "fun_swap_extra",
+  paste_sep_empty = "fun_swap_extra",
+  sub_anchored = "fun_swap",
+  arg_is_default = "named_arg_drop",
+  fixed_plain_pattern = "named_arg_drop",
+  unused_formal = DEFAULT_REPLACING_OPERATORS
 )
 
 RULES_BY_OPERATOR <- local({
-  ops <- unique(unlist(lapply(TRIVIAL_EQUIVALENCE_RULES, `[[`, "operators")))
+  ops <- unique(unlist(TRIVIAL_EQUIVALENCE_RULES))
   names(ops) <- ops
   lapply(ops, function(op) {
-    TRIVIAL_EQUIVALENCE_RULES[vapply(TRIVIAL_EQUIVALENCE_RULES, function(r) op %in% r$operators, logical(1))]
+    names(TRIVIAL_EQUIVALENCE_RULES)[vapply(TRIVIAL_EQUIVALENCE_RULES, function(o) op %in% o, logical(1))]
   })
 })
 
@@ -236,12 +237,13 @@ RULES_BY_OPERATOR <- local({
 # applying.
 trivial_equivalence_rule <- function(orig, mut, operator_id, file_functions = character()) {
   if (length(operator_id) != 1 || is.na(operator_id)) return(NA_character_)
-  rules <- RULES_BY_OPERATOR[[operator_id]]
-  if (length(rules) == 0) return(NA_character_)
+  ids <- RULES_BY_OPERATOR[[operator_id]]
+  if (length(ids) == 0) return(NA_character_)
   d <- mutated_node(orig, mut)
   if (is.null(d)) return(NA_character_)
-  for (id in names(rules)) {
-    if (isTRUE(tryCatch(rules[[id]]$rule(d, file_functions), error = function(e) FALSE))) {
+  for (id in ids) {
+    rule <- get(paste0("rule_", id), mode = "function")
+    if (isTRUE(tryCatch(rule(d, file_functions), error = function(e) FALSE))) {
       return(id)
     }
   }
