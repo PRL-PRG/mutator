@@ -10,7 +10,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/PRL-PRG/mutator/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/PRL-PRG/mutator/blob/v0.3.0/DESCRIPTION)
 
 Donat-Bouillud P, Amandykov A (2026). *mutator: Mutation Testing*. R
 package version 0.3.0, <https://github.com/PRL-PRG/mutator>.
