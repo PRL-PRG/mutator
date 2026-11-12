@@ -82,24 +82,32 @@ build_coverage_map_record_tests <- function(pkg_dir, cran = TRUE) {
 
 # Codegen for the covr counter reset/snapshot helpers used by the per-file
 # coverage drivers (testthat per_file and tinytest). Defines `reset()` (zero every
-# trace counter; covr's own clear_counters() *removes* entries, which breaks
-# counting) and `snap()` (collect the non-zero traces as list(file, first, last)).
-# Emitted inside a `local({ ... })` so `ns`, `CT`, `reset`, `snap` stay scoped.
+# trace counter) and `snap()` (collect the non-zero traces as list(file, first,
+# last)). covr versions after 3.6.5 provide current_coverage(), which returns the
+# coverage so far and can zero the counts; they keep the counts in C until they
+# are read, so their internal .counters can't be read directly. With older
+# versions, which count in R, .counters is read and zeroed directly (covr's own
+# clear_counters() *removes* entries, which breaks counting).
+# Emitted inside a `local({ ... })` so `ns`, `rec`, `reset`, `snap` stay scoped.
 covr_perfile_counter_helpers <- function() {
   c(
-    "  ns <- asNamespace('covr'); CT <- get('.counters', ns)",
-    "  reset <- function() for (k in ls(CT)) { e <- CT[[k]]; if (is.list(e)) { e$value <- 0L; CT[[k]] <- e } }",
-    "  snap <- function() {",
-    "    recs <- list()",
-    "    for (k in ls(CT)) {",
-    "      e <- CT[[k]]; v <- tryCatch(e$value, error = function(...) NULL)",
-    "      if (!isTRUE(is.numeric(v) && length(v) == 1L && v > 0)) next",
-    "      sr <- e$srcref",
-    "      fn <- tryCatch(basename(attr(sr, 'srcfile')$filename), error = function(...) NA_character_)",
-    "      if (is.na(fn)) next",
-    "      recs[[length(recs) + 1L]] <- list(file = fn, first = as.integer(sr[[1L]]), last = as.integer(sr[[3L]]))",
-    "    }",
-    "    recs",
+    "  ns <- asNamespace('covr')",
+    "  rec <- function(e) {",
+    "    v <- tryCatch(e$value, error = function(...) NULL)",
+    "    if (!isTRUE(is.numeric(v) && length(v) == 1L && v > 0)) return(NULL)",
+    "    sr <- e$srcref",
+    "    fn <- tryCatch(basename(attr(sr, 'srcfile')$filename), error = function(...) NA_character_)",
+    "    if (is.na(fn)) return(NULL)",
+    "    list(file = fn, first = as.integer(sr[[1L]]), last = as.integer(sr[[3L]]))",
+    "  }",
+    "  if (exists('current_coverage', envir = ns, inherits = FALSE)) {",
+    "    current_coverage <- get('current_coverage', envir = ns)",
+    "    reset <- function() invisible(current_coverage(reset = TRUE))",
+    "    snap <- function() Filter(Negate(is.null), lapply(unclass(current_coverage()), rec))",
+    "  } else {",
+    "    CT <- get('.counters', ns)",
+    "    reset <- function() for (k in ls(CT)) { e <- CT[[k]]; if (is.list(e)) { e$value <- 0L; CT[[k]] <- e } }",
+    "    snap <- function() Filter(Negate(is.null), lapply(ls(CT), function(k) rec(CT[[k]])))",
     "  }"
   )
 }
