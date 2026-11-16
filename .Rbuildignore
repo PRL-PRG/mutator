@@ -25,3 +25,5 @@ packages
 ^vignettes/articles$
 ^tests/system$
 ^snapshots
+^TOOL-COMPARISON\.md$
+^mutations$

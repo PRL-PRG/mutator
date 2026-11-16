@@ -1,8 +1,9 @@
 ## Update
 
-This is an update from 0.2.1. It adds a selection of mutation operators, new
-operators, and the filtering of mutants that cannot change the behaviour of
-the code. 
+This is a patch release fixing compatibility with 'covr' 4.0.0, now on CRAN,
+which changed how coverage counters are stored. 'mutator' now uses covr's new
+`current_coverage()` when it is available and falls back to the previous
+behaviour with older versions of 'covr'.
 
 ## R CMD check results
 
