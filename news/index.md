@@ -1,12 +1,12 @@
 # Changelog
 
-## mutator (development version)
+## mutator 0.3.1
 
 - Coverage-guided runs of tinytest packages and the `"per_file"`
-  coverage backend work with the next version of covr, which counts
-  evaluated expressions in C and keeps the counts there until they are
-  read. They use covr’s new `current_coverage()` when it is available,
-  rather than reading covr’s internal counters.
+  coverage backend work with covr 4.0.0, which counts evaluated
+  expressions in C and keeps the counts there until they are read. They
+  use covr’s new `current_coverage()` when it is available, rather than
+  reading covr’s internal counters.
 
 ## mutator 0.3.0
 
