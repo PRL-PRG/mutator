@@ -80,7 +80,7 @@ single argument). A message gives their number per file.
 src <- tempfile(fileext = ".R")
 writeLines("add <- function(x, y) x + y", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"), max_mutants = 1)
-#> Generated 1 AST-based mutants for file188d39081a84.R
+#> Generated 1 AST-based mutants for file19534b8748d8.R
 length(mutants)
 #> [1] 1
 ```
