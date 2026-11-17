@@ -133,6 +133,6 @@ src <- tempfile(fileext = ".R")
 writeLines("f <- function(x) if (x > 0) x + 1 else NA", src)
 mutants <- mutate_file(src, out_dir = tempfile("mutations_"),
                        operators = c("default", "constants", "-na_type_swap"))
-#> Generated 16 AST-based mutants for file19536639e282.R
-#> Skipped 1 duplicate mutant(s) for file19536639e282.R (const_off_by_one: 1)
+#> Generated 16 AST-based mutants for file18c35e589f98.R
+#> Skipped 1 duplicate mutant(s) for file18c35e589f98.R (const_off_by_one: 1)
 ```
